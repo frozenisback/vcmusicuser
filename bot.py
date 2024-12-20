@@ -39,9 +39,9 @@ async def search_youtube(query):
         return results['entries'][0]  # Return the first search result
 
 # Command to search and play music
-@app.on_message(filters.command("play") & filters.args)  # Responds to /play command
+@app.on_message(filters.regex(r'^/play (?P<query>.+)'))  # Responds to /play command with arguments
 async def play_handler(client, message):
-    query = message.text.split(" ", 1)[1]  # Extract query after the command
+    query = message.matches[0]['query']  # Extract query from the command
 
     # Send "await" message
     await_message = await message.reply("🔎 Searching for the song...")
