@@ -16,20 +16,32 @@ call_py = PyTgCalls(app)
 
 # Function to search for a video on YouTube using yt-dlp
 async def search_youtube(query):
+    # Path to the cookies file or specify cookies directly
+    cookie_file_path = "cookies.txt"  # Update this path with your actual cookie file path
+    
+    # Example of cookies directly in the code (optional)
+    cookies = {
+        'name': 'value',  # Add your actual cookies here
+    }
+    
     ydl_opts = {
         'format': 'worstaudio/worst',  # Download the lowest quality audio and video
         'noplaylist': True,
         'quiet': True,
         'default_search': 'ytsearch1',  # Search and return the first result
+        'cookiefile': cookie_file_path,  # Specify the cookie file
+        # Alternatively, you can use cookies directly like this:
+        # 'cookie': cookies,  # Uncomment to use cookies directly
     }
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         results = ydl.extract_info(query, download=False)
         return results['entries'][0]  # Return the first search result
 
 # Command to search and play music
-@app.on_message(filters.regex(r'^/play (?P<query>.+)'))  # Responds to any chat
+@app.on_message(filters.command("play") & filters.args)  # Responds to /play command
 async def play_handler(client, message):
-    query = message.matches[0]['query']  # Extract query from the command
+    query = message.text.split(" ", 1)[1]  # Extract query after the command
 
     # Send "await" message
     await_message = await message.reply("🔎 Searching for the song...")
@@ -56,10 +68,8 @@ async def play_handler(client, message):
     except Exception as e:
         await await_message.edit(f"❌ Failed to play the song. Error: {str(e)}")
 
-
-
 # Command to ping the bot
-@app.on_message(filters.regex(r'^/ping'))
+@app.on_message(filters.command("ping"))
 async def ping_handler(client, message):
     start_time = time()  # Get the current time before sending the message
     response = await message.reply("🏓 Pong!")  # Send a reply to the user
@@ -67,9 +77,8 @@ async def ping_handler(client, message):
     latency = round((end_time - start_time) * 1000)  # Calculate the round-trip latency in ms
     await response.edit(f"🏓 Bot latency is {latency}ms")  # Edit the response with the latency
 
-
 # Command to stop the bot from playing
-@app.on_message(filters.regex(r'^/stop'))
+@app.on_message(filters.command("stop"))
 async def stop_handler(client, message):
     await call_py.leave_call(message.chat.id)  # Stop the current call
     await message.reply("🛑 Stopped the music and left the voice chat.")
@@ -81,3 +90,4 @@ print("Bot is running. Use the command /play <song name> to search and stream mu
 
 # Keep the bot running
 idle()
+
