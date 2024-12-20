@@ -1,0 +1,6 @@
+pyrogram
+pytgcalls
+yt-dlp
+aiohttp
+asyncio
+flask 
