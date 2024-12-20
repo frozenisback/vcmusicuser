@@ -4,3 +4,5 @@ yt-dlp
 aiohttp
 asyncio
 flask 
+Flask-RESTful
+tgcrypto
