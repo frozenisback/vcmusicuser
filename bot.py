@@ -3,9 +3,16 @@ from pytgcalls import idle, PyTgCalls
 from pytgcalls.types import AudioQuality, MediaStream
 import yt_dlp
 import asyncio
+import logging
+
+# Setup logging
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 
 # Your session string
-STRING_SESSION = "BQHDLbkAHmvy_8YL3jhi8yMQciHrELqqQR7tGwcww1TgICIpOVKdFE53nfI4l3RNwciZydLZ_zZlukn_OKnomoPo3NmHAwBcBCPgSvTGEc_SQElYpqQVZQRWH3ZngoeHI5td1MP_IKnkcsxW7-GW1kO0zic2NcoeiTBbAWqjp-UoSw8y7WlsRSFvERNlxN6_N7aevH0Y6gjSnCRpYMXUUO1Cghx015zuo7rN9m0YW_YhJApLCE11QYV_IzHcKF1N9SoG3xFQdZ2pup15ntW6HFNtEoenxRjvcbCyG9YB8Wpcx5jlb67pFFl2NypdQQbJ6v59Hgku62VOFEFKoNNaHmYLUHsFoAAAAAG4QLY7AA"
+STRING_SESSION = "BQHDLbkATTZi0QsIFyqEzgBd6ozQFbLXwfB0geUsx2EKEOnoU8m6-RnMgaRyQAZZaFbIwfkJ9p9Bgc5h2cqFt3d7BP5nB8dUC5AYozOE4vTtp16HburpQtZ0DVxpE6Nk0fw2UMPUuq1R0zVHjtF8KPcjms0xM1zxdhJkP1UuLDNuCA_y9ectk0jX-IRlj2KnypLHFT9KacpLot-fGYC8ZHSM-bDn25XhDA9r8Cn8fymmQAwxsJjs4rrpPETVZ_e5T29iPtyVamdeUY0BC9X6qL5xCp7kUYQJEcfW1XTvB9n_qZqhq5tzPikB-XoOhhYufPQfqCsR9R2QyaplODWyKHjwPJcxbAAAAAG4QLY7AA"
 
 # Initialize Pyrogram Client with StringSession
 app = Client("test", session_string=STRING_SESSION)
@@ -31,11 +38,9 @@ async def search_youtube(query):
         return results['entries'][0]  # Return the first search result
 
 # Command to search and play audio
-@app.on_message(filters.regex(r'^/play (?P<query>.+)'))  # Responds to /play command with arguments
+@app.on_message(filters.regex(r'^/play (?P<query>.+)'))
 async def play_handler(client, message):
     query = message.matches[0]['query']  # Extract query from the command
-
-    # Send "await" message
     await_message = await message.reply("🔎 Searching for the song...")
 
     try:
@@ -88,19 +93,25 @@ async def play_handler(client, message):
             await_message.delete()
         )
     except Exception as e:
+        logging.error(f"Error in play_handler: {e}")
         await await_message.edit(f"❌ Failed to play the song. Error: {str(e)}")
 
 # Command to stop the bot from playing
 @app.on_message(filters.command("stop"))
 async def stop_handler(client, message):
-    await call_py.leave_call(message.chat.id)
-    await message.reply("🛑 Stopped the music and left the voice chat.")
+    try:
+        await call_py.leave_call(message.chat.id)
+        await message.reply("🛑 Stopped the music and left the voice chat.")
+    except Exception as e:
+        logging.error(f"Error in stop_handler: {e}")
+        await message.reply(f"❌ Failed to stop the music. Error: {str(e)}")
 
-# Start PyTgCalls and the Pyrogram Client
-call_py.start()
-
-print("Bot is running. Use the command /play <song name> to search and stream music.")
-
-# Keep the bot running
-idle()
-
+# Start the bot with a restart loop
+while True:
+    try:
+        call_py.start()
+        logging.info("Bot is running. Use the command /play <song name> to search and stream music.")
+        idle()
+    except Exception as e:
+        logging.error(f"Bot crashed with error: {e}. Restarting...")
+        asyncio.sleep(5)  # Wait before restarting
