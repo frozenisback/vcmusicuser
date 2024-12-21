@@ -3,10 +3,9 @@ from pytgcalls import idle, PyTgCalls
 from pytgcalls.types import AudioQuality, MediaStream
 import yt_dlp
 import asyncio
-from time import time
 
 # Your session string
-STRING_SESSION = "BQHDLbkAJatUS2ycH470F_fvXMeaF4O-ILmXUx43JZXFsAJmHI3Ej1HVazx_RhmoAHJMw01-b2JTw5GhzBcBrHSPvg2yoR20TkN0_3VkkxHqQ6Dguldlv5BDfE_TFk4fAUmaUi327GjP7ntMDa0GObKAXv-sjv7CJDFcjpF1nPi9o_FlOpiQQkjw6auHgD8hjwtWfHkeAU5sHHd1LSTUW4DgoisPqRFsE21JAtgCr_Ea_RTEAumD0zaqA5sqzAl78YU_8SNLxH39B4zWQNplNRNNwZJV5uaxiBtOLm-j60Yw37xBqfRN2I9DAHeW5HtVUc5Ytrt_88Z6Fh485jSylqIxUD67DwAAAAG4QLY7AA"
+STRING_SESSION = "BQHDLbkAHmvy_8YL3jhi8yMQciHrELqqQR7tGwcww1TgICIpOVKdFE53nfI4l3RNwciZydLZ_zZlukn_OKnomoPo3NmHAwBcBCPgSvTGEc_SQElYpqQVZQRWH3ZngoeHI5td1MP_IKnkcsxW7-GW1kO0zic2NcoeiTBbAWqjp-UoSw8y7WlsRSFvERNlxN6_N7aevH0Y6gjSnCRpYMXUUO1Cghx015zuo7rN9m0YW_YhJApLCE11QYV_IzHcKF1N9SoG3xFQdZ2pup15ntW6HFNtEoenxRjvcbCyG9YB8Wpcx5jlb67pFFl2NypdQQbJ6v59Hgku62VOFEFKoNNaHmYLUHsFoAAAAAG4QLY7AA"
 
 # Initialize Pyrogram Client with StringSession
 app = Client("test", session_string=STRING_SESSION)
@@ -14,24 +13,20 @@ app = Client("test", session_string=STRING_SESSION)
 # Initialize PyTgCalls
 call_py = PyTgCalls(app)
 
-# Path to the cookies file
-COOKIES_FILE = "cookies.txt"  # Ensure this file exists and contains valid cookies
-
 # Function to search for a video on YouTube using yt-dlp
 async def search_youtube(query):
     ydl_opts = {
-        'format': 'worstaudio/worst',  # Download the lowest quality audio and video
+        'format': 'bestaudio/best',
         'noplaylist': True,
         'quiet': True,
-        'default_search': 'ytsearch1',  # Search and return the first result
-        'cookiefile': COOKIES_FILE,  # Use the cookie file for authenticated requests
+        'default_search': 'ytsearch1',
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         results = ydl.extract_info(query, download=False)
         return results['entries'][0]  # Return the first search result
 
-# Command to search and play music
+# Command to search and play audio
 @app.on_message(filters.regex(r'^/play (?P<query>.+)'))  # Responds to /play command with arguments
 async def play_handler(client, message):
     query = message.matches[0]['query']  # Extract query from the command
@@ -45,32 +40,50 @@ async def play_handler(client, message):
         video_url = video_result['webpage_url']
         video_title = video_result['title']
 
-        # Play the video with cookies
+        # Forward URL to the bot
+        forwarded_message = await app.send_message("@YoutubeAudioDownloadBot", video_url)
+
+        # Wait for the bot to respond with the audio file
+        bot_response = None
+        for _ in range(10):  # Retry for up to 10 iterations (adjust as needed)
+            async for response in app.get_chat_history("@YoutubeAudioDownloadBot", limit=10):
+                if response.audio:  # Check if the message contains an audio file
+                    bot_response = response
+                    break
+            if bot_response:
+                break
+            await asyncio.sleep(2)  # Wait 2 seconds before checking again
+
+        if not bot_response:
+            await await_message.edit("❌ Failed to retrieve the audio file from the api")
+            return
+
+        # Download the audio file locally
+        audio_file_path = await bot_response.download()
+
+        # Play the audio file in the voice chat
         await call_py.play(
             message.chat.id,
             MediaStream(
-                video_url,
-                AudioQuality.HIGH,
-                ytdlp_parameters=f"--cookies {COOKIES_FILE}",  # Pass cookies to yt-dlp
-            ),
+                audio_file_path,
+                AudioQuality.HIGH
+            )
         )
 
-        # Edit message with the title of the video being played
+        # Edit message with the title of the audio being played
         await await_message.edit(
-            f"🎶 Started playing: [{video_title}]({video_url})",
+            f"🎶 Now Playing: [{video_title}]({video_url})",
             disable_web_page_preview=True
+        )
+
+        # Clean up chat messages
+        await asyncio.gather(
+            forwarded_message.delete(),
+            bot_response.delete(),
+            await_message.delete()
         )
     except Exception as e:
         await await_message.edit(f"❌ Failed to play the song. Error: {str(e)}")
-
-# Command to ping the bot
-@app.on_message(filters.command("ping"))
-async def ping_handler(client, message):
-    start_time = time()
-    response = await message.reply("🏓 Pong!")
-    end_time = time()
-    latency = round((end_time - start_time) * 1000)
-    await response.edit(f"🏓 Bot latency is {latency}ms")
 
 # Command to stop the bot from playing
 @app.on_message(filters.command("stop"))
