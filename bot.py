@@ -13,6 +13,9 @@ app = Client("test", session_string=STRING_SESSION)
 # Initialize PyTgCalls
 call_py = PyTgCalls(app)
 
+# Path to the cookies file
+COOKIES_FILE = "cookies.txt"  # Ensure this file exists and contains valid cookies
+
 # Function to search for a video on YouTube using yt-dlp
 async def search_youtube(query):
     ydl_opts = {
@@ -20,6 +23,7 @@ async def search_youtube(query):
         'noplaylist': True,
         'quiet': True,
         'default_search': 'ytsearch1',
+        'cookiefile': COOKIES_FILE,  # Include cookies file for authenticated requests
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -55,18 +59,19 @@ async def play_handler(client, message):
             await asyncio.sleep(2)  # Wait 2 seconds before checking again
 
         if not bot_response:
-            await await_message.edit("❌ Failed to retrieve the audio file from the api")
+            await await_message.edit("❌ Failed to retrieve the audio file from the bot.")
             return
 
         # Download the audio file locally
         audio_file_path = await bot_response.download()
 
-        # Play the audio file in the voice chat
+        # Play the audio file in the voice chat using cookies
         await call_py.play(
             message.chat.id,
             MediaStream(
                 audio_file_path,
-                AudioQuality.HIGH
+                AudioQuality.HIGH,
+                ytdlp_parameters=f"--cookies {COOKIES_FILE}"  # Pass cookies to yt-dlp
             )
         )
 
