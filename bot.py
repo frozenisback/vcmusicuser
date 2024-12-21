@@ -114,8 +114,7 @@ async def play_handler(client, message):
             message.chat.id,
             MediaStream(
                 audio_file_path,
-                AudioQuality.HIGH,
-                ytdlp_parameters=f"--cookies {COOKIES_FILE}"  # Pass cookies to yt-dlp
+                video_flags=MediaStream.Flags.IGNORE,
             )
         )
 
@@ -152,7 +151,7 @@ async def cache_handler(client, message):
 @app.on_message(filters.command("ping"))
 async def ping_handler(client, message):
     pings = call_py.ping
-    await message.reply(f"🏓 Pong - 56.26ms")
+    await message.reply(f"🏓 Pong - {pings}")
 
 # Command to pause the stream
 @app.on_message(filters.command("pause"))
@@ -173,3 +172,4 @@ print("Bot is running. Use the command /play <song name> to search and stream mu
 
 # Keep the bot running
 idle()
+
