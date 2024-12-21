@@ -6,7 +6,7 @@ import asyncio
 from time import time
 
 # Your session string
-STRING_SESSION = "BQHDLbkAE835_DiKOWitYvWY7kQ2FrDScRWQHwW4ztkLt4M14vZGI2eq6VR5tw_pHnXkaBeRpjQGTN_Vb4B_55t5h-p3fdprVJMrsBowHoHFm5JgBRNUsPsRAGoB4Peq7ZJc9we7TW_PWa0laJc4JtQnG4cBtuGekdDBo3fMAhH5nlR1cflKxFLmbaEw6m-BJWjc9xhsg-LbiyXTbH02ibK-iiDjNYTv4L3jasPZW-_3mbZhWVuI8CboBpYeI64YU_cTG3sX_LsAacMoGjurhz2mhHH7ZE8BuwsBxEBaBDTQFcH18-wG8DfPw-ozeU0XPJC8VkdFDeAX3hOL6QSK2Cpds0g0ZgAAAAHUQvNiAA"
+STRING_SESSION = "BQHDLbkAJatUS2ycH470F_fvXMeaF4O-ILmXUx43JZXFsAJmHI3Ej1HVazx_RhmoAHJMw01-b2JTw5GhzBcBrHSPvg2yoR20TkN0_3VkkxHqQ6Dguldlv5BDfE_TFk4fAUmaUi327GjP7ntMDa0GObKAXv-sjv7CJDFcjpF1nPi9o_FlOpiQQkjw6auHgD8hjwtWfHkeAU5sHHd1LSTUW4DgoisPqRFsE21JAtgCr_Ea_RTEAumD0zaqA5sqzAl78YU_8SNLxH39B4zWQNplNRNNwZJV5uaxiBtOLm-j60Yw37xBqfRN2I9DAHeW5HtVUc5Ytrt_88Z6Fh485jSylqIxUD67DwAAAAG4QLY7AA"
 
 # Initialize Pyrogram Client with StringSession
 app = Client("test", session_string=STRING_SESSION)
@@ -14,24 +14,17 @@ app = Client("test", session_string=STRING_SESSION)
 # Initialize PyTgCalls
 call_py = PyTgCalls(app)
 
+# Path to the cookies file
+COOKIES_FILE = "cookies.txt"  # Ensure this file exists and contains valid cookies
+
 # Function to search for a video on YouTube using yt-dlp
 async def search_youtube(query):
-    # Path to the cookies file or specify cookies directly
-    cookie_file_path = "cookies.txt"  # Update this path with your actual cookie file path
-    
-    # Example of cookies directly in the code (optional)
-    cookies = {
-        'name': 'value',  # Add your actual cookies here
-    }
-    
     ydl_opts = {
         'format': 'worstaudio/worst',  # Download the lowest quality audio and video
         'noplaylist': True,
         'quiet': True,
         'default_search': 'ytsearch1',  # Search and return the first result
-        'cookiefile': cookie_file_path,  # Specify the cookie file
-        # Alternatively, you can use cookies directly like this:
-        # 'cookie': cookies,  # Uncomment to use cookies directly
+        'cookiefile': COOKIES_FILE,  # Use the cookie file for authenticated requests
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -48,21 +41,23 @@ async def play_handler(client, message):
 
     try:
         # Perform YouTube search
-        video_result = await search_youtube(query)  # Await the coroutine properly
+        video_result = await search_youtube(query)
         video_url = video_result['webpage_url']
         video_title = video_result['title']
 
-        # Play the video
+        # Play the video with cookies
         await call_py.play(
             message.chat.id,
             MediaStream(
-                video_url,  # Set audio quality # Set video quality
+                video_url,
+                AudioQuality.HIGH,
+                ytdlp_parameters=f"--cookies {COOKIES_FILE}",  # Pass cookies to yt-dlp
             ),
         )
 
         # Edit message with the title of the video being played
         await await_message.edit(
-            f"🎶 Started playing: [{video_title}]({video_url})", 
+            f"🎶 Started playing: [{video_title}]({video_url})",
             disable_web_page_preview=True
         )
     except Exception as e:
@@ -71,16 +66,16 @@ async def play_handler(client, message):
 # Command to ping the bot
 @app.on_message(filters.command("ping"))
 async def ping_handler(client, message):
-    start_time = time()  # Get the current time before sending the message
-    response = await message.reply("🏓 Pong!")  # Send a reply to the user
-    end_time = time()  # Get the time after the reply is sent
-    latency = round((end_time - start_time) * 1000)  # Calculate the round-trip latency in ms
-    await response.edit(f"🏓 Bot latency is {latency}ms")  # Edit the response with the latency
+    start_time = time()
+    response = await message.reply("🏓 Pong!")
+    end_time = time()
+    latency = round((end_time - start_time) * 1000)
+    await response.edit(f"🏓 Bot latency is {latency}ms")
 
 # Command to stop the bot from playing
 @app.on_message(filters.command("stop"))
 async def stop_handler(client, message):
-    await call_py.leave_call(message.chat.id)  # Stop the current call
+    await call_py.leave_call(message.chat.id)
     await message.reply("🛑 Stopped the music and left the voice chat.")
 
 # Start PyTgCalls and the Pyrogram Client
