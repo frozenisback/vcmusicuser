@@ -106,7 +106,7 @@ async def play_handler(client, message):
         else:
             await await_message.edit(
                 f"✅ Added to queue:\n"
-                f"**Title:** [{video_title}]({video_url})\n"
+                f"**Title:** {video_title}\n"
                 f"**Duration:** {formatted_duration}\n"
                 f"**Requested by:** {message.from_user.mention if message.from_user else 'Unknown'}",
                 disable_web_page_preview=True
@@ -136,7 +136,7 @@ async def play_song(chat_id, await_message):
 
         await await_message.edit(
             f"🎵 **Now Playing**\n"
-            f"**Title:** [{song_info['title']}]({song_info['url']})\n"
+            f"**Title:** {song_info['title']}\n"
             f"**Requested by:** {song_info['requester']}",
             disable_web_page_preview=True
         )
