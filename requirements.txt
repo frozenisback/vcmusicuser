@@ -7,3 +7,4 @@ flask
 Flask-RESTful
 tgcrypto
 ffmpeg-python
+isodate
