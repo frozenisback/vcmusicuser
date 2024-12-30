@@ -179,7 +179,7 @@ async def skip_to_next_song(chat_id):
                     await call_py.play(
                 chat_id,
                 MediaStream(
-                    audio_file_path,
+                    media_path,
                     video_flags=MediaStream.Flags.IGNORE,
                 ),
             )
