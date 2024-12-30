@@ -177,9 +177,12 @@ async def skip_to_next_song(chat_id):
                 # Play the media using pytgcalls
                 try:
                     await call_py.play(
-                        chat_id,
-                        MediaStream(media_path),
-                    )
+                chat_id,
+                MediaStream(
+                    audio_file_path,
+                    video_flags=MediaStream.Flags.IGNORE,
+                ),
+            )
                     # Notify the group about the currently playing song
                     await app.send_message(
                         chat_id,
