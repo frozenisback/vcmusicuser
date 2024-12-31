@@ -11,6 +11,7 @@ import time
 import psutil
 from datetime import datetime, timedelta
 from isodate import parse_duration
+import uuid
 
 # Your session string
 STRING_SESSION = "BQHDLbkAfkX9lQA0YbYNNlaZN5mT-HXjSTME4eYPh615lYxYOFWRsxbQ4BHd5iqTQOoWAxdzEMUGoyNcY3TNlEeHKIAlNm5pp-aZT7WYCw30MwOPZCVOmiekdlFTSZv9qehM0qFfzy7CwJGXoILgO_axlB9O0rsXKaNchPhuS-8Kchv_wKU11ubdVhJzIy5vB7t_cTGpoL1fhgy-_0JaPXOe8f75Ch6ukGHkqq1SbCc7Oo4IBEebmLt7SKgpmPtl89f9IRRxJp6QPEeXx_RaolABkoopwHCpm1Mo2HyjILLpD-IL9QpT1pDmsxXZBVzGQPlRAsEFq_tMBZMiNtnSONct_jYnHQAAAAG4QLY7AA"
@@ -105,11 +106,11 @@ async def play_handler(client, message):
 
         # If the queue has only one song, start playing immediately
         if len(chat_containers[chat_id]) == 1:
-            await skip_to_next_song(chat_id)
+            await skip_to_next_song(chat_id, await_message)
         else:
             await await_message.edit(
-                f"\u2705 Added to queue:\n"
-                f"**Title:** {video_title}\n"
+                f"\u2705 Added to queue:\n\n"
+                f"**Title:** {video_title}\n\n"
                 f"**Duration:** {readable_duration}\n"
                 f"**Requested by:** {message.from_user.mention if message.from_user else 'Unknown'}",
                 disable_web_page_preview=True
@@ -118,7 +119,7 @@ async def play_handler(client, message):
     except Exception as e:
         await message.reply(f"\u274C Failed to play the song. Error: {str(e)}")
 
-async def skip_to_next_song(chat_id):
+async def skip_to_next_song(chat_id, await_message):
     try:
         while chat_id in chat_containers and chat_containers[chat_id]:
             song_info = chat_containers[chat_id][0]  # Get the first song in the queue
@@ -131,6 +132,7 @@ async def skip_to_next_song(chat_id):
 
             try:
                 # Send the video URL to the @YoutubeAudioDownloadBot
+                await await_message.edit(f"\U0001F916 Sending URL to download bot for\n\n **{song_info['title']}**...")
                 forwarded_message = await app.send_message("@YoutubeAudioDownloadBot", video_url)
 
                 # Wait for the bot to respond with the audio file or link
@@ -151,41 +153,44 @@ async def skip_to_next_song(chat_id):
                     print("Failed to retrieve the audio file or link.")
                     await forwarded_message.delete()
                     chat_containers[chat_id].pop(0)  # Remove the song from the queue
-                    await app.send_message(
-                        chat_id,
+                    await await_message.edit(
                         f"❌ Failed to retrieve audio for **{song_info['title']}**. Skipping to the next song...",
                     )
                     continue
 
-                # Determine the media path
-                if bot_response.audio:  # Handle the audio file
+                # Download the media if it is a link
+                if bot_response.text and bot_response.reply_markup:
+                    download_url = bot_response.reply_markup.inline_keyboard[0][0].url
+                    await await_message.edit(f"⏳** Received link for**\n\n {song_info['title']}. \n\n **Starting download...**")
+                    media_path = await download_audio(download_url)
+                    await await_message.edit(f"✅ **Download completed for**\n\n {song_info['title']}. \n\n **Playing now...**")
+                elif bot_response.audio:  # Handle the audio file
+                    await await_message.edit(f"⏳ **Received audio file for** \n\n{song_info['title']}.\n\n **Downloading...**")
                     media_path = await bot_response.download()
-                elif bot_response.text and bot_response.reply_markup:  # Handle the link
-                    media_path = bot_response.reply_markup.inline_keyboard[0][0].url
+                    await await_message.edit(f"✅ **Download completed for**\n\n {song_info['title']}.\n\n **Playing now...**")
                 else:
                     print(f"Failed to determine media path for song: {song_info}")
                     chat_containers[chat_id].pop(0)
-                    await app.send_message(
-                        chat_id,
-                        f"❌ Unable to play **{song_info['title']}**. Skipping to the next song...",
+                    await await_message.edit(
+                        f"❌ Unable to play {song_info['title']}.\n\n **Skipping to the next song...**",
                     )
                     continue
 
+                # Delete bot messages after processing
                 async for msg in app.get_chat_history("@YoutubeAudioDownloadBot"):
-                 await app.delete_messages("@YoutubeAudioDownloadBot", msg.id)
+                    await app.delete_messages("@YoutubeAudioDownloadBot", msg.id)
 
                 # Play the media using pytgcalls
                 try:
                     await call_py.play(
-                chat_id,
-                MediaStream(
-                    media_path,
-                    video_flags=MediaStream.Flags.IGNORE,
-                ),
-            )
-                    # Notify the group about the currently playing song
-                    await app.send_message(
                         chat_id,
+                        MediaStream(
+                            media_path,
+                            video_flags=MediaStream.Flags.IGNORE,
+                        ),
+                    )
+                    # Notify the group about the currently playing song
+                    await await_message.edit(
                         f"🎵 **Now Playing**\n"
                         f"**Title:** {song_info['title']}\n"
                         f"**Duration:** {song_info['duration']}\n"
@@ -194,18 +199,16 @@ async def skip_to_next_song(chat_id):
                     )
 
                     # Wait for the song to finish
-                    await asyncio.sleep(song_info['duration_seconds'])
+                    await asyncio.sleep(song_info['duration_seconds'] + 20)  # Added extra 20 seconds
                 except Exception as playback_error:
                     print(f"Error during playback: {playback_error}")
-                    await app.send_message(
-                        chat_id,
+                    await await_message.edit(
                         f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...",
                     )
 
             except Exception as download_error:
                 print(f"Error during download or processing: {download_error}")
-                await app.send_message(
-                    chat_id,
+                await await_message.edit(
                     f"❌ Error retrieving or processing audio for **{song_info['title']}**. Skipping...",
                 )
 
@@ -217,12 +220,28 @@ async def skip_to_next_song(chat_id):
         if chat_id in chat_containers and not chat_containers[chat_id]:
             try:
                 await call_py.leave_call(chat_id)
-                await app.send_message(chat_id, "✅ Queue finished. Leaving the voice chat.")
+                await await_message.edit("✅ Queue finished. Leaving the voice chat.")
             except Exception as leave_error:
                 print(f"Error leaving call: {leave_error}")
 
     except Exception as e:
         print(f"Unexpected error in skip_to_next_song: {str(e)}")
+
+async def download_audio(url):
+    """Downloads the audio from a given URL and returns the file path."""
+    try:
+        file_name = f"downloads/{uuid.uuid4()}.mp3"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    with open(file_name, 'wb') as f:
+                        f.write(await response.read())
+                    return file_name
+                else:
+                    raise Exception(f"Failed to download audio. HTTP status: {response.status}")
+    except Exception as e:
+        raise Exception(f"Error downloading audio: {e}")
+
 
 
 # Command to stop the bot from playing
@@ -416,4 +435,3 @@ try:
     idle()
 except Exception as e:
     print(f"Critical error: {str(e)}")
-
