@@ -291,19 +291,34 @@ async def resume_handler(client, message):
 
 # Command to skip the current song
 @app.on_message(filters.command("skip"))
-async def skip_to_next_song(chat_id, await_message):
-    if chat_id in chat_containers and chat_containers[chat_id]:
-        next_song = chat_containers[chat_id][0]
-        file_path = next_song.get('file_path', '')
+async def skip_handler(client, message):
+    chat_id = message.chat.id
 
+    try:
+        if chat_id not in chat_containers or not chat_containers[chat_id]:
+            await message.reply("❌ No songs in the queue to skip.")
+            return
+
+        # Remove the current song from the chat-specific queue
+        skipped_song = chat_containers[chat_id].pop(0)
+
+        # End playback and skip first, then delete the file
+        await call_py.leave_call(chat_id)
+        await asyncio.sleep(3)
         try:
-            await call_py.join_call(chat_id, file_path)
-            await await_message.reply(f"🎶 Now playing **{next_song['title']}**.")
+            os.remove(skipped_song.get('file_path', ''))
         except Exception as e:
-            await await_message.reply(f"❌ Failed to play the next song. Error: {str(e)}")
-    else:
-        await await_message.reply("❌ No more songs to play.")
+            print(f"Error deleting file: {e}")
 
+        if not chat_containers[chat_id]:  # If no songs left in the queue
+            await message.reply(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 No more songs in the queue.")
+        else:
+            # Play the next song in the queue
+            await message.reply(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
+            await skip_to_next_song(chat_id)
+
+    except Exception as e:
+        await message.reply(f"❌ Failed to skip the song. Error: {str(e)}")
 
 @app.on_message(filters.command(["join"], "/"))
 async def join(client: Client, message: Message):
