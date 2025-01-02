@@ -315,10 +315,24 @@ async def skip_handler(client, message):
         else:
             # Play the next song in the queue
             await message.reply(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
-            await skip_to_next_song(chat_id)
+            await skip_to_next_song(client, chat_id, message)
 
     except Exception as e:
         await message.reply(f"❌ Failed to skip the song. Error: {str(e)}")
+
+async def skip_to_next_song(client, chat_id, message):
+    """
+    Handles playing the next song in the queue.
+    """
+    try:
+        next_song = chat_containers[chat_id][0]
+        # Start playing the next song (replace with actual playback logic)
+        await call_py.join_call(chat_id, next_song['file_path'])
+        await message.reply(f"🎵 Now playing **{next_song['title']}**.")
+    except Exception as e:
+        print(f"Error playing next song: {e}")
+        await message.reply(f"❌ Failed to play the next song. Error: {str(e)}")
+
 
 @app.on_message(filters.command(["join"], "/"))
 async def join(client: Client, message: Message):
