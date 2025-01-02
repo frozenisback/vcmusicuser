@@ -315,10 +315,11 @@ async def skip_handler(client, message):
         else:
             # Play the next song in the queue
             await message.reply(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
-            await skip_to_next_song(client, chat_id, message)
+            await skip_to_next_song(client, chat_id)  # Adjusted call
 
     except Exception as e:
         await message.reply(f"❌ Failed to skip the song. Error: {str(e)}")
+
 
 
 
