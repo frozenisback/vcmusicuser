@@ -12,6 +12,7 @@ import psutil
 from datetime import datetime, timedelta
 from isodate import parse_duration
 import uuid
+import tempfile
 
 # Your session string
 STRING_SESSION = "BQHAYsoABMh-PazUmloJ7G0nyO4m1M7HLm0vyAVFXFuUeIMcYuf52yizYFMYcViJpQ5hpOQt81ZmSjI4mhIMDCchpg9opeXHqx8v0dxRmFk43z093-i-7XhbETvB0XZUQqlba5ARaK2md9Frq_RCGEkEvraT4CSMlKeAkRhOnuZLsjvN9XLW0C1Dy5Bjdm3YuuacHkNi-m5PRrhFy0GXgbmsKMH2pCRs0EG8waKIb16nXONhoq7lAS2Nbzkn0ex0Imq7VB53zYMJpJWr43X-JrIBGVYnpHuGTy8THGsc0qdsfL4yJqHfLiWJ240Y7xrWEnnSb86vvm_TlWGhcTCeMYZqFNtnwQAAAAHUQvNiAA"
@@ -174,7 +175,7 @@ async def skip_to_next_song(chat_id, await_message):
                 chat_containers[chat_id].pop(0)
 
         # Leave the voice chat if the queue is empty
-        if chat_id in chat_containers and not chat_containers[chat_id]:
+        if chat_id in chat_containers and not chat_containers[chat_id]]:
             try:
                 await call_py.leave_call(chat_id)
                 await await_message.edit("✅ Queue finished. Leaving the voice chat.")
@@ -187,7 +188,8 @@ async def skip_to_next_song(chat_id, await_message):
 async def download_audio(url):
     """Downloads the audio from a given URL and returns the file path."""
     try:
-        file_name = f"downloads/{uuid.uuid4()}.mp3"
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+        file_name = temp_file.name
         download_url = f"{DOWNLOAD_API_URL}{url}"
         async with aiohttp.ClientSession() as session:
             async with session.get(download_url) as response:
