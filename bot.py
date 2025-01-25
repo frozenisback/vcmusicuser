@@ -14,7 +14,7 @@ from isodate import parse_duration
 import uuid
 
 # Your session string
-STRING_SESSION = "BQHDLbkAfkX9lQA0YbYNNlaZN5mT-HXjSTME4eYPh615lYxYOFWRsxbQ4BHd5iqTQOoWAxdzEMUGoyNcY3TNlEeHKIAlNm5pp-aZT7WYCw30MwOPZCVOmiekdlFTSZv9qehM0qFfzy7CwJGXoILgO_axlB9O0rsXKaNchPhuS-8Kchv_wKU11ubdVhJzIy5vB7t_cTGpoL1fhgy-_0JaPXOe8f75Ch6ukGHkqq1SbCc7Oo4IBEebmLt7SKgpmPtl89f9IRRxJp6QPEeXx_RaolABkoopwHCpm1Mo2HyjILLpD-IL9QpT1pDmsxXZBVzGQPlRAsEFq_tMBZMiNtnSONct_jYnHQAAAAG4QLY7AA"
+STRING_SESSION = "BQHAYsoABMh-PazUmloJ7G0nyO4m1M7HLm0vyAVFXFuUeIMcYuf52yizYFMYcViJpQ5hpOQt81ZmSjI4mhIMDCchpg9opeXHqx8v0dxRmFk43z093-i-7XhbETvB0XZUQqlba5ARaK2md9Frq_RCGEkEvraT4CSMlKeAkRhOnuZLsjvN9XLW0C1Dy5Bjdm3YuuacHkNi-m5PRrhFy0GXgbmsKMH2pCRs0EG8waKIb16nXONhoq7lAS2Nbzkn0ex0Imq7VB53zYMJpJWr43X-JrIBGVYnpHuGTy8THGsc0qdsfL4yJqHfLiWJ240Y7xrWEnnSb86vvm_TlWGhcTCeMYZqFNtnwQAAAAHUQvNiAA"
 
 app = Client("music_bot", session_string=STRING_SESSION)
 
@@ -28,6 +28,7 @@ bot_start_time = time.time()
 
 # API endpoint for searching YouTube links
 API_URL = "https://small-bush-de65.tenopno.workers.dev/search?title="
+DOWNLOAD_API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/download?url="
 
 # Utility function to convert ISO 8601 duration to HH:MM:SS
 def iso8601_to_human_readable(iso_duration):
@@ -131,54 +132,10 @@ async def skip_to_next_song(chat_id, await_message):
                 continue
 
             try:
-                # Send the video URL to the @YoutubeAudioDownloadBot
+                # Send the video URL to the new API for download
                 await await_message.edit(f"\U0001F916 Sending URL to download bot for\n\n **{song_info['title']}**...")
-                forwarded_message = await app.send_message("@YoutubeAudioDownloadBot", video_url)
-
-                # Wait for the bot to respond with the audio file or link
-                bot_response = None
-                for _ in range(10):  # Retry for up to 10 iterations
-                    async for response in app.get_chat_history("@YoutubeAudioDownloadBot", limit=10):
-                        if response.audio:  # Case 1: Audio file
-                            bot_response = response
-                            break
-                        elif response.text and response.reply_markup:  # Case 2: Link with reply_markup
-                            bot_response = response
-                            break
-                    if bot_response:
-                        break
-                    await asyncio.sleep(2)
-
-                if not bot_response:
-                    print("Failed to retrieve the audio file or link.")
-                    await forwarded_message.delete()
-                    chat_containers[chat_id].pop(0)  # Remove the song from the queue
-                    await await_message.edit(
-                        f"❌ Failed to retrieve audio for **{song_info['title']}**. Skipping to the next song...",
-                    )
-                    continue
-
-                # Download the media if it is a link
-                if bot_response.text and bot_response.reply_markup:
-                    download_url = bot_response.reply_markup.inline_keyboard[0][0].url
-                    await await_message.edit(f"⏳** Received link for**\n\n {song_info['title']}. \n\n **Starting download...**")
-                    media_path = await download_audio(download_url)
-                    await await_message.edit(f"✅ **Download completed for**\n\n {song_info['title']}. \n\n **Playing now...**")
-                elif bot_response.audio:  # Handle the audio file
-                    await await_message.edit(f"⏳ **Received audio file for** \n\n{song_info['title']}.\n\n **Downloading...**")
-                    media_path = await bot_response.download()
-                    await await_message.edit(f"✅ **Download completed for**\n\n {song_info['title']}.\n\n **Playing now...**")
-                else:
-                    print(f"Failed to determine media path for song: {song_info}")
-                    chat_containers[chat_id].pop(0)
-                    await await_message.edit(
-                        f"❌ Unable to play {song_info['title']}.\n\n **Skipping to the next song...**",
-                    )
-                    continue
-
-                # Delete bot messages after processing
-                async for msg in app.get_chat_history("@YoutubeAudioDownloadBot"):
-                    await app.delete_messages("@YoutubeAudioDownloadBot", msg.id)
+                media_path = await download_audio(video_url)
+                await await_message.edit(f"✅ **Download completed for**\n\n {song_info['title']}. \n\n **Playing now...**")
 
                 # Play the media using pytgcalls
                 try:
@@ -231,8 +188,9 @@ async def download_audio(url):
     """Downloads the audio from a given URL and returns the file path."""
     try:
         file_name = f"downloads/{uuid.uuid4()}.mp3"
+        download_url = f"{DOWNLOAD_API_URL}{url}"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
+            async with session.get(download_url) as response:
                 if response.status == 200:
                     with open(file_name, 'wb') as f:
                         f.write(await response.read())
@@ -241,8 +199,6 @@ async def download_audio(url):
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
-
-
 
 # Command to stop the bot from playing
 @app.on_message(filters.command(["stop", "end"]))
@@ -319,9 +275,6 @@ async def skip_handler(client, message):
 
     except Exception as e:
         await message.reply(f"❌ Failed to skip the song. Error: {str(e)}")
-
-
-
 
 @app.on_message(filters.command(["join"], "/"))
 async def join(client: Client, message: Message):
@@ -428,8 +381,6 @@ async def ping_handler(client, message):
         await message.reply(response)
     except Exception as e:
         await message.reply(f"❌ Failed to execute the command. Error: {str(e)}")
-
-        
 
 # Start PyTgCalls and the Pyrogram Client
 try:
