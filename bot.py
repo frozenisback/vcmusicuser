@@ -99,20 +99,22 @@ async def play_handler(client, message):
             "title": video_title,
             "duration": readable_duration,
             "duration_seconds": isodate.parse_duration(video_duration).total_seconds(),
-            "requester": message.from_user.mention if message.from_user else "Unknown",
+            "requester": message.from_user.first_name if message.from_user else "Unknown",
         })
 
         # If the queue has only one song, start playing immediately
         if len(chat_containers[chat_id]) == 1:
             await skip_to_next_song(chat_id, await_message)
         else:
-            await await_message.edit(
-                f"\u2705 Added to queue:\n\n"
-                f"**Title:** {video_title}\n\n"
-                f"**Duration:** {readable_duration}\n"
-                f"**Requested by:** {message.from_user.mention if message.from_user else 'Unknown'}",
-                disable_web_page_preview=True
-            )
+            await await_message.delete()
+            await message.reply(
+    f"\u2705 Added to queue:\n\n"
+    f"**Title:** {video_title}\n\n"
+    f"**Duration:** {readable_duration}\n"
+    f"**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n\n"
+    f"If the assistant is not in the voice chat, please use /clear.",
+    disable_web_page_preview=True
+)
 
     except Exception as e:
         await message.reply(f"\u274C Failed to play the song. Error: {str(e)}")
@@ -130,7 +132,7 @@ async def skip_to_next_song(chat_id, await_message):
 
             try:
                 # Send the video URL to the new API for download
-                await await_message.edit(f"\U0001F916 Sending URL to download bot for\n\n **{song_info['title']}**...")
+                await await_message.edit(f"\U0001F916 Sending URL to download api for\n\n **{song_info['title']}**...")
                 media_path = await download_audio(video_url)
                 await await_message.edit(f"✅ **Download completed for**\n\n {song_info['title']}. \n\n **Playing now...**")
 
@@ -144,25 +146,28 @@ async def skip_to_next_song(chat_id, await_message):
                         ),
                     )
                     # Notify the group about the currently playing song
-                    await await_message.edit(
-                        f"🎵 **Now Playing**\n"
-                        f"**Title:** {song_info['title']}\n"
-                        f"**Duration:** {song_info['duration']}\n"
+                    await await_message.delete()
+                    await await_message.reply(
+                        f"🎵 **Now Playing**\n\n"
+                        f"**Title:** {song_info['title']}\n\n"
+                        f"**Duration:** {song_info['duration']}\n\n"
                         f"**Requested by:** {song_info['requester']}",
                         disable_web_page_preview=True,
                     )
 
                     # Wait for the song to finish
-                    await asyncio.sleep(song_info['duration_seconds'] + 20)  # Added extra 20 seconds
+                    await asyncio.sleep(song_info['duration_seconds'] + 5)  
                 except Exception as playback_error:
                     print(f"Error during playback: {playback_error}")
-                    await await_message.edit(
+                    await await_message.delete()
+                    await await_message.reply(
                         f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...",
                     )
 
             except Exception as download_error:
                 print(f"Error during download or processing: {download_error}")
-                await await_message.edit(
+                await await_message.delete()
+                await await_message.reply(
                     f"❌ Error retrieving or processing audio for **{song_info['title']}**. Skipping...",
                 )
 
@@ -174,7 +179,8 @@ async def skip_to_next_song(chat_id, await_message):
         if chat_id in chat_containers and not chat_containers[chat_id]:
             try:
                 await call_py.leave_call(chat_id)
-                await await_message.edit("✅ Queue finished. Leaving the voice chat.")
+                await await_message.delete()
+                await await_message.reply("✅ Queue finished. Leaving the voice chat.")
             except Exception as leave_error:
                 print(f"Error leaving call: {leave_error}")
 
@@ -243,10 +249,11 @@ async def resume_handler(client, message):
 @app.on_message(filters.command("skip"))
 async def skip_handler(client, message):
     chat_id = message.chat.id
+    await_message = await message.reply("⏩ Skipping the current song...")
 
     try:
         if chat_id not in chat_containers or not chat_containers[chat_id]:
-            await message.reply("❌ No songs in the queue to skip.")
+            await await_message.edit("❌ No songs in the queue to skip.")
             return
 
         # Remove the current song from the chat-specific queue
@@ -261,14 +268,14 @@ async def skip_handler(client, message):
             print(f"Error deleting file: {e}")
 
         if not chat_containers[chat_id]:  # If no songs left in the queue
-            await message.reply(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 No more songs in the queue.")
+            await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 No more songs in the queue.")
         else:
             # Play the next song in the queue
-            await message.reply(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
+            await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
             await skip_to_next_song(chat_id, await_message)
 
     except Exception as e:
-        await message.reply(f"❌ Failed to skip the song. Error: {str(e)}")
+        await await_message.edit(f"❌ Failed to skip the song. Error: {str(e)}")
 
 @app.on_message(filters.command(["join"], "/"))
 async def join(client: Client, message: Message):
@@ -374,6 +381,31 @@ async def ping_handler(client, message):
         await message.reply(response)
     except Exception as e:
         await message.reply(f"❌ Failed to execute the command. Error: {str(e)}")
+
+@app.on_message(filters.command("clear"))
+async def clear_handler(client, message):
+    chat_id = message.chat.id
+
+    if chat_id in chat_containers:
+        # Stop the playback first
+        try:
+            await call_py.leave_call(chat_id)
+        except Exception as e:
+            print(f"Error leaving call: {e}")
+            await message.reply(f"❌ Failed to stop the playback. Error: {str(e)}")
+            return
+
+        # Clear the chat-specific queue
+        for song in chat_containers[chat_id]:
+            try:
+                os.remove(song.get('file_path', ''))
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+        
+        chat_containers.pop(chat_id)
+        await message.reply("🗑️ Cleared the queue and stopped the music.")
+    else:
+        await message.reply("❌ No songs in the queue to clear.")
 
 try:
     call_py.start()
