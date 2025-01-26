@@ -387,14 +387,6 @@ async def clear_handler(client, message):
     chat_id = message.chat.id
 
     if chat_id in chat_containers:
-        # Stop the playback first
-        try:
-            await call_py.leave_call(chat_id)
-        except Exception as e:
-            print(f"Error leaving call: {e}")
-            await message.reply(f"❌ Failed to stop the playback. Error: {str(e)}")
-            return
-
         # Clear the chat-specific queue
         for song in chat_containers[chat_id]:
             try:
@@ -403,7 +395,7 @@ async def clear_handler(client, message):
                 print(f"Error deleting file: {e}")
         
         chat_containers.pop(chat_id)
-        await message.reply("🗑️ Cleared the queue and stopped the music.")
+        await message.reply("🗑️ Cleared the queue.")
     else:
         await message.reply("❌ No songs in the queue to clear.")
 
