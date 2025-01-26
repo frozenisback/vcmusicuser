@@ -10,12 +10,11 @@ import re
 import time
 import psutil
 from datetime import datetime, timedelta
-from isodate import parse_duration
 import uuid
 import tempfile
 
 # Your session string
-STRING_SESSION = "BQHAYsoABMh-PazUmloJ7G0nyO4m1M7HLm0vyAVFXFuUeIMcYuf52yizYFMYcViJpQ5hpOQt81ZmSjI4mhIMDCchpg9opeXHqx8v0dxRmFk43z093-i-7XhbETvB0XZUQqlba5ARaK2md9Frq_RCGEkEvraT4CSMlKeAkRhOnuZLsjvN9XLW0C1Dy5Bjdm3YuuacHkNi-m5PRrhFy0GXgbmsKMH2pCRs0EG8waKIb16nXONhoq7lAS2Nbzkn0ex0Imq7VB53zYMJpJWr43X-JrIBGVYnpHuGTy8THGsc0qdsfL4yJqHfLiWJ240Y7xrWEnnSb86vvm_TlWGhcTCeMYZqFNtnwQAAAAHUQvNiAA"
+STRING_SESSION = "BQHAYsoAvDh3SUwVr4yf0U_r7wjrA2xSauDJzZrsnRy-zPHzYaaoG3QO3NIiSYC1K6x0o-X2RJ4jRoSWdryD4ZBHO93eDgIpRlezdXF5WCT8pxukTZFMBzitAEvZjkkSMQEXBq4ECww5PLgjeHNkr3x8uXUP2NWOgNYxS2b6OvQ2Xqr_OIt2Ze6T8ibDvC1Lue4w-1dDVmOjdBHhS-C34I9-cLrNDd7uqCtly5ChZo5UcRmemA1zfC6bXVuBSA2pHXxaxRqV13uFSj0GuiZd2OXAzto7g7451WO3QAsBR04eQSDYXQ-PvI5XuQDHl2XQMEoQt5sscmwcatDi9Lxa9L39oP-OAQAAAAG4QLY7AA"
 
 app = Client("music_bot", session_string=STRING_SESSION)
 
@@ -31,7 +30,6 @@ bot_start_time = time.time()
 API_URL = "https://small-bush-de65.tenopno.workers.dev/search?title="
 DOWNLOAD_API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/download?url="
 
-# Utility function to convert ISO 8601 duration to HH:MM:SS
 def iso8601_to_human_readable(iso_duration):
     try:
         duration = isodate.parse_duration(iso_duration)
@@ -44,7 +42,6 @@ def iso8601_to_human_readable(iso_duration):
     except Exception as e:
         return "Unknown duration"
 
-# Function to fetch YouTube link using the API
 async def fetch_youtube_link(query):
     try:
         async with aiohttp.ClientSession() as session:
@@ -57,7 +54,6 @@ async def fetch_youtube_link(query):
     except Exception as e:
         raise Exception(f"Failed to fetch YouTube link: {str(e)}")
 
-# Command to handle /start
 @app.on_message(filters.command("start"))
 async def start_handler(client, message):
     try:
@@ -175,7 +171,7 @@ async def skip_to_next_song(chat_id, await_message):
                 chat_containers[chat_id].pop(0)
 
         # Leave the voice chat if the queue is empty
-        if chat_id in chat_containers and not chat_containers[chat_id]]:
+        if chat_id in chat_containers and not chat_containers[chat_id]:
             try:
                 await call_py.leave_call(chat_id)
                 await await_message.edit("✅ Queue finished. Leaving the voice chat.")
@@ -202,7 +198,6 @@ async def download_audio(url):
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
 
-# Command to stop the bot from playing
 @app.on_message(filters.command(["stop", "end"]))
 async def stop_handler(client, message):
     chat_id = message.chat.id
@@ -229,7 +224,6 @@ async def stop_handler(client, message):
 
     await message.reply("⏹ Stopped the music and cleared the queue.")
 
-# Command to pause the stream
 @app.on_message(filters.command("pause"))
 async def pause_handler(client, message):
     try:
@@ -238,7 +232,6 @@ async def pause_handler(client, message):
     except Exception as e:
         await message.reply(f"❌ Failed to pause the stream. Error: {str(e)}")
 
-# Command to resume the stream
 @app.on_message(filters.command("resume"))
 async def resume_handler(client, message):
     try:
@@ -247,7 +240,6 @@ async def resume_handler(client, message):
     except Exception as e:
         await message.reply(f"❌ Failed to resume the stream. Error: {str(e)}")
 
-# Command to skip the current song
 @app.on_message(filters.command("skip"))
 async def skip_handler(client, message):
     chat_id = message.chat.id
@@ -273,7 +265,7 @@ async def skip_handler(client, message):
         else:
             # Play the next song in the queue
             await message.reply(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
-            await skip_to_next_song(client, chat_id)  # Adjusted call
+            await skip_to_next_song(chat_id, await_message)
 
     except Exception as e:
         await message.reply(f"❌ Failed to skip the song. Error: {str(e)}")
@@ -326,7 +318,6 @@ async def dm_message_handler(client, message):
     except Exception as e:
         await message.reply(f"❌ Failed to process the command. Error: {str(e)}")
 
-# Command to clear the queue for the current chat and reboot (/reboot)
 @app.on_message(filters.command("reboot"))
 async def reboot_handler(client, message):
     chat_id = message.chat.id
@@ -384,7 +375,6 @@ async def ping_handler(client, message):
     except Exception as e:
         await message.reply(f"❌ Failed to execute the command. Error: {str(e)}")
 
-# Start PyTgCalls and the Pyrogram Client
 try:
     call_py.start()
     print("Bot is running. Use /play to search and stream music.")
