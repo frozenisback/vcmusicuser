@@ -78,13 +78,13 @@ async def play_handler(client, message):
             await message.reply("\u2753 Please provide a song name to play.\nExample: /play Shape of You")
             return
 
-        await_message = await message.reply("\U0001F50D Searching for the song...")
+        processing_message = await message.reply("✨")
 
         # Fetch YouTube link from the API
         video_url, video_title, video_duration = await fetch_youtube_link(query)
 
         if not video_url:
-            await await_message.edit("\u274C Could not find the song. Please try another query.")
+            await processing_message.edit("\u274C Could not find the song. Please try another query.")
             return
 
         # Convert ISO 8601 duration to human-readable format
@@ -102,24 +102,27 @@ async def play_handler(client, message):
             "requester": message.from_user.first_name if message.from_user else "Unknown",
         })
 
+        queue_number = len(chat_containers[chat_id]) - 1  # Correct the queue number to start from 0
+
         # If the queue has only one song, start playing immediately
-        if len(chat_containers[chat_id]) == 1:
-            await skip_to_next_song(chat_id, await_message)
+        if queue_number == 0:
+            await skip_to_next_song(chat_id, processing_message)
         else:
-            await await_message.delete()
-            await message.reply(
-    f"\u2705 Added to queue:\n\n"
-    f"**Title:** {video_title}\n\n"
-    f"**Duration:** {readable_duration}\n"
-    f"**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n\n"
-    f"If the assistant is not in the voice chat, please use /clear.",
-    disable_web_page_preview=True
-)
+            await processing_message.edit(
+                f"\u2705 Added to queue:\n\n"
+                f"**Title:** {video_title}\n"
+                f"**Duration:** {readable_duration}\n"
+                f"**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
+                f"**Queue number:** {queue_number}\n\n"
+                f"If the assistant is not in the voice chat, please use /clear.",
+                disable_web_page_preview=True
+            )
 
     except Exception as e:
         await message.reply(f"\u274C Failed to play the song. Error: {str(e)}")
 
-async def skip_to_next_song(chat_id, await_message):
+
+async def skip_to_next_song(chat_id, message):
     try:
         while chat_id in chat_containers and chat_containers[chat_id]:
             song_info = chat_containers[chat_id][0]  # Get the first song in the queue
@@ -131,44 +134,37 @@ async def skip_to_next_song(chat_id, await_message):
                 continue
 
             try:
+                await message.edit(
+                    f"\U0001F50D Processing song \n**{song_info['title']}**..."
+                )
+
                 # Send the video URL to the new API for download
-                await await_message.edit(f"\U0001F916 Sending URL to download api for\n\n **{song_info['title']}**...")
                 media_path = await download_audio(video_url)
-                await await_message.edit(f"✅ **Download completed for**\n\n {song_info['title']}. \n\n **Playing now...**")
 
                 # Play the media using pytgcalls
-                try:
-                    await call_py.play(
-                        chat_id,
-                        MediaStream(
-                            media_path,
-                            video_flags=MediaStream.Flags.IGNORE,
-                        ),
-                    )
-                    # Notify the group about the currently playing song
-                    await await_message.delete()
-                    await await_message.reply(
-                        f"🎵 **Now Playing**\n\n"
-                        f"**Title:** {song_info['title']}\n\n"
-                        f"**Duration:** {song_info['duration']}\n\n"
-                        f"**Requested by:** {song_info['requester']}",
-                        disable_web_page_preview=True,
-                    )
+                await call_py.play(
+                    chat_id,
+                    MediaStream(
+                        media_path,
+                        video_flags=MediaStream.Flags.IGNORE,
+                    ),
+                )
 
-                    # Wait for the song to finish
-                    await asyncio.sleep(song_info['duration_seconds'] + 5)  
-                except Exception as playback_error:
-                    print(f"Error during playback: {playback_error}")
-                    await await_message.delete()
-                    await await_message.reply(
-                        f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...",
-                    )
+                # Notify the group about the currently playing song
+                await message.edit(
+                    f"\ud83c\udfb5 **Now Playing**\n\n"
+                    f"**Title:** {song_info['title']}\n\n"
+                    f"**Duration:** {song_info['duration']}\n\n"
+                    f"**Requested by:** {song_info['requester']}",
+                    disable_web_page_preview=True,
+                )
 
-            except Exception as download_error:
-                print(f"Error during download or processing: {download_error}")
-                await await_message.delete()
-                await await_message.reply(
-                    f"❌ Error retrieving or processing audio for **{song_info['title']}**. Skipping...",
+                # Wait for the song to finish
+                await asyncio.sleep(song_info['duration_seconds'] + 10)  
+            except Exception as playback_error:
+                print(f"Error during playback: {playback_error}")
+                await message.edit(
+                    f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...",
                 )
 
             finally:
@@ -179,13 +175,13 @@ async def skip_to_next_song(chat_id, await_message):
         if chat_id in chat_containers and not chat_containers[chat_id]:
             try:
                 await call_py.leave_call(chat_id)
-                await await_message.delete()
-                await await_message.reply("✅ Queue finished. Leaving the voice chat.")
+                await message.reply("✅ Queue finished. Leaving the voice chat.")
             except Exception as leave_error:
                 print(f"Error leaving call: {leave_error}")
 
     except Exception as e:
         print(f"Unexpected error in skip_to_next_song: {str(e)}")
+
 
 async def download_audio(url):
     """Downloads the audio from a given URL and returns the file path."""
