@@ -215,8 +215,8 @@ async def play_handler(_, message):
             await bot.send_message(ASSISTANT_CHAT_ID, f"/join {invite_link}")
             await processing_message.edit("⏳ Assistant is joining... Please wait.")
             
-            for _ in range(5):  # Retry for 10 seconds
-                await asyncio.sleep(1)
+            for _ in range(10):  # Retry for 10 seconds
+                await asyncio.sleep(3)
                 is_in_chat = await is_assistant_in_chat(chat_id)
                 print(f"Retry checking assistant in chat: {is_in_chat}")  # Debugging
                 
