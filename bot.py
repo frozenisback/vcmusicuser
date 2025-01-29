@@ -9,26 +9,28 @@ import os
 import re
 import time
 import psutil
-from datetime import datetime, timedelta
+from datetime import timedelta
 import uuid
 import tempfile
 
-# Your session string
-STRING_SESSION = "BQHAYsoAb3ae0jLs1ZCipc8iNCwh7-I-e6bbxJhaJeJH0uRjp_zPgLecdoKkWzK0sQQ7oJQNKCOXNhoQ6mTxSStvVFZrMyzMtZBhnA8i9U89NVvuJ8HL6GIGnKuiqKpLjTc6vzpyaik5AygMQ9pQ6-rIL9WPQTlLDZg4XnUNHkRpZcOuTjvGjvJFkWLqXg-eonQfJ5Aexopgdv_7gAPCGTD0Mw3JTyxUAYVKs4Y9WcAYHjSQ0bfydO7cuOHbqbNUeKp5vi526nZzuFdd1kEgYTxgaQHBhZ_ZoS1yxLVpc-oAizBiCU_bV4cGO3l-4SCZilPJ0Tmbu1cNR9GS1jH4DOH4-3VPaAAAAAG4QLY7AA"
+# Bot and Assistant session strings 
+API_ID = 29385418  # Replace with your actual API ID
+API_HASH = "5737577bcb32ea1aac1ac394b96c4b10"  # Replace with your actual API Hash
+BOT_TOKEN = "7598576464:AAEH2ftzzjK38uIsufcUnKwgKAhlRiSJoNA"  # Replace with your bot token
+ASSISTANT_SESSION = "BQHAYsoAb3ae0jLs1ZCipc8iNCwh7-I-e6bbxJhaJeJH0uRjp_zPgLecdoKkWzK0sQQ7oJQNKCOXNhoQ6mTxSStvVFZrMyzMtZBhnA8i9U89NVvuJ8HL6GIGnKuiqKpLjTc6vzpyaik5AygMQ9pQ6-rIL9WPQTlLDZg4XnUNHkRpZcOuTjvGjvJFkWLqXg-eonQfJ5Aexopgdv_7gAPCGTD0Mw3JTyxUAYVKs4Y9WcAYHjSQ0bfydO7cuOHbqbNUeKp5vi526nZzuFdd1kEgYTxgaQHBhZ_ZoS1yxLVpc-oAizBiCU_bV4cGO3l-4SCZilPJ0Tmbu1cNR9GS1jH4DOH4-3VPaAAAAAG4QLY7AA"  # Replace with your assistant session string
 
-app = Client("music_bot", session_string=STRING_SESSION)
+# Initialize the bot and assistant clients
+bot = Client("music_bot", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
+assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
+call_py = PyTgCalls(assistant)
 
-# Initialize PyTgCalls
-call_py = PyTgCalls(app)
+# API Endpoints
+API_URL = "https://small-bush-de65.tenopno.workers.dev/search?title="
+DOWNLOAD_API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/download?url="
 
 # Containers for song queues per chat/group
 chat_containers = {}
-
 bot_start_time = time.time()
-
-# API endpoint for searching YouTube links
-API_URL = "https://small-bush-de65.tenopno.workers.dev/search?title="
-DOWNLOAD_API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/download?url="
 
 def iso8601_to_human_readable(iso_duration):
     try:
@@ -54,37 +56,27 @@ async def fetch_youtube_link(query):
     except Exception as e:
         raise Exception(f"Failed to fetch YouTube link: {str(e)}")
 
-@app.on_message(filters.command("start"))
-async def start_handler(client, message):
-    try:
-        await message.reply(
-            "\U0001F44B **Welcome to the Music Bot!**\n\n"
-            "\U0001F3B5 Use `/play <song name>` to search and play music in your voice chat.\n"
-            "\u23F9 Use `/stop` to stop the music.\n"
-            "\u23F8 Use `/pause` to pause the music.\n"
-            "\u25B6\uFE0F Use `/resume` to resume the music.\n\n"
-            "Happy listening! \U0001F3A7"
-        )
-    except Exception as e:
-        await message.reply(f"\u274C Failed to process the command. Error: {str(e)}")
+@bot.on_message(filters.command("start"))
+async def start_handler(_, message):
+    await message.reply("👋 **Welcome to the Music Bot!**\n\n🎵 Use `/play <song name>` to search and play music in your voice chat.\n⏹ Use `/stop` to stop the music.\n⏸ Use `/pause` to pause the music.\n▶️ Use `/resume` to resume the music.\n\nHappy listening! 🎧")
 
-@app.on_message(filters.regex(r'^/play(?: (?P<query>.+))?$'))
-async def play_handler(client, message):
+@bot.on_message(filters.regex(r'^/play(?: (?P<query>.+))?$'))
+async def play_handler(_, message):
     chat_id = message.chat.id
     try:
         query = message.matches[0]['query']  # Extract query from the command
 
         if not query:
-            await message.reply("\u2753 Please provide a song name to play.\nExample: /play Shape of You")
+            await message.reply("❓ Please provide a song name to play.\nExample: /play Shape of You")
             return
 
-        processing_message = await message.reply("✨")
+        processing_message = await message.reply("🔍 Searching for the song...")
 
         # Fetch YouTube link from the API
         video_url, video_title, video_duration = await fetch_youtube_link(query)
 
         if not video_url:
-            await processing_message.edit("\u274C Could not find the song. Please try another query.")
+            await processing_message.edit("❌ Could not find the song. Please try another query.")
             return
 
         # Convert ISO 8601 duration to human-readable format
@@ -109,7 +101,7 @@ async def play_handler(client, message):
             await skip_to_next_song(chat_id, processing_message)
         else:
             await processing_message.edit(
-                f"\u2705 Added to queue:\n\n"
+                f"🎵 Added to queue:\n\n"
                 f"**Title:** {video_title}\n"
                 f"**Duration:** {readable_duration}\n"
                 f"**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
@@ -119,8 +111,7 @@ async def play_handler(client, message):
             )
 
     except Exception as e:
-        await message.reply(f"\u274C Failed to play the song. Error: {str(e)}")
-
+        await message.reply(f"❌ Failed to play the song. Error: {str(e)}")
 
 async def skip_to_next_song(chat_id, message):
     try:
@@ -135,7 +126,7 @@ async def skip_to_next_song(chat_id, message):
 
             try:
                 await message.edit(
-                    f"\U0001F50D Processing song \n**{song_info['title']}**..."
+                    f"🔎 Processing song \n**{song_info['title']}**..."
                 )
 
                 # Send the video URL to the new API for download
@@ -152,7 +143,7 @@ async def skip_to_next_song(chat_id, message):
 
                 # Notify the group about the currently playing song
                 await message.edit(
-                    f"\ud83c\udfb5 **Now Playing**\n\n"
+                    f"🎵 **Now Playing**\n\n"
                     f"**Title:** {song_info['title']}\n\n"
                     f"**Duration:** {song_info['duration']}\n\n"
                     f"**Requested by:** {song_info['requester']}",
@@ -174,14 +165,13 @@ async def skip_to_next_song(chat_id, message):
         # Leave the voice chat if the queue is empty
         if chat_id in chat_containers and not chat_containers[chat_id]:
             try:
-                await call_py.leave_call(chat_id)
+                await call_py.leave_group_call(chat_id)
                 await message.reply("✅ Queue finished. Leaving the voice chat.")
             except Exception as leave_error:
                 print(f"Error leaving call: {leave_error}")
 
     except Exception as e:
         print(f"Unexpected error in skip_to_next_song: {str(e)}")
-
 
 async def download_audio(url):
     """Downloads the audio from a given URL and returns the file path."""
@@ -200,7 +190,7 @@ async def download_audio(url):
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
 
-@app.on_message(filters.command(["stop", "end"]))
+@bot.on_message(filters.command(["stop", "end"]))
 async def stop_handler(client, message):
     chat_id = message.chat.id
 
@@ -226,23 +216,23 @@ async def stop_handler(client, message):
 
     await message.reply("⏹ Stopped the music and cleared the queue.")
 
-@app.on_message(filters.command("pause"))
-async def pause_handler(client, message):
+@bot.on_message(filters.command("pause"))
+async def pause_handler(_, message):
     try:
         await call_py.pause_stream(message.chat.id)
         await message.reply("⏸ Paused the stream.")
     except Exception as e:
         await message.reply(f"❌ Failed to pause the stream. Error: {str(e)}")
 
-@app.on_message(filters.command("resume"))
-async def resume_handler(client, message):
+@bot.on_message(filters.command("resume"))
+async def resume_handler(_, message):
     try:
         await call_py.resume_stream(message.chat.id)
         await message.reply("▶️ Resumed the stream.")
     except Exception as e:
         await message.reply(f"❌ Failed to resume the stream. Error: {str(e)}")
 
-@app.on_message(filters.command("skip"))
+@bot.on_message(filters.command("skip"))
 async def skip_handler(client, message):
     chat_id = message.chat.id
     await_message = await message.reply("⏩ Skipping the current song...")
@@ -273,56 +263,9 @@ async def skip_handler(client, message):
     except Exception as e:
         await await_message.edit(f"❌ Failed to skip the song. Error: {str(e)}")
 
-@app.on_message(filters.command(["join"], "/"))
-async def join(client: Client, message: Message):
-    input_text = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else None
-    processing_msg = await message.reply_text("`Processing...`")
 
-    if not input_text:
-        await processing_msg.edit("❌ Please provide a valid group/channel link or username.")
-        return
-
-    # Validate and process the input
-    if re.match(r"https://t\.me/[\w_]+/?", input_text):
-        input_text = input_text.split("https://t.me/")[1].strip("/")
-    elif input_text.startswith("@"):
-        input_text = input_text[1:]
-
-    try:
-        # Attempt to join the group/channel
-        await client.join_chat(input_text)
-        await processing_msg.edit(f"**Successfully Joined Group/Channel:** `{input_text}`")
-    except Exception as error:
-        error_message = str(error)
-        if "USERNAME_INVALID" in error_message:
-            await processing_msg.edit("❌ ERROR: Invalid username or link. Please check and try again.")
-        elif "INVITE_HASH_INVALID" in error_message:
-            await processing_msg.edit("❌ ERROR: Invalid invite link. Please verify and try again.")
-        elif "USER_ALREADY_PARTICIPANT" in error_message:
-            await processing_msg.edit(f"✅ You are already a member of `{input_text}`.")
-        else:
-            await processing_msg.edit(f"**ERROR:** \n\n{error_message}")
-
-@app.on_message(filters.private)
-async def dm_message_handler(client, message):
-    try:
-        # Ignore bots and the bot's own messages
-        if message.from_user.is_bot or message.from_user.id == client.me.id:
-            return
-
-        await message.reply(
-            "👋 **Welcome to the Music Bot!**\n\n"
-            "🎵 Use `/play <song name>` to search and play music in your voice chat.\n"
-            "⏹ Use `/stop` to stop the music.\n"
-            "⏸ Use `/pause` to pause the music.\n"
-            "▶️ Use `/resume` to resume the music.\n\n"
-            "Happy listening! 🎧"
-        )
-    except Exception as e:
-        await message.reply(f"❌ Failed to process the command. Error: {str(e)}")
-
-@app.on_message(filters.command("reboot"))
-async def reboot_handler(client, message):
+@bot.on_message(filters.command("reboot"))
+async def reboot_handler(_, message):
     chat_id = message.chat.id
 
     try:
@@ -332,7 +275,7 @@ async def reboot_handler(client, message):
                     os.remove(song.get('file_path', ''))
                 except Exception as e:
                     print(f"Error deleting file: {e}")
-            await call_py.leave_call(chat_id)
+            await call_py.leave_group_call(chat_id)
 
             # Remove stored audio files for each song in the queue
             for song in chat_containers[chat_id]:
@@ -344,14 +287,14 @@ async def reboot_handler(client, message):
             # Clear the queue for this chat
             chat_containers.pop(chat_id, None)
 
-            await message.reply("🔄 rebooted for this chat and queue is cleared.")
+            await message.reply("♻️ Rebooted for this chat and queue is cleared.")
         else:
             await message.reply("❌ No active queue to clear in this chat.")
     except Exception as e:
         await message.reply(f"❌ Failed to reboot. Error: {str(e)}")
 
-@app.on_message(filters.command("ping"))
-async def ping_handler(client, message):
+@bot.on_message(filters.command("ping"))
+async def ping_handler(_, message):
     try:
         # Calculate uptime
         current_time = time.time()
@@ -378,8 +321,8 @@ async def ping_handler(client, message):
     except Exception as e:
         await message.reply(f"❌ Failed to execute the command. Error: {str(e)}")
 
-@app.on_message(filters.command("clear"))
-async def clear_handler(client, message):
+@bot.on_message(filters.command("clear"))
+async def clear_handler(_, message):
     chat_id = message.chat.id
 
     if chat_id in chat_containers:
@@ -395,9 +338,18 @@ async def clear_handler(client, message):
     else:
         await message.reply("❌ No songs in the queue to clear.")
 
-try:
-    call_py.start()
-    print("Bot is running. Use /play to search and stream music.")
-    idle()
-except Exception as e:
-    print(f"Critical error: {str(e)}")
+if __name__ == "__main__":
+    try:
+        call_py.start()
+        bot.start()
+        if not assistant.is_connected:
+            assistant.start()
+        idle()
+    except KeyboardInterrupt:
+        print("Bot stopped by user.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        bot.stop()
+        assistant.stop()
+        call_py.stop()
