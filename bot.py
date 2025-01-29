@@ -49,10 +49,8 @@ async def extract_invite_link(client, chat_id):
 
 async def is_assistant_in_chat(chat_id):
     try:
-        async for member in assistant.get_chat_members(chat_id):
-            if member.user.is_self:
-                return True
-        return False
+        member = await assistant.get_chat_member(chat_id, ASSISTANT_USERNAME)
+        return member.status is not None
     except Exception as e:
         print(f"Error checking assistant in chat: {e}")
         return False
