@@ -25,8 +25,8 @@ bot = Client("music_bot1", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH
 assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
 call_py = PyTgCalls(assistant)
 
-ASSISTANT_USERNAME = "@xyz09723"
-ASSISTANT_CHAT_ID = 5268762773
+ASSISTANT_USERNAME = "@Frozensupporter1"
+ASSISTANT_CHAT_ID = 7386215995
 
 # API Endpoints
 API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/search?title="
