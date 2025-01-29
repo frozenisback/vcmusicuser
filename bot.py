@@ -29,7 +29,7 @@ ASSISTANT_USERNAME = "@Frozensupporter1"
 ASSISTANT_CHAT_ID = 7386215995
 
 # API Endpoints
-API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/search?title="
+API_URL = "https://odd-block-a945.tenopno.workers.dev/search?title="
 DOWNLOAD_API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/download?url="
 
 # Containers for song queues per chat/group
