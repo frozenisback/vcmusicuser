@@ -422,11 +422,11 @@ async def start_playback_task(chat_id, message):
             control_buttons = InlineKeyboardMarkup(
                 [
                     [
-                        InlineKeyboardButton("⏸ Pause", callback_data="pause"),
-                        InlineKeyboardButton("⏭ Resume", callback_data="resume"),
+                        InlineKeyboardButton("▶️ Pause", callback_data="pause"),
+                        InlineKeyboardButton("⏸ Resume", callback_data="resume"),
                     ],
                     [
-                        InlineKeyboardButton("▶️ Skip", callback_data="skip"),
+                        InlineKeyboardButton("⏭ Skip", callback_data="skip"),
                         InlineKeyboardButton("⏹ Stop", callback_data="stop"),
                     ],
                 ]
