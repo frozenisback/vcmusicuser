@@ -18,6 +18,9 @@ import aiohttp
 from io import BytesIO
 from pyrogram.enums import ChatType, ChatMemberStatus
 from typing import Union
+from pytgcalls.types import Update
+from pytgcalls import filters as fl
+
 
 # Bot and Assistant session strings 
 API_ID = 29385418  # Replace with your actual API ID
@@ -93,7 +96,7 @@ async def fetch_youtube_link(query):
     
 
 
-async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="    ᴘᴏᴡᴇʀᴇᴅ ʙʏ ғʀᴏᴢᴇɴ ʙᴏᴛs     "):
+async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="ᴘᴏᴡᴇʀᴇᴅ ʙʏ ғʀᴏᴢᴇɴ ʙᴏᴛs"):
     try:
         # Fetch the thumbnail image
         async with aiohttp.ClientSession() as session:
@@ -115,8 +118,8 @@ async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="    ᴘᴏ�
         text_bbox = draw.textbbox((0, 0), watermark_text, font=font)
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
-        x = image.width - text_width - 22  # Padding of 20px from the right
-        y = image.height - text_height - 18  # Padding of 20px from the bottom
+        x = 20  # Padding of 20px from the left
+        y = image.height - text_height - 20  # Padding of 20px from the bottom
 
         # Create a solid black rectangle behind the text for better visibility
         rect_x1 = x - 5
@@ -156,7 +159,7 @@ async def is_user_admin(obj: Union[Message, CallbackQuery]) -> bool:
 
     if user.id in [
         777000,  # Telegram Service Notifications
-        7856124770,  # GroupwcgbrandedBot
+        7009413119,  # GroupwcgbrandedBot
     ]:
         return True
 
@@ -383,95 +386,89 @@ async def start_playback_task(chat_id, message):
     if chat_id in playback_tasks:
         playback_tasks[chat_id].cancel()  # Cancel the existing task if any
 
-    playback_tasks[chat_id] = asyncio.create_task(skip_to_next_song(chat_id, message))
+    if chat_id in chat_containers and chat_containers[chat_id]:
+        song_info = chat_containers[chat_id][0]  # Get the first song in the queue
 
-async def skip_to_next_song(chat_id, message):
-    try:
-        while chat_id in chat_containers and chat_containers[chat_id]:
-            song_info = chat_containers[chat_id][0]  # Get the first song in the queue
+        video_url = song_info.get('url')
+        if not video_url:
+            print(f"Invalid video URL for song: {song_info}")
+            chat_containers[chat_id].pop(0)
+            return
 
-            video_url = song_info.get('url')
-            if not video_url:
-                print(f"Invalid video URL for song: {song_info}")
-                chat_containers[chat_id].pop(0)
-                continue
-
+        try:
+            # Attempt to edit the processing message to indicate downloading
             try:
-                # Attempt to edit the processing message to indicate downloading
-                try:
-                    await message.edit(
-                        f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕",
-                    )
-                except Exception as edit_error:
-                    print(f"Error editing message: {edit_error}")
-                    # If editing fails, send a new message
-                    message = await bot.send_message(chat_id, f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕")
-
-                # Send the video URL to the new API for download
-                media_path = await download_audio(video_url)
-
-                # Play the media using pytgcalls
-                await call_py.play(
-                    chat_id,
-                    MediaStream(
-                        media_path,
-                        video_flags=MediaStream.Flags.IGNORE,
-                    ),
+                await message.edit(
+                    f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕",
                 )
+            except Exception as edit_error:
+                print(f"Error editing message: {edit_error}")
+                # If editing fails, send a new message
+                message = await bot.send_message(chat_id, f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕")
 
-                # Create inline buttons for playback control
-                control_buttons = InlineKeyboardMarkup(
+            # Send the video URL to the new API for download
+            media_path = await download_audio(video_url)
+
+            # Play the media using pytgcalls
+            await call_py.play(
+                chat_id,
+                MediaStream(
+                    media_path,
+                    video_flags=MediaStream.Flags.IGNORE,
+                ),
+            )
+
+            # Create inline buttons for playback control
+            control_buttons = InlineKeyboardMarkup(
+                [
                     [
-                        [
-                            InlineKeyboardButton("⏸ Pause", callback_data="pause"),
-                            InlineKeyboardButton("⏭ Resume", callback_data="resume"),
-                        ],
-                        [
-                            InlineKeyboardButton("▶️ Skip", callback_data="skip"),
-                            InlineKeyboardButton("⏹ Stop", callback_data="stop"),
-                        ],
-                    ]
-                )
+                        InlineKeyboardButton("⏸ Pause", callback_data="pause"),
+                        InlineKeyboardButton("⏭ Resume", callback_data="resume"),
+                    ],
+                    [
+                        InlineKeyboardButton("▶️ Skip", callback_data="skip"),
+                        InlineKeyboardButton("⏹ Stop", callback_data="stop"),
+                    ],
+                ]
+            )
 
-                # Send the "Now Playing" message with thumbnail and buttons
-                now_playing_message = await message.reply_photo(
-                    photo=song_info['thumbnail'],  # Use the thumbnail URL here
-                    caption=(
-                        f"✨ **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**\n\n"
-                        f"✨**Title:** {song_info['title']}\n\n"
-                        f"✨**Duration:** {song_info['duration']}\n\n"
-                        f"✨**Requested by:** {song_info['requester']}"
-                    ),
-                    reply_markup=control_buttons,
-                )
-                # Delete the old processing message
-                await message.delete()
+            # Send the "Now Playing" message with thumbnail and buttons
+            now_playing_message = await message.reply_photo(
+                photo=song_info['thumbnail'],  # Use the thumbnail URL here
+                caption=(
+                    f"✨ **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**\n\n"
+                    f"✨**Title:** {song_info['title']}\n\n"
+                    f"✨**Duration:** {song_info['duration']}\n\n"
+                    f"✨**Requested by:** {song_info['requester']}"
+                ),
+                reply_markup=control_buttons,
+            )
+            # Delete the old processing message
+            await message.delete()
 
-                # Wait for the song to finish
-                await asyncio.sleep(song_info['duration_seconds'] + 10)  
-            except Exception as playback_error:
-                print(f"Error during playback: {playback_error}")
-                await message.reply(
-                    f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...",
-                )
+        except Exception as playback_error:
+            print(f"Error during playback: {playback_error}")
+            await message.reply(
+                f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...",
+            )
+            chat_containers[chat_id].pop(0)
+            await start_playback_task(chat_id, message)
 
-            finally:
-                # Clean up: remove the song from the queue
-                chat_containers[chat_id].pop(0)
+@call_py.on_update(fl.stream_end)
+async def stream_end_handler(_: PyTgCalls, update: Update):
+    chat_id = update.chat_id
+    if chat_id in chat_containers and chat_containers[chat_id]:
+        skipped_song = chat_containers[chat_id].pop(0)
+        await asyncio.sleep(3)  # Delay to ensure the stream has ended
+        try:
+            os.remove(skipped_song.get('file_path', ''))
+        except Exception as e:
+            print(f"Error deleting file: {e}")
 
-        # Leave the voice chat if the queue is empty
-        if chat_id in chat_containers and not chat_containers[chat_id]:
-            try:
-                await call_py.leave_call(chat_id)
-                await message.reply("✅ Queue finished. Leaving the voice chat.")
-            except Exception as leave_error:
-                print(f"Error leaving call: {leave_error}")
-
-    except Exception as e:
-        print(f"Unexpected error in skip_to_next_song: {str(e)}")
-    finally:
-        if chat_id in playback_tasks:
-            del playback_tasks[chat_id]
+        if chat_id in chat_containers and chat_containers[chat_id]:
+            await start_playback_task(chat_id, None)  # Start the next song
+        else:
+            await bot.send_message(chat_id, "No more songs in the queue.")
 
 # Add a callback query handler to handle button presses
 @bot.on_callback_query()
@@ -535,6 +532,8 @@ async def download_audio(url):
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
+    
+
 
 @bot.on_message(filters.command(["stop", "end"]))
 async def skip_handler(client, message):
