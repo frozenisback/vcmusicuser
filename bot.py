@@ -468,7 +468,26 @@ async def stream_end_handler(_: PyTgCalls, update: Update):
         if chat_id in chat_containers and chat_containers[chat_id]:
             await start_playback_task(chat_id, None)  # Start the next song
         else:
-            await bot.send_message(chat_id, "No more songs in the queue.")
+            await bot.send_message(chat_id, "❌ No more songs in the queue.\n Leaving the voice chat.💕")
+            await leave_voice_chat(chat_id)  # Leave the voice chat
+
+async def leave_voice_chat(chat_id):
+    try:
+        await call_py.leave_call(chat_id)
+    except Exception as e:
+        print(f"Error leaving the voice chat: {e}")
+
+    if chat_id in chat_containers:
+        for song in chat_containers[chat_id]:
+            try:
+                os.remove(song.get('file_path', ''))
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+        chat_containers.pop(chat_id)
+
+    if chat_id in playback_tasks:
+        playback_tasks[chat_id].cancel()
+        del playback_tasks[chat_id]
 
 # Add a callback query handler to handle button presses
 @bot.on_callback_query()
