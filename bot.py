@@ -108,8 +108,8 @@ async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="    ᴘᴏ�
         # Create a drawing context
         draw = ImageDraw.Draw(image)
 
-        # Load a font (ensure this font file is available or replace it with one that exists on your system)
-        font = ImageFont.truetype("/opt/render/.local/share/fonts/arial.ttf", size=28)  # Adjust font size if needed
+        # Use Pillow's default font
+        font = ImageFont.load_default()
 
         # Calculate text size and position
         text_bbox = draw.textbbox((0, 0), watermark_text, font=font)
@@ -137,6 +137,7 @@ async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="    ᴘᴏ�
 
     except Exception as e:
         raise Exception(f"Error adding watermark: {str(e)}")
+
 
 
 @bot.on_message(filters.command("start"))
