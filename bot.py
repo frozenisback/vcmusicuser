@@ -21,7 +21,7 @@ from io import BytesIO
 API_ID = 29385418  # Replace with your actual API ID
 API_ID = 29385418  # Replace with your actual API ID
 API_HASH = "5737577bcb32ea1aac1ac394b96c4b10"  # Replace with your actual API Hash
-BOT_TOKEN = "7903434583:AAEKUl33YOK8ctONSqV152B7gbw29rXkX2A"  # Replace with your bot token
+BOT_TOKEN = "7598576464:AAHTQqNDdgD_DyzOfo_ET2an0OTLtd-S7io"  # Replace with your bot token
 ASSISTANT_SESSION = "BQHAYsoAsZr5lE0jAOg3HFhl1f-rs5NbOgW2Z5aWqk-T3N4dQCBT3PdQ4zSWP-0Hcb00PAthrB_NgFViTfb8UtHV6BXAiAD43UXF9BMZe_rH6H-Td_LG-bq8bSRY9cfKJ-bSOs2mXicroIcuQDC3QUBm_ARvE3CDzAL1ckugMCIO0S1z17olRDn9MQtZ_GJrtgTIei4HPCQly1EVf5ObRjriS3Py1uh0TQTwQEtW9K29S117Pw4g7PeksIla6ewhw9jjieZ46RVdftHkbeljTLkKy2jqMSHGresx33OuNNhQA75IcwsQCxBWZjE60ir6BeTuaB8xv33WWo_WaPkLlM0YowbLbQAAAAE6CvCVAA"
 
 # Initialize the bot and assistant clients
