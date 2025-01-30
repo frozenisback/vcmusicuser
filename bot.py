@@ -13,12 +13,16 @@ from datetime import timedelta
 import uuid
 import tempfile
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from PIL import Image, ImageDraw, ImageFont
+import aiohttp
+from io import BytesIO
 
 # Bot and Assistant session strings 
 API_ID = 29385418  # Replace with your actual API ID
+API_ID = 29385418  # Replace with your actual API ID
 API_HASH = "5737577bcb32ea1aac1ac394b96c4b10"  # Replace with your actual API Hash
-BOT_TOKEN = "7598576464:AAHTQqNDdgD_DyzOfo_ET2an0OTLtd-S7io"  # Replace with your bot token
-ASSISTANT_SESSION = "BQHAYsoAb3ae0jLs1ZCipc8iNCwh7-I-e6bbxJhaJeJH0uRjp_zPgLecdoKkWzK0sQQ7oJQNKCOXNhoQ6mTxSStvVFZrMyzMtZBhnA8i9U89NVvuJ8HL6GIGnKuiqKpLjTc6vzpyaik5AygMQ9pQ6-rIL9WPQTlLDZg4XnUNHkRpZcOuTjvGjvJFkWLqXg-eonQfJ5Aexopgdv_7gAPCGTD0Mw3JTyxUAYVKs4Y9WcAYHjSQ0bfydO7cuOHbqbNUeKp5vi526nZzuFdd1kEgYTxgaQHBhZ_ZoS1yxLVpc-oAizBiCU_bV4cGO3l-4SCZilPJ0Tmbu1cNR9GS1jH4DOH4-3VPaAAAAAG4QLY7AA"
+BOT_TOKEN = "7903434583:AAEKUl33YOK8ctONSqV152B7gbw29rXkX2A"  # Replace with your bot token
+ASSISTANT_SESSION = "BQHAYsoAsZr5lE0jAOg3HFhl1f-rs5NbOgW2Z5aWqk-T3N4dQCBT3PdQ4zSWP-0Hcb00PAthrB_NgFViTfb8UtHV6BXAiAD43UXF9BMZe_rH6H-Td_LG-bq8bSRY9cfKJ-bSOs2mXicroIcuQDC3QUBm_ARvE3CDzAL1ckugMCIO0S1z17olRDn9MQtZ_GJrtgTIei4HPCQly1EVf5ObRjriS3Py1uh0TQTwQEtW9K29S117Pw4g7PeksIla6ewhw9jjieZ46RVdftHkbeljTLkKy2jqMSHGresx33OuNNhQA75IcwsQCxBWZjE60ir6BeTuaB8xv33WWo_WaPkLlM0YowbLbQAAAAE6CvCVAA"
 
 # Initialize the bot and assistant clients
 bot = Client("music_bot1", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
@@ -34,6 +38,7 @@ DOWNLOAD_API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/dow
 
 # Containers for song queues per chat/group
 chat_containers = {}
+playback_tasks = {}  # To manage playback tasks per chat
 bot_start_time = time.time()
 
 async def extract_invite_link(client, chat_id):
@@ -73,15 +78,62 @@ async def fetch_youtube_link(query):
             async with session.get(f"{API_URL}{query}") as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data.get("link"), data.get("title"), data.get("duration")
+                    return (
+                        data.get("link"),
+                        data.get("title"),
+                        data.get("duration"),
+                        data.get("thumbnail")  # Add this line to return the thumbnail URL
+                    )
                 else:
                     raise Exception(f"API returned status code {response.status}")
     except Exception as e:
         raise Exception(f"Failed to fetch YouTube link: {str(e)}")
+    
+async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="    ᴘᴏᴡᴇʀᴇᴅ ʙʏ ғʀᴏᴢᴇɴ ʙᴏᴛs ᴡɪᴛʜ    "):
+    try:
+        # Fetch the thumbnail image
+        async with aiohttp.ClientSession() as session:
+            async with session.get(thumbnail_url) as response:
+                if response.status != 200:
+                    raise Exception("Failed to fetch thumbnail image.")
+                image_data = await response.read()
 
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        # Open the image using Pillow
+        image = Image.open(BytesIO(image_data)).convert("RGBA")
 
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        # Create a drawing context
+        draw = ImageDraw.Draw(image)
+
+        # Load a font (ensure this font file is available or replace it with one that exists on your system)
+        font = ImageFont.truetype("arial.ttf", size=28)  # Adjust font size if needed
+
+        # Calculate text size and position
+        text_bbox = draw.textbbox((0, 0), watermark_text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        x = image.width - text_width - 22  # Padding of 20px from the right
+        y = image.height - text_height - 18  # Padding of 20px from the bottom
+
+        # Create a solid black rectangle behind the text for better visibility
+        rect_x1 = x - 5
+        rect_y1 = y - 5
+        rect_x2 = x + text_width + 5
+        rect_y2 = y + text_height + 5
+        draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], fill=(0, 0, 0, 255))  # Solid black
+
+        # Add the neon-colored, bold text watermark
+        neon_color = (57, 255, 20)  # Neon green
+        draw.text((x, y), watermark_text, font=font, fill=neon_color)
+
+        # Save the watermarked image to an in-memory buffer
+        output_buffer = BytesIO()
+        image.save(output_buffer, format="PNG")
+        output_buffer.seek(0)
+        return output_buffer
+
+    except Exception as e:
+        raise Exception(f"Error adding watermark: {str(e)}")
+
 
 @bot.on_message(filters.command("start"))
 async def start_handler(_, message):
@@ -230,13 +282,20 @@ async def play_handler(_, message):
 
     # ✅ Assistant is in the chat, proceed to fetch and play song
     try:
-        video_url, video_title, video_duration = await fetch_youtube_link(query)
+        video_url, video_title, video_duration, thumbnail_url = await fetch_youtube_link(query)  # Updated to include thumbnail
 
         if not video_url:
             await processing_message.edit("❌ Could not find the song. Try another query.")
             return
 
         readable_duration = iso8601_to_human_readable(video_duration)
+
+        # Fetch and add watermark to the thumbnail
+        try:
+            watermarked_thumbnail = await add_watermark_to_thumbnail(thumbnail_url)
+        except Exception as e:
+            await processing_message.edit(f"❌ Error processing thumbnail: {str(e)}")
+            return
 
         if chat_id not in chat_containers:
             chat_containers[chat_id] = []
@@ -247,21 +306,44 @@ async def play_handler(_, message):
             "duration": readable_duration,
             "duration_seconds": isodate.parse_duration(video_duration).total_seconds(),
             "requester": message.from_user.first_name if message.from_user else "Unknown",
+            "thumbnail": watermarked_thumbnail  # Use the watermarked thumbnail
         })
 
         if len(chat_containers[chat_id]) == 1:
-            await skip_to_next_song(chat_id, processing_message)
+            await start_playback_task(chat_id, processing_message)
         else:
-            await processing_message.edit(
-                f"✨ ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:\n\n"
-                f"✨**Title:** {video_title}\n"
-                f"✨**Duration:** {readable_duration}\n"
-                f"✨**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
-                f"✨**Queue number:** {len(chat_containers[chat_id]) - 1}\n"
+            # Create inline buttons for queue control
+            control_buttons = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("⏭ Skip", callback_data="skip")
+                    ]
+                ]
             )
-
+            
+            # Send a new message with the watermarked thumbnail, queue details, and control buttons
+            new_message = await message.reply_photo(
+                photo=watermarked_thumbnail,  # Use the watermarked image here
+                caption=(
+                    f"✨ ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:\n\n"
+                    f"✨**Title:** {video_title}\n"
+                    f"✨**Duration:** {readable_duration}\n"
+                    f"✨**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
+                    f"✨**Queue number:** {len(chat_containers[chat_id]) - 1}\n"
+                ),
+                reply_markup=control_buttons
+            )
+            # Delete the old processing message
+            await processing_message.delete()
     except Exception as e:
-        await message.reply(f"❌ Failed to play the song. Error: {str(e)}")
+        await processing_message.edit(f"❌ Error: {str(e)}")
+
+async def start_playback_task(chat_id, message):
+    """Starts a playback task for the given chat."""
+    if chat_id in playback_tasks:
+        playback_tasks[chat_id].cancel()  # Cancel the existing task if any
+
+    playback_tasks[chat_id] = asyncio.create_task(skip_to_next_song(chat_id, message))
 
 async def skip_to_next_song(chat_id, message):
     try:
@@ -275,6 +357,7 @@ async def skip_to_next_song(chat_id, message):
                 continue
 
             try:
+                # Update the processing message to indicate downloading
                 await message.edit(
                     f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕",
                 )
@@ -291,20 +374,39 @@ async def skip_to_next_song(chat_id, message):
                     ),
                 )
 
-                # Notify the group about the currently playing song
-                await message.edit(
-                    f"✨ **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**\n\n"
-                    f"✨**Title:** {song_info['title']}\n\n"
-                    f"✨**Duration:** {song_info['duration']}\n\n"
-                    f"✨**Requested by:** {song_info['requester']}",
-                    disable_web_page_preview=True,
+                # Create inline buttons for playback control
+                control_buttons = InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton("⏸ Pause", callback_data="pause"),
+                            InlineKeyboardButton("⏭ Resume", callback_data="resume"),
+                        ],
+                        [
+                            InlineKeyboardButton("▶️ Skip", callback_data="skip"),
+                            InlineKeyboardButton("⏹ Stop", callback_data="stop"),
+                        ],
+                    ]
                 )
+
+                # Send the "Now Playing" message with thumbnail and buttons
+                now_playing_message = await message.reply_photo(
+                    photo=song_info['thumbnail'],  # Use the thumbnail URL here
+                    caption=(
+                        f"✨ **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**\n\n"
+                        f"✨**Title:** {song_info['title']}\n\n"
+                        f"✨**Duration:** {song_info['duration']}\n\n"
+                        f"✨**Requested by:** {song_info['requester']}"
+                    ),
+                    reply_markup=control_buttons,
+                )
+                # Delete the old processing message
+                await message.delete()
 
                 # Wait for the song to finish
                 await asyncio.sleep(song_info['duration_seconds'] + 10)  
             except Exception as playback_error:
                 print(f"Error during playback: {playback_error}")
-                await message.edit(
+                await message.reply(
                     f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...",
                 )
 
@@ -322,6 +424,52 @@ async def skip_to_next_song(chat_id, message):
 
     except Exception as e:
         print(f"Unexpected error in skip_to_next_song: {str(e)}")
+    finally:
+        if chat_id in playback_tasks:
+            del playback_tasks[chat_id]
+
+# Add a callback query handler to handle button presses
+@bot.on_callback_query()
+async def callback_query_handler(client, callback_query):
+    chat_id = callback_query.message.chat.id
+    data = callback_query.data
+
+    if data == "pause":
+        # Pause the playback
+        await call_py.pause_stream(chat_id)
+        await callback_query.answer("⏸ Playback paused.")
+
+    elif data == "skip":
+        # Skip the current song
+        if chat_id in chat_containers and chat_containers[chat_id]:
+            skipped_song = chat_containers[chat_id].pop(0)
+
+            # Stop the current song and remove the file
+            await call_py.leave_call(chat_id)
+            await asyncio.sleep(3)
+
+            try:
+                os.remove(skipped_song.get('file_path', ''))
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+
+            # Check if there are more songs in the queue
+            if chat_id in chat_containers and chat_containers[chat_id]:
+                await callback_query.answer("⏩ Skipped! Playing the next song...")
+                await skip_to_next_song(chat_id, callback_query.message)
+            else:
+                await callback_query.answer("⏩ Skipped! No more songs in the queue.")
+        else:
+            await callback_query.answer("❌ No songs in the queue to skip.")
+
+    elif data == "stop":
+        # Stop the playback and clear the queue
+        if chat_id in chat_containers:
+            chat_containers[chat_id].clear()
+
+        await call_py.leave_call(chat_id)
+        await callback_query.answer("🛑 Playback stopped and queue cleared.")
+
 
 async def download_audio(url):
     """Downloads the audio from a given URL and returns the file path."""
@@ -364,6 +512,11 @@ async def stop_handler(client, message):
                 print(f"Error deleting file: {e}")
         chat_containers.pop(chat_id)
 
+    # Cancel the playback task if it exists
+    if chat_id in playback_tasks:
+        playback_tasks[chat_id].cancel()
+        del playback_tasks[chat_id]
+
     await message.reply("⏹ Stopped the music and cleared the queue.")
 
 @bot.on_message(filters.command("pause"))
@@ -387,31 +540,32 @@ async def skip_handler(client, message):
     chat_id = message.chat.id
     await_message = await message.reply("⏩ Skipping the current song...")
 
+    # Check if there are songs in the queue
+    if chat_id not in chat_containers or not chat_containers[chat_id]:
+        await await_message.edit("❌ No songs in the queue to skip.")
+        return
+
+    # Remove the current song from the queue
+    skipped_song = chat_containers[chat_id].pop(0)
+
+    # End playback and skip first
+    await call_py.leave_call(chat_id)
+    await asyncio.sleep(3)
+
+    # Try deleting the file
     try:
-        if chat_id not in chat_containers or not chat_containers[chat_id]:
-            await await_message.edit("❌ No songs in the queue to skip.")
-            return
-
-        # Remove the current song from the chat-specific queue
-        skipped_song = chat_containers[chat_id].pop(0)
-
-        # End playback and skip first, then delete the file
-        await call_py.leave_call(chat_id)
-        await asyncio.sleep(3)
-        try:
-            os.remove(skipped_song.get('file_path', ''))
-        except Exception as e:
-            print(f"Error deleting file: {e}")
-
-        if not chat_containers[chat_id]:  # If no songs left in the queue
-            await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 No more songs in the queue.")
-        else:
-            # Play the next song in the queue
-            await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
-            await skip_to_next_song(chat_id, await_message)
-
+        os.remove(skipped_song.get('file_path', ''))
     except Exception as e:
-        await await_message.edit(f"❌ Failed to skip the song. Error: {str(e)}")
+        print(f"Error deleting file: {e}")
+
+    # Check if there are more songs in the queue
+    if not chat_containers[chat_id]:  
+        await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 No more songs in the queue.")
+    else:
+        # Play the next song in the queue
+        await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
+        await skip_to_next_song(chat_id, await_message)
+
 
 @bot.on_message(filters.command("reboot"))
 async def reboot_handler(_, message):
@@ -435,6 +589,11 @@ async def reboot_handler(_, message):
 
             # Clear the queue for this chat
             chat_containers.pop(chat_id, None)
+
+            # Cancel the playback task if it exists
+            if chat_id in playback_tasks:
+                playback_tasks[chat_id].cancel()
+                del playback_tasks[chat_id]
 
             await message.reply("♻️ Rebooted for this chat and queue is cleared.")
         else:
