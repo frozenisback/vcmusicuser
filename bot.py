@@ -93,7 +93,7 @@ async def fetch_youtube_link(query):
     
 
 
-async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="    ᴘᴏᴡᴇʀᴇᴅ ʙʏ ғʀᴏᴢᴇɴ ʙᴏᴛs ᴡɪᴛʜ    "):
+async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="    ᴘᴏᴡᴇʀᴇᴅ ʙʏ ғʀᴏᴢᴇɴ ʙᴏᴛs     "):
     try:
         # Fetch the thumbnail image
         async with aiohttp.ClientSession() as session:
@@ -156,7 +156,7 @@ async def is_user_admin(obj: Union[Message, CallbackQuery]) -> bool:
 
     if user.id in [
         777000,  # Telegram Service Notifications
-        7009413119,  # GroupwcgbrandedBot
+        7856124770,  # GroupwcgbrandedBot
     ]:
         return True
 
