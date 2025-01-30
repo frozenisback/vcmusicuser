@@ -8,3 +8,5 @@ Flask-RESTful
 tgcrypto
 ffmpeg-python
 isodate
+pillow
+psutil
