@@ -10,3 +10,4 @@ ffmpeg-python
 isodate
 pillow
 psutil
+git+https://github.com/gasharper/linux-fonts/blob/master/arial.ttf
