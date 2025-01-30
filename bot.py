@@ -3,7 +3,7 @@ from pytgcalls import idle, PyTgCalls
 from pytgcalls.types import MediaStream
 import aiohttp
 import asyncio
-from pyrogram.types import Message
+from pyrogram.types import Message, CallbackQuery
 import isodate
 import os
 import re
@@ -16,6 +16,8 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMedi
 from PIL import Image, ImageDraw, ImageFont
 import aiohttp
 from io import BytesIO
+from pyrogram.enums import ChatType, ChatMemberStatus
+from typing import Union
 
 # Bot and Assistant session strings 
 API_ID = 29385418  # Replace with your actual API ID
@@ -135,6 +137,41 @@ async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="    ᴘᴏ�
 
     except Exception as e:
         raise Exception(f"Error adding watermark: {str(e)}")
+    
+async def is_user_admin(obj: Union[Message, CallbackQuery]) -> bool:
+    if isinstance(obj, CallbackQuery):
+        message = obj.message
+        user = obj.from_user
+    elif isinstance(obj, Message):
+        message = obj
+        user = obj.from_user
+    else:
+        return False
+
+    if not user:
+        return False
+
+    if message.chat.type not in [ChatType.SUPERGROUP, ChatType.CHANNEL]:
+        return False
+
+    if user.id in [
+        777000,  # Telegram Service Notifications
+        7009413119,  # GroupwcgbrandedBot
+    ]:
+        return True
+
+    client = message._client
+    chat_id = message.chat.id
+    user_id = user.id
+
+    check_status = await client.get_chat_member(chat_id=chat_id, user_id=user_id)
+    if check_status.status not in [
+        ChatMemberStatus.OWNER,
+        ChatMemberStatus.ADMINISTRATOR
+    ]:
+        return False
+    else:
+        return True
 
 
 
@@ -360,10 +397,15 @@ async def skip_to_next_song(chat_id, message):
                 continue
 
             try:
-                # Update the processing message to indicate downloading
-                await message.edit(
-                    f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕",
-                )
+                # Attempt to edit the processing message to indicate downloading
+                try:
+                    await message.edit(
+                        f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕",
+                    )
+                except Exception as edit_error:
+                    print(f"Error editing message: {edit_error}")
+                    # If editing fails, send a new message
+                    message = await bot.send_message(chat_id, f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕")
 
                 # Send the video URL to the new API for download
                 media_path = await download_audio(video_url)
@@ -435,28 +477,32 @@ async def skip_to_next_song(chat_id, message):
 @bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
     chat_id = callback_query.message.chat.id
+    user_id = callback_query.from_user.id
+
+    if not await is_user_admin(callback_query):
+        await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
+        return
+
     data = callback_query.data
 
     if data == "pause":
-        # Pause the playback
         await call_py.pause_stream(chat_id)
         await callback_query.answer("⏸ Playback paused.")
 
+    elif data == "resume":
+        await call_py.resume_stream(chat_id)
+        await callback_query.answer("▶️ Playback resumed.")
+
     elif data == "skip":
-        # Skip the current song
         if chat_id in chat_containers and chat_containers[chat_id]:
             skipped_song = chat_containers[chat_id].pop(0)
-
-            # Stop the current song and remove the file
             await call_py.leave_call(chat_id)
             await asyncio.sleep(3)
-
             try:
                 os.remove(skipped_song.get('file_path', ''))
             except Exception as e:
                 print(f"Error deleting file: {e}")
 
-            # Check if there are more songs in the queue
             if chat_id in chat_containers and chat_containers[chat_id]:
                 await callback_query.answer("⏩ Skipped! Playing the next song...")
                 await skip_to_next_song(chat_id, callback_query.message)
@@ -466,7 +512,6 @@ async def callback_query_handler(client, callback_query):
             await callback_query.answer("❌ No songs in the queue to skip.")
 
     elif data == "stop":
-        # Stop the playback and clear the queue
         if chat_id in chat_containers:
             chat_containers[chat_id].clear()
 
@@ -492,21 +537,23 @@ async def download_audio(url):
         raise Exception(f"Error downloading audio: {e}")
 
 @bot.on_message(filters.command(["stop", "end"]))
-async def stop_handler(client, message):
+async def skip_handler(client, message):
     chat_id = message.chat.id
+    user_id = message.from_user.id
+
+    if not await is_user_admin(message):
+        await message.reply("❌ You need to be an admin to use this command.")
+        return
 
     try:
-        # Leave the voice chat (handles cases where the bot is not in VC)
         await call_py.leave_call(chat_id)
     except Exception as e:
-        # Handle cases where the bot is not in the voice chat
         if "not in a call" in str(e).lower():
             await message.reply("❌ The bot is not currently in a voice chat.")
         else:
             await message.reply(f"❌ An error occurred while leaving the voice chat: {str(e)}")
         return
 
-    # Clear the chat-specific queue
     if chat_id in chat_containers:
         for song in chat_containers[chat_id]:
             try:
@@ -515,7 +562,6 @@ async def stop_handler(client, message):
                 print(f"Error deleting file: {e}")
         chat_containers.pop(chat_id)
 
-    # Cancel the playback task if it exists
     if chat_id in playback_tasks:
         playback_tasks[chat_id].cancel()
         del playback_tasks[chat_id]
@@ -523,17 +569,31 @@ async def stop_handler(client, message):
     await message.reply("⏹ Stopped the music and cleared the queue.")
 
 @bot.on_message(filters.command("pause"))
-async def pause_handler(_, message):
+async def skip_handler(client, message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+
+    if not await is_user_admin(message):
+        await message.reply("❌ You need to be an admin to use this command.")
+        return
+
     try:
-        await call_py.pause_stream(message.chat.id)
+        await call_py.pause_stream(chat_id)
         await message.reply("⏸ Paused the stream.")
     except Exception as e:
         await message.reply(f"❌ Failed to pause the stream. Error: {str(e)}")
 
 @bot.on_message(filters.command("resume"))
-async def resume_handler(_, message):
+async def skip_handler(client, message):
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+
+    if not await is_user_admin(message):
+        await message.reply("❌ You need to be an admin to use this command.")
+        return
+
     try:
-        await call_py.resume_stream(message.chat.id)
+        await call_py.resume_stream(chat_id)
         await message.reply("▶️ Resumed the stream.")
     except Exception as e:
         await message.reply(f"❌ Failed to resume the stream. Error: {str(e)}")
@@ -541,31 +601,30 @@ async def resume_handler(_, message):
 @bot.on_message(filters.command("skip"))
 async def skip_handler(client, message):
     chat_id = message.chat.id
+    user_id = message.from_user.id
+
+    if not await is_user_admin(message):
+        await message.reply("❌ You need to be an admin to use this command.")
+        return
+
     await_message = await message.reply("⏩ Skipping the current song...")
 
-    # Check if there are songs in the queue
     if chat_id not in chat_containers or not chat_containers[chat_id]:
         await await_message.edit("❌ No songs in the queue to skip.")
         return
 
-    # Remove the current song from the queue
     skipped_song = chat_containers[chat_id].pop(0)
-
-    # End playback and skip first
     await call_py.leave_call(chat_id)
     await asyncio.sleep(3)
 
-    # Try deleting the file
     try:
         os.remove(skipped_song.get('file_path', ''))
     except Exception as e:
         print(f"Error deleting file: {e}")
 
-    # Check if there are more songs in the queue
-    if not chat_containers[chat_id]:  
+    if not chat_containers[chat_id]:
         await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 No more songs in the queue.")
     else:
-        # Play the next song in the queue
         await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
         await skip_to_next_song(chat_id, await_message)
 
