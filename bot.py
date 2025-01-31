@@ -170,7 +170,7 @@ async def is_user_admin(obj: Union[Message, CallbackQuery]) -> bool:
 
     if user.id in [
         777000,  # Telegram Service Notifications
-        7009413119,  # GroupwcgbrandedBot
+        7856124770,  # GroupwcgbrandedBot
     ]:
         return True
 
@@ -218,7 +218,7 @@ async def start_handler(_, message):
 
     # Buttons
     buttons = [
-        [InlineKeyboardButton("➕ Add me to your group", url="https://t.me/vcmusiclubot?startgroup=true"),
+        [InlineKeyboardButton("➕ Add me ", url="https://t.me/vcmusiclubot?startgroup=true"),
          InlineKeyboardButton("💬 Support", url="https://t.me/Frozensupport1")],
         [InlineKeyboardButton("❓ Help", callback_data="show_help")]
     ]
@@ -328,10 +328,10 @@ async def play_handler(_, message):
                     await processing_message.edit("✅ Assistant joined! Playing your song...")
                     break
             else:
-                await processing_message.edit("❌ Assistant failed to join. Try again later.")
+                await processing_message.edit("❌ Assistant failed to join. Please unban assistant \n assistant username - @Frozensupporter1\n assistant id - 7386215995 \n support - @frozensupport1")
                 return
         else:
-            await processing_message.edit("❌ Could not get a joinable link.")
+            await processing_message.edit("❌ Please give bot invite val link permission\n\n support - @frozensupport1")
             return
 
     # ✅ Assistant is in the chat, proceed to fetch and play song
@@ -339,7 +339,7 @@ async def play_handler(_, message):
         video_url, video_title, video_duration, thumbnail_url = await fetch_youtube_link(query)  # Updated to include thumbnail
 
         if not video_url:
-            await processing_message.edit("❌ Could not find the song. Try another query.")
+            await processing_message.edit("❌ Could not find the song. Try another query. \n\n support - @frozensupport1")
             return
 
         readable_duration = iso8601_to_human_readable(video_duration)
@@ -348,7 +348,7 @@ async def play_handler(_, message):
         try:
             watermarked_thumbnail = await add_watermark_to_thumbnail(thumbnail_url)
         except Exception as e:
-            await processing_message.edit(f"❌ Error processing thumbnail: {str(e)}")
+            await processing_message.edit(f"❌ Error processing thumbnail: {str(e)}\n\n support - frozensupport1")
             return
 
         if chat_id not in chat_containers:
@@ -460,7 +460,7 @@ async def start_playback_task(chat_id, message):
         except Exception as playback_error:
             print(f"Error during playback: {playback_error}")
             await message.reply(
-                f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...",
+                f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...\n\n support - @frozensupport1",
             )
             chat_containers[chat_id].pop(0)
             await start_playback_task(chat_id, message)
@@ -479,7 +479,7 @@ async def stream_end_handler(_: PyTgCalls, update: Update):
         if chat_id in chat_containers and chat_containers[chat_id]:
             await start_playback_task(chat_id, None)  # Start the next song
         else:
-            await bot.send_message(chat_id, "❌ No more songs in the queue.\n Leaving the voice chat.💕")
+            await bot.send_message(chat_id, "❌ No more songs in the queue.\n Leaving the voice chat.💕\n\n support - @frozensupport1")
             await leave_voice_chat(chat_id)  # Leave the voice chat
 
 async def leave_voice_chat(chat_id):
@@ -580,7 +580,7 @@ async def skip_handler(client, message):
         if "not in a call" in str(e).lower():
             await message.reply("❌ The bot is not currently in a voice chat.")
         else:
-            await message.reply(f"❌ An error occurred while leaving the voice chat: {str(e)}")
+            await message.reply(f"❌ An error occurred while leaving the voice chat: {str(e)}\n\n support - @frozensupport1")
         return
 
     if chat_id in chat_containers:
@@ -610,7 +610,7 @@ async def skip_handler(client, message):
         await call_py.pause_stream(chat_id)
         await message.reply("⏸ Paused the stream.")
     except Exception as e:
-        await message.reply(f"❌ Failed to pause the stream. Error: {str(e)}")
+        await message.reply(f"❌ Failed to pause the stream. Error: {str(e)}\n\n support - @frozensupport1 ")
 
 @bot.on_message(filters.command("resume"))
 async def skip_handler(client, message):
@@ -625,7 +625,7 @@ async def skip_handler(client, message):
         await call_py.resume_stream(chat_id)
         await message.reply("▶️ Resumed the stream.")
     except Exception as e:
-        await message.reply(f"❌ Failed to resume the stream. Error: {str(e)}")
+        await message.reply(f"❌ Failed to resume the stream. Error: {str(e)}\n\n support - @frozensupport1")
 
 @bot.on_message(filters.command("skip"))
 async def skip_handler(client, message):
@@ -652,9 +652,9 @@ async def skip_handler(client, message):
         print(f"Error deleting file: {e}")
 
     if not chat_containers[chat_id]:
-        await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 No more songs in the queue.")
+        await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n❌ No more songs in the queue.")
     else:
-        await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n🎵 Playing the next song...")
+        await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n💕 Playing the next song...")
         await skip_to_next_song(chat_id, await_message)
 
 
@@ -690,7 +690,7 @@ async def reboot_handler(_, message):
         else:
             await message.reply("❌ No active queue to clear in this chat.")
     except Exception as e:
-        await message.reply(f"❌ Failed to reboot. Error: {str(e)}")
+        await message.reply(f"❌ Failed to reboot. Error: {str(e)}\n\n support - @frozensupport1")
 
 @bot.on_message(filters.command("ping"))
 async def ping_handler(_, message):
@@ -718,7 +718,7 @@ async def ping_handler(_, message):
 
         await message.reply(response)
     except Exception as e:
-        await message.reply(f"❌ Failed to execute the command. Error: {str(e)}")
+        await message.reply(f"❌ Failed to execute the command. Error: {str(e)}\n\n support - @frozensupport1")
 
 @bot.on_message(filters.command("clear"))
 async def clear_handler(_, message):
