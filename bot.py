@@ -140,6 +140,17 @@ async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="ᴘᴏᴡᴇ
 
     except Exception as e:
         raise Exception(f"Error adding watermark: {str(e)}")
+
+async def skip_to_next_song(chat_id, message):
+    """Skips to the next song in the queue and starts playback."""
+    if chat_id not in chat_containers or not chat_containers[chat_id]:
+        await message.edit("❌ No more songs in the queue.")
+        await leave_voice_chat(chat_id)
+        return
+
+
+    await message.edit("⏭ Skipping to the next song...")
+    await start_playback_task(chat_id, message)
     
 async def is_user_admin(obj: Union[Message, CallbackQuery]) -> bool:
     if isinstance(obj, CallbackQuery):
