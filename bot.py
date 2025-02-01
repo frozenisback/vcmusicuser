@@ -20,6 +20,7 @@ from pyrogram.enums import ChatType, ChatMemberStatus
 from typing import Union
 from pytgcalls.types import Update
 from pytgcalls import filters as fl
+from pytgcalls.types import GroupCallParticipant
 
 
 # Bot and Assistant session strings 
@@ -29,7 +30,6 @@ API_HASH = "5737577bcb32ea1aac1ac394b96c4b10"  # Replace with your actual API Ha
 BOT_TOKEN = "7598576464:AAHTQqNDdgD_DyzOfo_ET2an0OTLtd-S7io"  # Replace with your bot token
 ASSISTANT_SESSION = "BQHAYsoAmaja57XTQO0l0e2gHIGEa0K5Nc2h9tG0mm11PB2kLXxnCvyVaskILpPxdjYabtBAxdjvD0PfsFTpZwC_x3hbJpOz89Xna75yG16UHtNm43S0GeGvhtEwsOt73qAnP_7WyTtAR-gciWFQrQw31uqmwrZ_p4R_6JtrQt616sgzZxb8liEADodDBfwMtcNVMfU2RynyxTg7Dba4qN5h4iTnPNjEv5Fo0-KxjBrd6rmzv4ZE47rEawLFUGPKfiIFCKPXqDHxvq1ro60jz2udFPdRaDYxXeTWtljHXIpN3vm-LGXQXpwRWqvzFUoMpFIcGjetc15GPV3bnUXx9MVmyHjHiwAAAAG4QLY7AA"
 
-# Initialize the bot and assistant clients
 bot = Client("music_bot1", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
 call_py = PyTgCalls(assistant)
@@ -45,6 +45,46 @@ DOWNLOAD_API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/dow
 chat_containers = {}
 playback_tasks = {}  # To manage playback tasks per chat
 bot_start_time = time.time()
+COOLDOWN = 10
+chat_last_command = {}
+chat_pending_commands = {}
+QUEUE_LIMIT = 5
+FILE_AGE_THRESHOLD = 7800 
+MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
+
+async def process_pending_command(chat_id, delay):
+    await asyncio.sleep(delay)  # Wait for the cooldown period to expire
+    if chat_id in chat_pending_commands:
+        message, cooldown_reply = chat_pending_commands.pop(chat_id)
+        await cooldown_reply.delete()  # Delete the cooldown notification
+        await play_handler(bot, message)  # Use `bot` instead of `app`
+
+
+async def periodic_auto_cleaner():
+    """Periodically deletes old downloaded audio files."""
+    while True:
+        try:
+            for chat_id in list(chat_containers.keys()):
+                for song in chat_containers[chat_id][:]:  # Copy list to avoid modification errors
+                    file_path = song.get('file_path', '')
+                    if file_path and os.path.exists(file_path):
+                        file_mtime = os.stat(file_path).st_mtime  # Get last modified time
+                        if time.time() - file_mtime > FILE_AGE_THRESHOLD:
+                            try:
+                                os.remove(file_path)
+                                print(f"Auto-cleaner: Deleted {file_path}")
+                            except Exception as e:
+                                print(f"Auto-cleaner: Failed to delete {file_path}: {e}")
+                            chat_containers[chat_id].remove(song)  # Remove from queue
+
+                # Remove empty chat queues
+                if not chat_containers[chat_id]:
+                    chat_containers.pop(chat_id)
+
+        except Exception as e:
+            print(f"Auto-cleaner encountered an error: {e}")
+
+        await asyncio.sleep(600)  # Sleep for 10 minutes before checking again
 
 async def extract_invite_link(client, chat_id):
     try:
@@ -62,6 +102,11 @@ async def is_assistant_in_chat(chat_id):
         member = await assistant.get_chat_member(chat_id, ASSISTANT_USERNAME)
         return member.status is not None
     except Exception as e:
+        error_message = str(e)
+        if "USER_BANNED" in error_message or "Banned" in error_message:
+            return "banned"
+        elif "USER_NOT_PARTICIPANT" in error_message or "Chat not found" in error_message:
+            return False
         print(f"Error checking assistant in chat: {e}")
         return False
 
@@ -298,16 +343,52 @@ async def go_back_callback(_, callback_query):
         reply_markup=reply_markup
     )
 
-@bot.on_message(filters.regex(r'^/play(?: (?P<query>.+))?$'))
+@bot.on_message(filters.group & filters.regex(r'^/play(?: (?P<query>.+))?$'))
 async def play_handler(_, message):
     chat_id = message.chat.id
-    query = message.matches[0]['query']
+    now = time.time()
+    
+    # Check if this chat is within the cooldown period.
+    if chat_id in chat_last_command and (now - chat_last_command[chat_id]) < COOLDOWN:
+        remaining = int(COOLDOWN - (now - chat_last_command[chat_id]))
+        # If a pending command already exists, just notify the chat.
+        if chat_id in chat_pending_commands:
+            await message.reply(f"⏳ A command is already queued for this chat. Please wait {remaining} more second(s).")
+            return
+        else:
+            # Send the cooldown reply and store both the user's message and the reply.
+            cooldown_reply = await message.reply(f"⏳ This chat is on cooldown. Your command will be processed in {remaining} second(s).")
+            chat_pending_commands[chat_id] = (message, cooldown_reply)
+            # Schedule the pending command to be processed after the remaining delay.
+            asyncio.create_task(process_pending_command(chat_id, remaining))
+            return
+    else:
+        # Update the last command time for this chat.
+        chat_last_command[chat_id] = now
 
+    query = message.matches[0]['query']
     if not query:
         await message.reply("❓ Please provide a song name.\nExample: /play Shape of You")
         return
 
+    await process_play_command(message, query)
+
+
+async def process_play_command(message, query):
+    chat_id = message.chat.id
+
+    # Check if the chat already has an active voice chat.
+    # We assume call_py.group_call returns a truthy value if a voice chat is active.
+
     processing_message = await message.reply("❄️")
+    
+    # --- Convert youtu.be links to full YouTube URLs ---
+    if "youtu.be" in query:
+        m = re.search(r"youtu\.be/([^?&]+)", query)
+        if m:
+            video_id = m.group(1)
+            query = f"https://www.youtube.com/watch?v={video_id}"
+    # --- End URL conversion ---
 
     # 🔍 Check if the assistant is already in the chat
     is_in_chat = await is_assistant_in_chat(chat_id)
@@ -318,37 +399,51 @@ async def play_handler(_, message):
         if invite_link:
             await bot.send_message(ASSISTANT_CHAT_ID, f"/join {invite_link}")
             await processing_message.edit("⏳ Assistant is joining... Please wait.")
-            
             for _ in range(10):  # Retry for 10 seconds
                 await asyncio.sleep(3)
                 is_in_chat = await is_assistant_in_chat(chat_id)
                 print(f"Retry checking assistant in chat: {is_in_chat}")  # Debugging
-                
                 if is_in_chat:
                     await processing_message.edit("✅ Assistant joined! Playing your song...")
                     break
             else:
-                await processing_message.edit("❌ Assistant failed to join. Please unban assistant \n assistant username - @Frozensupporter1\n assistant id - 7386215995 \n support - @frozensupport1")
+                await processing_message.edit(
+                    "❌ Assistant failed to join. Please unban assistant \n"
+                    "assistant username - @Frozensupporter1\n"
+                    "assistant id - 7386215995 \n"
+                    "support - @frozensupport1"
+                )
                 return
         else:
-            await processing_message.edit("❌ Please give bot invite val link permission\n\n support - @frozensupport1")
+            await processing_message.edit(
+                "❌ Please give bot invite link permission\n\n support - @frozensupport1"
+            )
             return
 
-    # ✅ Assistant is in the chat, proceed to fetch and play song
     try:
-        video_url, video_title, video_duration, thumbnail_url = await fetch_youtube_link(query)  # Updated to include thumbnail
-
+        video_url, video_title, video_duration, thumbnail_url = await fetch_youtube_link(query)
         if not video_url:
-            await processing_message.edit("❌ Could not find the song. Try another query. \n\n support - @frozensupport1")
+            await processing_message.edit(
+                "❌ Could not find the song. Try another query. \n\n support - @frozensupport1"
+            )
+            return
+
+        duration_seconds = isodate.parse_duration(video_duration).total_seconds()
+        if duration_seconds > MAX_DURATION_SECONDS:
+            await processing_message.edit("❌ Streams longer than 2 hours are not allowed on Frozen Music.")
             return
 
         readable_duration = iso8601_to_human_readable(video_duration)
-
-        # Fetch and add watermark to the thumbnail
         try:
             watermarked_thumbnail = await add_watermark_to_thumbnail(thumbnail_url)
         except Exception as e:
-            await processing_message.edit(f"❌ Error processing thumbnail: {str(e)}\n\n support - frozensupport1")
+            await processing_message.edit(
+                f"❌ Error processing thumbnail: {str(e)}\n\n support - @frozensupport1"
+            )
+            return
+
+        if chat_id in chat_containers and len(chat_containers[chat_id]) >= QUEUE_LIMIT:
+            await processing_message.edit("❌ The queue is full (limit 5). Please wait until some songs finish playing or clear the queue.")
             return
 
         if chat_id not in chat_containers:
@@ -358,26 +453,24 @@ async def play_handler(_, message):
             "url": video_url,
             "title": video_title,
             "duration": readable_duration,
-            "duration_seconds": isodate.parse_duration(video_duration).total_seconds(),
+            "duration_seconds": duration_seconds,
             "requester": message.from_user.first_name if message.from_user else "Unknown",
-            "thumbnail": watermarked_thumbnail  # Use the watermarked thumbnail
+            "thumbnail": watermarked_thumbnail
         })
 
         if len(chat_containers[chat_id]) == 1:
             await start_playback_task(chat_id, processing_message)
         else:
-            # Create inline buttons for queue control
             control_buttons = InlineKeyboardMarkup(
                 [
                     [
-                        InlineKeyboardButton("⏭ Skip", callback_data="skip")
+                        InlineKeyboardButton("⏭ Skip", callback_data="skip"),
+                        InlineKeyboardButton("🗑 Clear", callback_data="clear")
                     ]
                 ]
             )
-            
-            # Send a new message with the watermarked thumbnail, queue details, and control buttons
-            new_message = await message.reply_photo(
-                photo=watermarked_thumbnail,  # Use the watermarked image here
+            await message.reply_photo(
+                photo=watermarked_thumbnail,
                 caption=(
                     f"✨ ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:\n\n"
                     f"✨**Title:** {video_title}\n"
@@ -387,10 +480,10 @@ async def play_handler(_, message):
                 ),
                 reply_markup=control_buttons
             )
-            # Delete the old processing message
             await processing_message.delete()
     except Exception as e:
         await processing_message.edit(f"❌ Error: {str(e)}")
+
 
 async def start_playback_task(chat_id, message):
     """Starts a playback task for the given chat."""
@@ -407,20 +500,16 @@ async def start_playback_task(chat_id, message):
             return
 
         try:
-            # Attempt to edit the processing message to indicate downloading
             try:
                 await message.edit(
                     f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕",
                 )
             except Exception as edit_error:
                 print(f"Error editing message: {edit_error}")
-                # If editing fails, send a new message
                 message = await bot.send_message(chat_id, f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕")
 
-            # Send the video URL to the new API for download
             media_path = await download_audio(video_url)
 
-            # Play the media using pytgcalls
             await call_py.play(
                 chat_id,
                 MediaStream(
@@ -429,7 +518,6 @@ async def start_playback_task(chat_id, message):
                 ),
             )
 
-            # Create inline buttons for playback control
             control_buttons = InlineKeyboardMarkup(
                 [
                     [
@@ -443,9 +531,8 @@ async def start_playback_task(chat_id, message):
                 ]
             )
 
-            # Send the "Now Playing" message with thumbnail and buttons
-            now_playing_message = await message.reply_photo(
-                photo=song_info['thumbnail'],  # Use the thumbnail URL here
+            await message.reply_photo(
+                photo=song_info['thumbnail'],
                 caption=(
                     f"✨ **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**\n\n"
                     f"✨**Title:** {song_info['title']}\n\n"
@@ -454,7 +541,6 @@ async def start_playback_task(chat_id, message):
                 ),
                 reply_markup=control_buttons,
             )
-            # Delete the old processing message
             await message.delete()
 
         except Exception as playback_error:
@@ -501,11 +587,13 @@ async def leave_voice_chat(chat_id):
         del playback_tasks[chat_id]
 
 # Add a callback query handler to handle button presses
+
 @bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
     chat_id = callback_query.message.chat.id
     user_id = callback_query.from_user.id
 
+    # Check if the user is an admin; if not, notify and exit.
     if not await is_user_admin(callback_query):
         await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
         return
@@ -538,12 +626,29 @@ async def callback_query_handler(client, callback_query):
         else:
             await callback_query.answer("❌ No songs in the queue to skip.")
 
+    elif data == "clear":
+        if chat_id in chat_containers:
+            # Clear the chat-specific queue by deleting each song's file.
+            for song in chat_containers[chat_id]:
+                try:
+                    os.remove(song.get('file_path', ''))
+                except Exception as e:
+                    print(f"Error deleting file: {e}")
+
+            # Remove the queue from the container.
+            chat_containers.pop(chat_id)
+            # Optionally, you can edit the message or send an answer to confirm.
+            await callback_query.message.edit("🗑️ Cleared the queue.")
+            await callback_query.answer("🗑️ Cleared the queue.")
+        else:
+            await callback_query.answer("❌ No songs in the queue to clear.", show_alert=True)
+
     elif data == "stop":
         if chat_id in chat_containers:
             chat_containers[chat_id].clear()
-
         await call_py.leave_call(chat_id)
         await callback_query.answer("🛑 Playback stopped and queue cleared.")
+
 
 
 async def download_audio(url):
@@ -565,7 +670,7 @@ async def download_audio(url):
     
 
 
-@bot.on_message(filters.command(["stop", "end"]))
+@bot.on_message(filters.group & filters.command(["stop", "end"]))
 async def skip_handler(client, message):
     chat_id = message.chat.id
     user_id = message.from_user.id
@@ -597,7 +702,7 @@ async def skip_handler(client, message):
 
     await message.reply("⏹ Stopped the music and cleared the queue.")
 
-@bot.on_message(filters.command("pause"))
+@bot.on_message(filters.group & filters.command("pause"))
 async def skip_handler(client, message):
     chat_id = message.chat.id
     user_id = message.from_user.id
@@ -612,7 +717,7 @@ async def skip_handler(client, message):
     except Exception as e:
         await message.reply(f"❌ Failed to pause the stream. Error: {str(e)}\n\n support - @frozensupport1 ")
 
-@bot.on_message(filters.command("resume"))
+@bot.on_message(filters.group & filters.command("resume"))
 async def skip_handler(client, message):
     chat_id = message.chat.id
     user_id = message.from_user.id
@@ -627,7 +732,7 @@ async def skip_handler(client, message):
     except Exception as e:
         await message.reply(f"❌ Failed to resume the stream. Error: {str(e)}\n\n support - @frozensupport1")
 
-@bot.on_message(filters.command("skip"))
+@bot.on_message(filters.group & filters.command("skip"))
 async def skip_handler(client, message):
     chat_id = message.chat.id
     user_id = message.from_user.id
@@ -720,7 +825,7 @@ async def ping_handler(_, message):
     except Exception as e:
         await message.reply(f"❌ Failed to execute the command. Error: {str(e)}\n\n support - @frozensupport1")
 
-@bot.on_message(filters.command("clear"))
+@bot.on_message(filters.group & filters.command("clear"))
 async def clear_handler(_, message):
     chat_id = message.chat.id
 
@@ -767,12 +872,82 @@ async def join(client: Client, message: Message):
         else:
             await processing_msg.edit(f"**ERROR:** \n\n{error_message}")
 
+@bot.on_message(filters.video_chat_ended)
+async def clear_queue_on_vc_end(_, message: Message):
+    chat_id = message.chat.id
+
+    if chat_id in chat_containers:
+        # Clear queue files
+        for song in chat_containers[chat_id]:
+            try:
+                os.remove(song.get('file_path', ''))
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+
+        chat_containers.pop(chat_id)  # Remove queue data
+        await message.reply("**😕ᴠɪᴅᴇᴏ ᴄʜᴀᴛ ᴇɴᴅᴇᴅ💔**\n ✨Queue has been cleared.")
+    else:
+        await message.reply("**😕ᴠɪᴅᴇᴏ ᴄʜᴀᴛ ᴇɴᴅᴇᴅ💔** \n ❌No active queue to clear.")
+
+@bot.on_message(filters.video_chat_started)
+async def brah(_, msg):
+    await msg.reply("**😍ᴠɪᴅᴇᴏ ᴄʜᴀᴛ sᴛᴀʀᴛᴇᴅ🥳**")
+
+
+@call_py.on_update(fl.call_participant(GroupCallParticipant.Action.LEFT))
+async def auto_stop_listener(client, update: Update):
+    chat_id = update.chat_id  
+    
+    await asyncio.sleep(5)
+    
+    try:
+        participants = await call_py.get_participants(chat_id)
+        assistant_muted = await call_py.get_is_muted(chat_id)
+    except Exception as e:
+        print(f"Error fetching call status: {e}")
+        participants = []
+        assistant_muted = True
+
+    # Determine whether to stop:
+    # If there is one or fewer participants (likely meaning only the bot is in the call),
+    # or if the assistant is muted, then disconnect.
+    if len(participants) <= 1 or assistant_muted:
+        print(f"Auto-stopping the call in chat {chat_id}: "
+              f"participants={len(participants)}, assistant_muted={assistant_muted}")
+        try:
+            await call_py.leave_call(chat_id)
+        except Exception as e:
+            print(f"Error leaving call: {e}")
+            return
+
+        # Clear the queue of songs and cancel any active playback tasks.
+        if chat_id in chat_containers:
+            for song in chat_containers[chat_id]:
+                try:
+                    os.remove(song.get('file_path', ''))
+                except Exception as del_err:
+                    print(f"Error deleting file: {del_err}")
+            chat_containers.pop(chat_id)
+
+        if chat_id in playback_tasks:
+            playback_tasks[chat_id].cancel()
+            del playback_tasks[chat_id]
+        print("Call ended and queue cleared automatically.")
+
+        # Send message via the bot to notify that the stream has ended.
+        try:
+            await bot.send_message(chat_id, "🎶 Stream ended as no one was listening! 😢")
+        except Exception as e:
+            print(f"Error sending message: {e}")
+
+
 if __name__ == "__main__":
     try:
         call_py.start()
         bot.start()
         if not assistant.is_connected:
             assistant.start()
+            asyncio.create_task(periodic_auto_cleaner())
         idle()
     except KeyboardInterrupt:
         print("Bot stopped by user.")
@@ -782,3 +957,4 @@ if __name__ == "__main__":
         bot.stop()
         assistant.stop()
         call_py.stop()
+
