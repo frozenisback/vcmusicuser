@@ -909,7 +909,7 @@ async def auto_stop_listener(client, update: Update):
         participants = []
     
     # Filter out the assistant from the participants list.
-    non_bot_participants = [p for p in participants if p.user_id != 5268762773]
+    non_bot_participants = [p for p in participants if p.user_id != 7386215995]
     
     # End the call only if no non-bot participants remain.
     if not non_bot_participants:
