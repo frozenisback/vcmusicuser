@@ -893,52 +893,6 @@ async def clear_queue_on_vc_end(_, message: Message):
 async def brah(_, msg):
     await msg.reply("**😍ᴠɪᴅᴇᴏ ᴄʜᴀᴛ sᴛᴀʀᴛᴇᴅ🥳**")
 
-@call_py.on_update(fl.call_participant(GroupCallParticipant.Action.LEFT))
-async def auto_stop_listener(client, update: Update):
-    chat_id = update.chat_id  
-    
-    # Allow some time for participant changes to settle.
-    await asyncio.sleep(5)
-    
-    try:
-        participants = await call_py.get_participants(chat_id)
-        # Optionally, check mute status if needed:
-        # assistant_muted = await call_py.get_is_muted(chat_id)
-    except Exception as e:
-        print(f"Error fetching call status: {e}")
-        participants = []
-    
-    # Filter out the assistant from the participants list.
-    non_bot_participants = [p for p in participants if p.user_id != 7386215995]
-    
-    # End the call only if no non-bot participants remain.
-    if not non_bot_participants:
-        print(f"Auto-stopping the call in chat {chat_id}: no non-bot participants remain.")
-        try:
-            await call_py.leave_call(chat_id)
-        except Exception as e:
-            print(f"Error leaving call: {e}")
-            return
-
-        # Clear the queue of songs and cancel any active playback tasks.
-        if chat_id in chat_containers:
-            for song in chat_containers[chat_id]:
-                try:
-                    os.remove(song.get('file_path', ''))
-                except Exception as del_err:
-                    print(f"Error deleting file: {del_err}")
-            chat_containers.pop(chat_id)
-
-        if chat_id in playback_tasks:
-            playback_tasks[chat_id].cancel()
-            del playback_tasks[chat_id]
-        print("Call ended and queue cleared automatically.")
-
-        # Notify the chat that the stream has ended.
-        try:
-            await bot.send_message(chat_id, "🎶 Stream ended as no one was listening! 😢")
-        except Exception as e:
-            print(f"Error sending message: {e}")
 
 
 
