@@ -51,6 +51,10 @@ chat_pending_commands = {}
 QUEUE_LIMIT = 5
 FILE_AGE_THRESHOLD = 7800 
 MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
+CHUNK_SIZE = 1024 * 256  # 256KB chunks (lower RAM usage)
+DOWNLOAD_TIMEOUT = 30  # Timeout for slow downloads
+MAX_FILE_SIZE_MB = 50  # Prevents downloading files larger than 50MB
+SEMAPHORE = asyncio.Semaphore(1)
 
 async def process_pending_command(chat_id, delay):
     await asyncio.sleep(delay)  # Wait for the cooldown period to expire
