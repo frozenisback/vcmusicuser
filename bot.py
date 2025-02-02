@@ -652,21 +652,31 @@ async def callback_query_handler(client, callback_query):
 
 
 async def download_audio(url):
-    """Downloads the audio from a given URL and returns the file path."""
-    try:
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-        file_name = temp_file.name
-        download_url = f"{DOWNLOAD_API_URL}{url}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(download_url) as response:
-                if response.status == 200:
+    """Efficiently downloads the audio file with memory limits."""
+    async with SEMAPHORE:  # Ensures only one download at a time
+        try:
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+            file_name = temp_file.name
+            download_url = f"{DOWNLOAD_API_URL}{url}"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(download_url, timeout=DOWNLOAD_TIMEOUT) as response:
+                    if response.status != 200:
+                        raise Exception(f"Failed to download audio. HTTP status: {response.status}")
+
+                    # Save the file in chunks
                     with open(file_name, 'wb') as f:
-                        f.write(await response.read())
+                        while True:
+                            chunk = await response.content.read(CHUNK_SIZE)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+
                     return file_name
-                else:
-                    raise Exception(f"Failed to download audio. HTTP status: {response.status}")
-    except Exception as e:
-        raise Exception(f"Error downloading audio: {e}")
+        except asyncio.TimeoutError:
+            raise Exception("Download request timed out")
+        except Exception as e:
+            raise Exception(f"Error downloading audio: {e}")
     
 
 
