@@ -51,10 +51,7 @@ chat_pending_commands = {}
 QUEUE_LIMIT = 5
 FILE_AGE_THRESHOLD = 7800 
 MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
-CHUNK_SIZE = 1024 * 256  # 256KB chunks (lower RAM usage)
-DOWNLOAD_TIMEOUT = 30  # Timeout for slow downloads
-MAX_FILE_SIZE_MB = 50  # Prevents downloading files larger than 50MB
-SEMAPHORE = asyncio.Semaphore(1)
+
 
 async def process_pending_command(chat_id, delay):
     await asyncio.sleep(delay)  # Wait for the cooldown period to expire
@@ -656,31 +653,21 @@ async def callback_query_handler(client, callback_query):
 
 
 async def download_audio(url):
-    """Efficiently downloads the audio file with memory limits."""
-    async with SEMAPHORE:  # Ensures only one download at a time
-        try:
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-            file_name = temp_file.name
-            download_url = f"{DOWNLOAD_API_URL}{url}"
-
-            async with aiohttp.ClientSession() as session:
-                async with session.get(download_url, timeout=DOWNLOAD_TIMEOUT) as response:
-                    if response.status != 200:
-                        raise Exception(f"Failed to download audio. HTTP status: {response.status}")
-
-                    # Save the file in chunks
+    """Downloads the audio from a given URL and returns the file path."""
+    try:
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+        file_name = temp_file.name
+        download_url = f"{DOWNLOAD_API_URL}{url}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(download_url) as response:
+                if response.status == 200:
                     with open(file_name, 'wb') as f:
-                        while True:
-                            chunk = await response.content.read(CHUNK_SIZE)
-                            if not chunk:
-                                break
-                            f.write(chunk)
-
+                        f.write(await response.read())
                     return file_name
-        except asyncio.TimeoutError:
-            raise Exception("Download request timed out")
-        except Exception as e:
-            raise Exception(f"Error downloading audio: {e}")
+                else:
+                    raise Exception(f"Failed to download audio. HTTP status: {response.status}")
+    except Exception as e:
+        raise Exception(f"Error downloading audio: {e}")
     
 
 
