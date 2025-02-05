@@ -61,6 +61,32 @@ async def process_pending_command(chat_id, delay):
         await play_handler(bot, message)  # Use `bot` instead of `app`
 
 
+async def periodic_auto_cleaner():
+    """Periodically deletes old downloaded audio files."""
+    while True:
+        try:
+            for chat_id in list(chat_containers.keys()):
+                for song in chat_containers[chat_id][:]:  # Copy list to avoid modification errors
+                    file_path = song.get('file_path', '')
+                    if file_path and os.path.exists(file_path):
+                        file_mtime = os.stat(file_path).st_mtime  # Get last modified time
+                        if time.time() - file_mtime > FILE_AGE_THRESHOLD:
+                            try:
+                                os.remove(file_path)
+                                print(f"Auto-cleaner: Deleted {file_path}")
+                            except Exception as e:
+                                print(f"Auto-cleaner: Failed to delete {file_path}: {e}")
+                            chat_containers[chat_id].remove(song)  # Remove from queue
+
+                # Remove empty chat queues
+                if not chat_containers[chat_id]:
+                    chat_containers.pop(chat_id)
+
+        except Exception as e:
+            print(f"Auto-cleaner encountered an error: {e}")
+
+        await asyncio.sleep(600)  # Sleep for 10 minutes before checking again
+
 async def extract_invite_link(client, chat_id):
     try:
         chat_info = await client.get_chat(chat_id)
@@ -477,11 +503,14 @@ async def start_playback_task(chat_id, message):
         try:
             try:
                 await message.edit(
-                    f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕",
+                    f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕"
                 )
             except Exception as edit_error:
                 print(f"Error editing message: {edit_error}")
-                message = await bot.send_message(chat_id, f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕")
+                message = await bot.send_message(
+                    chat_id,
+                    f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕"
+                )
 
             media_path = await download_audio(video_url)
 
@@ -489,20 +518,26 @@ async def start_playback_task(chat_id, message):
                 chat_id,
                 MediaStream(
                     media_path,
-                    video_flags=MediaStream.Flags.IGNORE,
-                ),
+                    video_flags=MediaStream.Flags.IGNORE
+                )
             )
 
             control_buttons = InlineKeyboardMarkup(
                 [
                     [
-                        InlineKeyboardButton("▶️ Pause", callback_data="pause"),
-                        InlineKeyboardButton("⏸ Resume", callback_data="resume"),
+                        InlineKeyboardButton(text="▶️", callback_data="pause"),
+                        InlineKeyboardButton(text="⏸", callback_data="resume"),
+                        InlineKeyboardButton(text="⏭", callback_data="skip"),
+                        InlineKeyboardButton(text="⏹", callback_data="stop")
                     ],
                     [
-                        InlineKeyboardButton("⏭ Skip", callback_data="skip"),
-                        InlineKeyboardButton("⏹ Stop", callback_data="stop"),
-                    ],
+                        InlineKeyboardButton(
+                            text="✨ Updates ✨", url="https://t.me/vibeshiftbots"
+                        ),
+                        InlineKeyboardButton(
+                            text="💕 Support 💕", url="https://t.me/Frozensupport1"
+                        ),
+                    ]
                 ]
             )
 
@@ -514,17 +549,18 @@ async def start_playback_task(chat_id, message):
                     f"✨**Duration:** {song_info['duration']}\n\n"
                     f"✨**Requested by:** {song_info['requester']}"
                 ),
-                reply_markup=control_buttons,
+                reply_markup=control_buttons
             )
             await message.delete()
 
         except Exception as playback_error:
             print(f"Error during playback: {playback_error}")
             await message.reply(
-                f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...\n\n support - @frozensupport1",
+                f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...\n\n support - @frozensupport1"
             )
             chat_containers[chat_id].pop(0)
             await start_playback_task(chat_id, message)
+
 
 @call_py.on_update(fl.stream_end)
 async def stream_end_handler(_: PyTgCalls, update: Update):
@@ -887,6 +923,7 @@ if __name__ == "__main__":
         bot.start()
         if not assistant.is_connected:
             assistant.start()
+            asyncio.create_task(periodic_auto_cleaner())
         idle()
     except KeyboardInterrupt:
         print("Bot stopped by user.")
