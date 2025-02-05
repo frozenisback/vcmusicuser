@@ -652,8 +652,16 @@ async def callback_query_handler(client, callback_query):
 
 
 
+download_cache = {}  # Global cache dictionary
+
 async def download_audio(url):
-    """Downloads the audio from a given URL and returns the file path."""
+    """Downloads the audio from a given URL and returns the file path.
+    Uses caching to avoid re-downloading the same file.
+    """
+    # Return the cached file path if it exists
+    if url in download_cache:
+        return download_cache[url]
+
     try:
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
         file_name = temp_file.name
@@ -663,6 +671,8 @@ async def download_audio(url):
                 if response.status == 200:
                     with open(file_name, 'wb') as f:
                         f.write(await response.read())
+                    # Cache the file path for this URL
+                    download_cache[url] = file_name
                     return file_name
                 else:
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
