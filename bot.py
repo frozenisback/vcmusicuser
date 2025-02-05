@@ -61,32 +61,6 @@ async def process_pending_command(chat_id, delay):
         await play_handler(bot, message)  # Use `bot` instead of `app`
 
 
-async def periodic_auto_cleaner():
-    """Periodically deletes old downloaded audio files."""
-    while True:
-        try:
-            for chat_id in list(chat_containers.keys()):
-                for song in chat_containers[chat_id][:]:  # Copy list to avoid modification errors
-                    file_path = song.get('file_path', '')
-                    if file_path and os.path.exists(file_path):
-                        file_mtime = os.stat(file_path).st_mtime  # Get last modified time
-                        if time.time() - file_mtime > FILE_AGE_THRESHOLD:
-                            try:
-                                os.remove(file_path)
-                                print(f"Auto-cleaner: Deleted {file_path}")
-                            except Exception as e:
-                                print(f"Auto-cleaner: Failed to delete {file_path}: {e}")
-                            chat_containers[chat_id].remove(song)  # Remove from queue
-
-                # Remove empty chat queues
-                if not chat_containers[chat_id]:
-                    chat_containers.pop(chat_id)
-
-        except Exception as e:
-            print(f"Auto-cleaner encountered an error: {e}")
-
-        await asyncio.sleep(600)  # Sleep for 10 minutes before checking again
-
 async def extract_invite_link(client, chat_id):
     try:
         chat_info = await client.get_chat(chat_id)
@@ -913,7 +887,6 @@ if __name__ == "__main__":
         bot.start()
         if not assistant.is_connected:
             assistant.start()
-            asyncio.create_task(periodic_auto_cleaner())
         idle()
     except KeyboardInterrupt:
         print("Bot stopped by user.")
