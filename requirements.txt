@@ -10,4 +10,5 @@ ffmpeg-python
 isodate
 pillow
 psutil
+requests
 
