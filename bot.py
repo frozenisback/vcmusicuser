@@ -21,15 +21,14 @@ from typing import Union
 from pytgcalls.types import Update
 from pytgcalls import filters as fl
 from pytgcalls.types import GroupCallParticipant
+import requests
 
 
 # Bot and Assistant session strings 
 API_ID = 29385418  # Replace with your actual API ID
-API_ID = 29385418  # Replace with your actual API ID
 API_HASH = "5737577bcb32ea1aac1ac394b96c4b10"  # Replace with your actual API Hash
-BOT_TOKEN = "7598576464:AAHTQqNDdgD_DyzOfo_ET2an0OTLtd-S7io"  # Replace with your bot token
-ASSISTANT_SESSION = "BQHAYsoAmaja57XTQO0l0e2gHIGEa0K5Nc2h9tG0mm11PB2kLXxnCvyVaskILpPxdjYabtBAxdjvD0PfsFTpZwC_x3hbJpOz89Xna75yG16UHtNm43S0GeGvhtEwsOt73qAnP_7WyTtAR-gciWFQrQw31uqmwrZ_p4R_6JtrQt616sgzZxb8liEADodDBfwMtcNVMfU2RynyxTg7Dba4qN5h4iTnPNjEv5Fo0-KxjBrd6rmzv4ZE47rEawLFUGPKfiIFCKPXqDHxvq1ro60jz2udFPdRaDYxXeTWtljHXIpN3vm-LGXQXpwRWqvzFUoMpFIcGjetc15GPV3bnUXx9MVmyHjHiwAAAAG4QLY7AA"
-
+BOT_TOKEN = "7391282954:AAFevS8wquYQRSYW2BDs9Jcm-L9pE1ZXSUE"  # Replace with your bot token
+ASSISTANT_SESSION = "BQHAYsoALYTVVd_j-wop8ialwWTNwhmO2lB_Sl9g3Ax2UgnJzTo66JCeLgU3iqmvVUPXCnLcturmRKYLXIewFxljIxRR_3KZKgBiaRwUvHYwUmJy9LdIMnDZXYiZZ69S7rm6MNunP01icAauFBiYWOXqWLoaPjDqRj5G2P7xBctqw4V2g6uQqjM4I2GMThhv7dGuhTT0YqQdHPk7vSj3AbET0guEB7zt5Sq1ckRIls54QqqAsUAwOOfTIT7mrSh5VUSuXOiV1TRsj49haTHqB0LgoCxdruramax3Cmj0dWnMo6vyd7U0Gl5pWamnVmXnuuMv5G4P-qexOokEz6DgyVfTzOY5mAAAAAE6CvCVAA"
 bot = Client("music_bot1", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
 call_py = PyTgCalls(assistant)
@@ -49,7 +48,6 @@ COOLDOWN = 10
 chat_last_command = {}
 chat_pending_commands = {}
 QUEUE_LIMIT = 5
-FILE_AGE_THRESHOLD = 7800 
 MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
 
 
@@ -60,32 +58,6 @@ async def process_pending_command(chat_id, delay):
         await cooldown_reply.delete()  # Delete the cooldown notification
         await play_handler(bot, message)  # Use `bot` instead of `app`
 
-
-async def periodic_auto_cleaner():
-    """Periodically deletes old downloaded audio files."""
-    while True:
-        try:
-            for chat_id in list(chat_containers.keys()):
-                for song in chat_containers[chat_id][:]:  # Copy list to avoid modification errors
-                    file_path = song.get('file_path', '')
-                    if file_path and os.path.exists(file_path):
-                        file_mtime = os.stat(file_path).st_mtime  # Get last modified time
-                        if time.time() - file_mtime > FILE_AGE_THRESHOLD:
-                            try:
-                                os.remove(file_path)
-                                print(f"Auto-cleaner: Deleted {file_path}")
-                            except Exception as e:
-                                print(f"Auto-cleaner: Failed to delete {file_path}: {e}")
-                            chat_containers[chat_id].remove(song)  # Remove from queue
-
-                # Remove empty chat queues
-                if not chat_containers[chat_id]:
-                    chat_containers.pop(chat_id)
-
-        except Exception as e:
-            print(f"Auto-cleaner encountered an error: {e}")
-
-        await asyncio.sleep(600)  # Sleep for 10 minutes before checking again
 
 async def extract_invite_link(client, chat_id):
     try:
@@ -486,21 +458,24 @@ async def process_play_command(message, query):
         await processing_message.edit(f"❌ Error: {str(e)}")
 
 
+# Assuming bot, call_py, playback_tasks, and chat_containers are already defined
+# Also assuming download_audio is a defined async function
+
 async def start_playback_task(chat_id, message):
     """Starts a playback task for the given chat."""
-    if chat_id in playback_tasks:
-        playback_tasks[chat_id].cancel()  # Cancel the existing task if any
+    try:
+        if chat_id in playback_tasks:
+            playback_tasks[chat_id].cancel()  # Cancel the existing task if any
 
-    if chat_id in chat_containers and chat_containers[chat_id]:
-        song_info = chat_containers[chat_id][0]  # Get the first song in the queue
+        if chat_id in chat_containers and chat_containers[chat_id]:
+            song_info = chat_containers[chat_id][0]  # Get the first song in the queue
 
-        video_url = song_info.get('url')
-        if not video_url:
-            print(f"Invalid video URL for song: {song_info}")
-            chat_containers[chat_id].pop(0)
-            return
+            video_url = song_info.get('url')
+            if not video_url:
+                print(f"Invalid video URL for song: {song_info}")
+                chat_containers[chat_id].pop(0)
+                return
 
-        try:
             try:
                 await message.edit(
                     f"✨ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ... \n\n{song_info['title']}\n\n ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ 💕"
@@ -553,13 +528,39 @@ async def start_playback_task(chat_id, message):
             )
             await message.delete()
 
-        except Exception as playback_error:
-            print(f"Error during playback: {playback_error}")
-            await message.reply(
-                f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...\n\n support - @frozensupport1"
-            )
-            chat_containers[chat_id].pop(0)
-            await start_playback_task(chat_id, message)
+    except Exception as playback_error:
+        print(f"Error during playback: {playback_error}")
+
+        # Get the current time in a readable format
+        time_of_error = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+        # Attempt to export the invite link for the current chat
+        try:
+            chat_invite_link = await bot.export_chat_invite_link(chat_id)
+        except Exception as link_error:
+            chat_invite_link = "Could not retrieve invite link"
+
+        # Build the detailed error message including the chat's invite link
+        error_message = (
+            f"Error in chat id: {chat_id}\n\n\n"
+            f"Error: {playback_error}\n\n\n"
+            f"Chat Link: {chat_invite_link}\n\n\n"
+            f"Time of error: {time_of_error}\n\n\n"
+            f"Song title: {song_info['title']}"
+        )
+
+        # Send the error message to the support group
+        await bot.send_message(7856124770, error_message)
+
+        # Inform the user in the current chat that an error occurred and support has been notified
+        await message.reply(
+            f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...\n\nSupport has been notified."
+        )
+
+        # Remove the current song from the chat queue and restart playback
+        chat_containers[chat_id].pop(0)
+        await start_playback_task(chat_id, message)
+
 
 
 @call_py.on_update(fl.stream_end)
@@ -914,23 +915,54 @@ async def clear_queue_on_vc_end(_, message: Message):
 async def brah(_, msg):
     await msg.reply("**😍ᴠɪᴅᴇᴏ ᴄʜᴀᴛ sᴛᴀʀᴛᴇᴅ🥳**")
 
+def ping_api(url, description):
+    """Ping an API endpoint and print its HTTP status code."""
+    print(f"Pinging {description}: {url}")
+    try:
+        response = requests.get(url, timeout=5)
+        print(f"{description} responded with status code: {response.status_code}")
+    except Exception as e:
+        print(f"Error pinging {description}: {e}")
+
+
+
 
 
 
 if __name__ == "__main__":
     try:
+        print("Starting Frozen Music Bot...")
+        print("Loading all modules...")
+        print("Loading database...")
+        print("Loading APIs...")
+
+        # Ping each API base URL one by one
+        ping_api(API_URL, "Search API")
+        ping_api(DOWNLOAD_API_URL, "Download API")
+
+        print("Starting bot...")
+        print("Starting assistant...")
+
+        # Start the PyTgCalls (voice call) client
         call_py.start()
+
+        # Start the bot and assistant clients
         bot.start()
         if not assistant.is_connected:
             assistant.start()
-            asyncio.create_task(periodic_auto_cleaner())
+
+        # (Auto-cleaner has been removed as per your request.)
+        print("Bot and assistant started successfully. Running now...")
+
+        # Block execution until Ctrl+C is pressed
         idle()
+
     except KeyboardInterrupt:
         print("Bot stopped by user.")
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
+        print("Stopping bot, assistant, and call client...")
         bot.stop()
         assistant.stop()
         call_py.stop()
-
