@@ -24,14 +24,14 @@ from pytgcalls.types import GroupCallParticipant
 import requests
 from io import BytesIO
 from PIL import ImageEnhance
-
+import urllib.parse
 
 
 # Bot and Assistant session strings 
 API_ID = 29385418  # Replace with your actual API ID
 API_HASH = "5737577bcb32ea1aac1ac394b96c4b10"  # Replace with your actual API Hash
-BOT_TOKEN = "7598576464:AAHTQqNDdgD_DyzOfo_ET2an0OTLtd-S7io"  # Replace with your bot token
-ASSISTANT_SESSION = "BQHAYsoAmaja57XTQO0l0e2gHIGEa0K5Nc2h9tG0mm11PB2kLXxnCvyVaskILpPxdjYabtBAxdjvD0PfsFTpZwC_x3hbJpOz89Xna75yG16UHtNm43S0GeGvhtEwsOt73qAnP_7WyTtAR-gciWFQrQw31uqmwrZ_p4R_6JtrQt616sgzZxb8liEADodDBfwMtcNVMfU2RynyxTg7Dba4qN5h4iTnPNjEv5Fo0-KxjBrd6rmzv4ZE47rEawLFUGPKfiIFCKPXqDHxvq1ro60jz2udFPdRaDYxXeTWtljHXIpN3vm-LGXQXpwRWqvzFUoMpFIcGjetc15GPV3bnUXx9MVmyHjHiwAAAAG4QLY7AA"
+BOT_TOKEN = "7391282954:AAFevS8wquYQRSYW2BDs9Jcm-L9pE1ZXSUE"  # Replace with your bot token
+ASSISTANT_SESSION = "BQHAYsoATAqjNlBYwdEplpfcJhlAZgg82W1B7ZQVWIRWsOa2hZ8TrbcwUrYCSq6TQqYggMnBglulKX6OtEbFsGeFDQyal52ElSuuqrItHDkJT8Up3GBbACF2hQkQuywLlAqp2_OrXXEs7YPwiAYmyw90F-tX_VjOP7AjSsaUI_Fq4dCDBds30BBRcR-J6zBcvwBNSauXP3zf6NI8-Hs8oKJTHIKQjSARxVAqa19HXQ49s741GeA5Dpp-paNAN_FOiAKZqEJAtpRzTi0NxEstK5-8YKkrFayRs6Qd7Vy20Ex4p_Zhq6fVVlBxTgw71YYD2XqH5k6rX4FMWSp9D6ObEyG-8eAsTgAAAAHUQvNiAA"
 bot = Client("music_bot1", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
 call_py = PyTgCalls(assistant)
@@ -52,6 +52,9 @@ chat_last_command = {}
 chat_pending_commands = {}
 QUEUE_LIMIT = 5
 MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
+LOCAL_VC_LIMIT = 4 
+api_playback_records = []
+playback_mode = {}  # Stores "local" or "api" for each chat
 
 
 async def process_pending_command(chat_id, delay):
@@ -163,6 +166,27 @@ async def is_user_admin(obj: Union[Message, CallbackQuery]) -> bool:
         return False
     else:
         return True
+    
+async def stop_playback(chat_id):
+    """
+    Stops playback in the given chat using the external API.
+    """
+    api_stop_url = f"https://py-tgcalls-api1.onrender.com/stop?chatid={chat_id}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_stop_url) as resp:
+                data = await resp.json()
+        # Record the API stop event
+        record = {
+            "chat_id": chat_id,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "event": "stop",
+            "api_response": data
+        }
+        api_playback_records.append(record)
+        await bot.send_message(chat_id, f"API Stop: {data['message']}")
+    except Exception as e:
+        await bot.send_message(chat_id, f"❌ API Stop Error: {str(e)}")
 
 
 @bot.on_message(filters.command("start"))
@@ -303,19 +327,15 @@ async def play_handler(_, message):
     # Check if this chat is within the cooldown period.
     if chat_id in chat_last_command and (now - chat_last_command[chat_id]) < COOLDOWN:
         remaining = int(COOLDOWN - (now - chat_last_command[chat_id]))
-        # If a pending command already exists, just notify the chat.
         if chat_id in chat_pending_commands:
             await message.reply(f"⏳ A command is already queued for this chat. Please wait {remaining} more second(s).")
             return
         else:
-            # Send the cooldown reply and store both the user's message and the reply.
             cooldown_reply = await message.reply(f"⏳ This chat is on cooldown. Your command will be processed in {remaining} second(s).")
             chat_pending_commands[chat_id] = (message, cooldown_reply)
-            # Schedule the pending command to be processed after the remaining delay.
             asyncio.create_task(process_pending_command(chat_id, remaining))
             return
     else:
-        # Update the last command time for this chat.
         chat_last_command[chat_id] = now
 
     query = message.matches[0]['query']
@@ -406,32 +426,107 @@ async def process_play_command(message, query):
         if len(chat_containers[chat_id]) == 1:
             await start_playback_task(chat_id, processing_message)
         else:
-            # Instead of sending a photo with the thumbnail, just send a text reply.
+            queue_buttons = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(text="⏭ Skip", callback_data="skip"),
+                        InlineKeyboardButton(text="🗑 Clear", callback_data="clear")
+                    ]
+                ]
+            )
             await message.reply(
                 f"✨ ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:\n\n"
                 f"✨**Title:** {video_title}\n"
                 f"✨**Duration:** {readable_duration}\n"
                 f"✨**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
-                f"✨**Queue number:** {len(chat_containers[chat_id]) - 1}\n"
+                f"✨**Queue number:** {len(chat_containers[chat_id]) - 1}\n",
+                reply_markup=queue_buttons
             )
             await processing_message.delete()
     except Exception as e:
         await processing_message.edit(f"❌ Error: {str(e)}")
 
 
-
-# Assuming bot, call_py, playback_tasks, and chat_containers are already defined
-# Also assuming download_audio is a defined async function
-
 async def start_playback_task(chat_id, message):
-    """Starts a playback task for the given chat."""
+    """
+    Starts playback for the given chat.
+    If the local VC limit is reached, the external API is used.
+    """
+    print(f"Current local VC count: {len(playback_tasks)}; Current chat: {chat_id}")
+
+    # Use the external API if local VC limit has been reached.
+    if chat_id not in playback_tasks and len(playback_tasks) >= LOCAL_VC_LIMIT:
+        song_info = chat_containers[chat_id][0]
+        video_title = song_info.get('title', 'Unknown')
+        encoded_title = urllib.parse.quote(video_title)
+        api_url = f"https://py-tgcalls-api1.onrender.com/play?chatid={chat_id}&title={encoded_title}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_url) as resp:
+                    data = await resp.json()
+            # Record the API playback details.
+            record = {
+                "chat_id": chat_id,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "song_title": video_title,
+                "api_response": data
+            }
+            api_playback_records.append(record)
+            # Set playback mode to API for this chat.
+            playback_mode[chat_id] = "api"
+            
+            # Define the inline control buttons.
+            control_buttons = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(text="▶️", callback_data="pause"),
+                        InlineKeyboardButton(text="⏸", callback_data="resume"),
+                        InlineKeyboardButton(text="⏭", callback_data="skip"),
+                        InlineKeyboardButton(text="⏹", callback_data="stop")
+                    ],
+                    [
+                        InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
+                        InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1"),
+                    ]
+                ]
+            )
+            
+            external_notice = (
+                "Note: Bot is using an external API to play (beta). "
+                "If any issues occur, please contact support - @frozensupport1"
+            )
+            caption = (
+                f"{external_notice}\n\n"
+                f"✨ **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**\n\n"
+                f"✨**Title:** {song_info['title']}\n\n"
+                f"✨**Duration:** {song_info['duration']}\n\n"
+                f"✨**Requested by:** {song_info['requester']}"
+            )
+            
+            await bot.send_photo(
+    chat_id,
+    photo=song_info['thumbnail'],
+    caption=(
+        f"✨ **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**\n\n"
+        f"✨**Title:** {song_info['title']}\n\n"
+        f"✨**Duration:** {song_info['duration']}\n\n"
+        f"✨**Requested by:** {song_info['requester']}"
+    ),
+    reply_markup=control_buttons
+)
+
+        except Exception as e:
+            await message.reply(f"❌ API Error: {str(e)}")
+        return  # Exit the local playback branch.
+
+    # Otherwise, use local playback.
+    playback_mode[chat_id] = "local"
     try:
         if chat_id in playback_tasks:
-            playback_tasks[chat_id].cancel()  # Cancel the existing task if any
+            playback_tasks[chat_id].cancel()
 
         if chat_id in chat_containers and chat_containers[chat_id]:
-            song_info = chat_containers[chat_id][0]  # Get the first song in the queue
-
+            song_info = chat_containers[chat_id][0]
             video_url = song_info.get('url')
             if not video_url:
                 print(f"Invalid video URL for song: {song_info}")
@@ -459,6 +554,8 @@ async def start_playback_task(chat_id, message):
                 )
             )
 
+            playback_tasks[chat_id] = asyncio.current_task()
+
             control_buttons = InlineKeyboardMarkup(
                 [
                     [
@@ -468,12 +565,8 @@ async def start_playback_task(chat_id, message):
                         InlineKeyboardButton(text="⏹", callback_data="stop")
                     ],
                     [
-                        InlineKeyboardButton(
-                            text="✨ Updates ✨", url="https://t.me/vibeshiftbots"
-                        ),
-                        InlineKeyboardButton(
-                            text="💕 Support 💕", url="https://t.me/Frozensupport1"
-                        ),
+                        InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
+                        InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1"),
                     ]
                 ]
             )
@@ -489,40 +582,136 @@ async def start_playback_task(chat_id, message):
                 reply_markup=control_buttons
             )
             await message.delete()
-
     except Exception as playback_error:
         print(f"Error during playback: {playback_error}")
-
-        # Get the current time in a readable format
         time_of_error = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-
-        # Attempt to export the invite link for the current chat
         try:
             chat_invite_link = await bot.export_chat_invite_link(chat_id)
         except Exception as link_error:
             chat_invite_link = "Could not retrieve invite link"
-
-        # Build the detailed error message including the chat's invite link
         error_message = (
-            f"Error in chat id: {chat_id}\n\n\n"
-            f"Error: {playback_error}\n\n\n"
-            f"Chat Link: {chat_invite_link}\n\n\n"
-            f"Time of error: {time_of_error}\n\n\n"
+            f"Error in chat id: {chat_id}\n\n"
+            f"Error: {playback_error}\n\n"
+            f"Chat Link: {chat_invite_link}\n\n"
+            f"Time of error: {time_of_error}\n\n"
             f"Song title: {song_info['title']}"
         )
-
-        # Send the error message to the support group
         await bot.send_message(7856124770, error_message)
-
-        # Inform the user in the current chat that an error occurred and support has been notified
         await message.reply(
             f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...\n\nSupport has been notified."
         )
-
-        # Remove the current song from the chat queue and restart playback
         chat_containers[chat_id].pop(0)
         await start_playback_task(chat_id, message)
 
+
+@bot.on_callback_query()
+async def callback_query_handler(client, callback_query):
+    chat_id = callback_query.message.chat.id
+    user_id = callback_query.from_user.id
+
+    # Check if the user is an admin; if not, notify and exit.
+    if not await is_user_admin(callback_query):
+        await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
+        return
+
+    data = callback_query.data
+    mode = playback_mode.get(chat_id, "local")  # Default to local mode
+    user = callback_query.from_user  # Get the user once for later use
+
+    if data == "pause":
+        if mode == "local":
+            try:
+                await call_py.pause_stream(chat_id)
+                await callback_query.answer("⏸ Playback paused.")
+                await client.send_message(
+                    chat_id, f"⏸ Playback paused by {user.first_name}."
+                )
+            except Exception as e:
+                await callback_query.answer("❌ Error pausing playback.", show_alert=True)
+        else:
+            await callback_query.answer("❌ Pause not supported in API mode.", show_alert=True)
+
+    elif data == "resume":
+        if mode == "local":
+            try:
+                await call_py.resume_stream(chat_id)
+                await callback_query.answer("▶️ Playback resumed.")
+                await client.send_message(
+                    chat_id, f"▶️ Playback resumed by {user.first_name}."
+                )
+            except Exception as e:
+                await callback_query.answer("❌ Error resuming playback.", show_alert=True)
+        else:
+            await callback_query.answer("❌ Resume not supported in API mode.", show_alert=True)
+
+    elif data == "skip":
+        if chat_id in chat_containers and chat_containers[chat_id]:
+            skipped_song = chat_containers[chat_id].pop(0)
+            if mode == "local":
+                try:
+                    await call_py.leave_call(chat_id)
+                except Exception as e:
+                    print("Local leave_call error:", e)
+                await asyncio.sleep(3)
+                try:
+                    os.remove(skipped_song.get('file_path', ''))
+                except Exception as e:
+                    print(f"Error deleting file: {e}")
+            else:
+                try:
+                    await stop_playback(chat_id)  # API mode: stop using external API
+                except Exception as e:
+                    print("API stop error:", e)
+                await asyncio.sleep(3)
+                try:
+                    if skipped_song.get('file_path'):
+                        os.remove(skipped_song.get('file_path', ''))
+                except Exception as e:
+                    print(f"Error deleting file: {e}")
+
+            # Send a message on chat indicating who skipped the song.
+            await client.send_message(
+                chat_id, f"⏩ {user.first_name} skipped **{skipped_song['title']}**."
+            )
+
+            if chat_id in chat_containers and chat_containers[chat_id]:
+                await callback_query.answer("⏩ Skipped! Playing the next song...")
+                await start_playback_task(chat_id, callback_query.message)
+            else:
+                await callback_query.answer("⏩ Skipped! No more songs in the queue.")
+        else:
+            await callback_query.answer("❌ No songs in the queue to skip.")
+
+    elif data == "clear":
+        if chat_id in chat_containers:
+            for song in chat_containers[chat_id]:
+                try:
+                    os.remove(song.get('file_path', ''))
+                except Exception as e:
+                    print(f"Error deleting file: {e}")
+            chat_containers.pop(chat_id)
+            await callback_query.message.edit("🗑️ Cleared the queue.")
+            await callback_query.answer("🗑️ Cleared the queue.")
+        else:
+            await callback_query.answer("❌ No songs in the queue to clear.", show_alert=True)
+
+    elif data == "stop":
+        # Clear the queue first
+        if chat_id in chat_containers:
+            chat_containers[chat_id].clear()
+        try:
+            if mode == "local":
+                await call_py.leave_call(chat_id)
+            else:
+                await stop_playback(chat_id)
+            await callback_query.answer("🛑 Playback stopped and queue cleared.")
+            await client.send_message(
+                chat_id,
+                f"🛑 Playback stopped and queue cleared by {user.first_name}."
+            )
+        except Exception as e:
+            print("Stop error:", e)
+            await callback_query.answer("❌ Error stopping playback.", show_alert=True)
 
 
 @call_py.on_update(fl.stream_end)
@@ -562,67 +751,6 @@ async def leave_voice_chat(chat_id):
 
 # Add a callback query handler to handle button presses
 
-@bot.on_callback_query()
-async def callback_query_handler(client, callback_query):
-    chat_id = callback_query.message.chat.id
-    user_id = callback_query.from_user.id
-
-    # Check if the user is an admin; if not, notify and exit.
-    if not await is_user_admin(callback_query):
-        await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
-        return
-
-    data = callback_query.data
-
-    if data == "pause":
-        await call_py.pause_stream(chat_id)
-        await callback_query.answer("⏸ Playback paused.")
-
-    elif data == "resume":
-        await call_py.resume_stream(chat_id)
-        await callback_query.answer("▶️ Playback resumed.")
-
-    elif data == "skip":
-        if chat_id in chat_containers and chat_containers[chat_id]:
-            skipped_song = chat_containers[chat_id].pop(0)
-            await call_py.leave_call(chat_id)
-            await asyncio.sleep(3)
-            try:
-                os.remove(skipped_song.get('file_path', ''))
-            except Exception as e:
-                print(f"Error deleting file: {e}")
-
-            if chat_id in chat_containers and chat_containers[chat_id]:
-                await callback_query.answer("⏩ Skipped! Playing the next song...")
-                await skip_to_next_song(chat_id, callback_query.message)
-            else:
-                await callback_query.answer("⏩ Skipped! No more songs in the queue.")
-        else:
-            await callback_query.answer("❌ No songs in the queue to skip.")
-
-    elif data == "clear":
-        if chat_id in chat_containers:
-            # Clear the chat-specific queue by deleting each song's file.
-            for song in chat_containers[chat_id]:
-                try:
-                    os.remove(song.get('file_path', ''))
-                except Exception as e:
-                    print(f"Error deleting file: {e}")
-
-            # Remove the queue from the container.
-            chat_containers.pop(chat_id)
-            # Optionally, you can edit the message or send an answer to confirm.
-            await callback_query.message.edit("🗑️ Cleared the queue.")
-            await callback_query.answer("🗑️ Cleared the queue.")
-        else:
-            await callback_query.answer("❌ No songs in the queue to clear.", show_alert=True)
-
-    elif data == "stop":
-        if chat_id in chat_containers:
-            chat_containers[chat_id].clear()
-        await call_py.leave_call(chat_id)
-        await callback_query.answer("🛑 Playback stopped and queue cleared.")
-
 
 
 download_cache = {}  # Global cache dictionary
@@ -655,23 +783,35 @@ async def download_audio(url):
 
 
 @bot.on_message(filters.group & filters.command(["stop", "end"]))
-async def skip_handler(client, message):
+async def stop_handler(client, message):
     chat_id = message.chat.id
     user_id = message.from_user.id
 
+    # Check admin rights
     if not await is_user_admin(message):
         await message.reply("❌ You need to be an admin to use this command.")
         return
 
-    try:
-        await call_py.leave_call(chat_id)
-    except Exception as e:
-        if "not in a call" in str(e).lower():
-            await message.reply("❌ The bot is not currently in a voice chat.")
-        else:
-            await message.reply(f"❌ An error occurred while leaving the voice chat: {str(e)}\n\n support - @frozensupport1")
-        return
+    # Determine the playback mode (defaulting to local)
+    mode = playback_mode.get(chat_id, "local")
 
+    if mode == "local":
+        try:
+            await call_py.leave_call(chat_id)
+        except Exception as e:
+            if "not in a call" in str(e).lower():
+                await message.reply("❌ The bot is not currently in a voice chat.")
+            else:
+                await message.reply(f"❌ An error occurred while leaving the voice chat: {str(e)}\n\n support - @frozensupport1")
+            return
+    else:
+        try:
+            await stop_playback(chat_id)
+        except Exception as e:
+            await message.reply(f"❌ An error occurred while stopping playback: {str(e)}", quote=True)
+            return
+
+    # Clear the song queue
     if chat_id in chat_containers:
         for song in chat_containers[chat_id]:
             try:
@@ -680,6 +820,7 @@ async def skip_handler(client, message):
                 print(f"Error deleting file: {e}")
         chat_containers.pop(chat_id)
 
+    # Cancel any playback tasks if present
     if chat_id in playback_tasks:
         playback_tasks[chat_id].cancel()
         del playback_tasks[chat_id]
@@ -725,26 +866,50 @@ async def skip_handler(client, message):
         await message.reply("❌ You need to be an admin to use this command.")
         return
 
-    await_message = await message.reply("⏩ Skipping the current song...")
+    status_message = await message.reply("⏩ Skipping the current song...")
 
     if chat_id not in chat_containers or not chat_containers[chat_id]:
-        await await_message.edit("❌ No songs in the queue to skip.")
+        await status_message.edit("❌ No songs in the queue to skip.")
         return
 
+    # Remove the currently playing song from the queue.
     skipped_song = chat_containers[chat_id].pop(0)
-    await call_py.leave_call(chat_id)
-    await asyncio.sleep(3)
+    # Determine the playback mode (default to local).
+    mode = playback_mode.get(chat_id, "local")
 
-    try:
-        os.remove(skipped_song.get('file_path', ''))
-    except Exception as e:
-        print(f"Error deleting file: {e}")
-
-    if not chat_containers[chat_id]:
-        await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n❌ No more songs in the queue.")
+    if mode == "local":
+        try:
+            await call_py.leave_call(chat_id)
+        except Exception as e:
+            print("Local leave_call error:", e)
+        await asyncio.sleep(3)
+        try:
+            os.remove(skipped_song.get('file_path', ''))
+        except Exception as e:
+            print(f"Error deleting file: {e}")
     else:
-        await await_message.edit(f"⏩ Skipped **{skipped_song['title']}**.\n\n💕 Playing the next song...")
-        await skip_to_next_song(chat_id, await_message)
+        try:
+            await stop_playback(chat_id)
+        except Exception as e:
+            print("API stop error:", e)
+        await asyncio.sleep(3)
+        try:
+            if skipped_song.get('file_path'):
+                os.remove(skipped_song.get('file_path', ''))
+        except Exception as e:
+            print(f"Error deleting file: {e}")
+
+    # Check if there are any more songs in the queue.
+    if not chat_containers.get(chat_id):
+        await status_message.edit(
+            f"⏩ Skipped **{skipped_song['title']}**.\n\n❌ No more songs in the queue."
+        )
+    else:
+        await status_message.edit(
+            f"⏩ Skipped **{skipped_song['title']}**.\n\n💕 Playing the next song..."
+        )
+        await skip_to_next_song(chat_id, status_message)
+
 
 
 @bot.on_message(filters.command("reboot"))
@@ -886,8 +1051,30 @@ def ping_api(url, description):
     except Exception as e:
         print(f"Error pinging {description}: {e}")
 
-
-
+@bot.on_message(filters.regex(r'^Stream ended in chat id (?P<chat_id>-?\d+)$'))
+async def stream_ended_handler(_, message):
+    # Extract the chat ID from the message
+    chat_id = int(message.matches[0]['chat_id'])
+    
+    # If a queue exists for this chat and it contains songs:
+    if chat_id in chat_containers and chat_containers[chat_id]:
+        # Remove the finished song from the queue (assumed to be at the start)
+        chat_containers[chat_id].pop(0)
+        
+        # Check if there are still songs in the queue
+        if chat_containers[chat_id]:
+            # Notify users that the bot is skipping to the next song
+            await bot.send_message(chat_id, "⏭ Skipping to the next song...")
+            # Start playing the next song
+            await start_playback_task(chat_id, message)
+        else:
+            # Notify users that there are no more songs and the bot is leaving
+            await message.reply("🚪 No songs left in the queue. Leaving the voice chat.")
+            await call_py.leave_chat(chat_id)
+    else:
+        # In case no queue exists or is empty, notify and leave the voice chat
+        await bot.send_message(chat_id, "🚪 No songs left in the queue. Leaving the voice chat.")
+        await call_py.leave_chat(chat_id)
 
 
 
