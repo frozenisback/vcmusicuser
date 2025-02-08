@@ -165,6 +165,136 @@ async def is_user_admin(obj: Union[Message, CallbackQuery]) -> bool:
         return True
 
 
+@bot.on_message(filters.command("start"))
+async def start_handler(_, message):
+    # Calculate uptime
+    current_time = time.time()
+    uptime_seconds = int(current_time - bot_start_time)
+    uptime_str = str(timedelta(seconds=uptime_seconds))
+
+    # Mention the user
+    user_mention = message.from_user.mention
+
+    # Caption with bot info and uptime
+    caption = (
+        f"👋 нєу {user_mention} 💠, 🥀\n\n"
+        "🎶 Wᴇʟᴄᴏᴍᴇ ᴛᴏ Fʀᴏᴢᴇɴ 🥀 ᴍᴜsɪᴄ! 🎵\n\n"
+        "➻ 🚀 A Sᴜᴘᴇʀғᴀsᴛ & Pᴏᴡᴇʀғᴜʟ Tᴇʟᴇɢʀᴀᴍ Mᴜsɪᴄ Bᴏᴛ ᴡɪᴛʜ ᴀᴍᴀᴢɪɴɢ ғᴇᴀᴛᴜʀᴇs. ✨\n\n"
+        "🎧 Sᴜᴘᴘᴏʀᴛᴇᴅ Pʟᴀᴛғᴏʀᴍs: ʏᴏᴜᴛᴜʙᴇ, sᴘᴏᴛɪғʏ, ʀᴇssᴏ, ᴀᴘᴘʟᴇ ᴍᴜsɪᴄ, sᴏᴜɴᴅᴄʟᴏᴜᴅ.\n\n"
+        "🔹 Kᴇʏ Fᴇᴀᴛᴜʀᴇs:\n"
+        "🎵 Playlist Support for your favorite tracks.\n"
+        "🤖 AI Chat for engaging conversations.\n"
+        "🖼️ Image Generation with AI creativity.\n"
+        "👥 Group Management tools for admins.\n"
+        "💡 And many more exciting features!\n\n"
+        f"**Uptime:** `{uptime_str}`\n\n"
+        "──────────────────\n"
+        "๏ ᴄʟɪᴄᴋ ᴛʜᴇ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ ғᴏʀ ᴍᴏᴅᴜʟᴇ ᴀɴᴅ ᴄᴏᴍᴍᴀɴᴅ ɪɴғᴏ.."
+    )
+
+    # Buttons on the start screen
+    buttons = [
+        [InlineKeyboardButton("➕ Add me", url="https://t.me/vcmusiclubot?startgroup=true"),
+         InlineKeyboardButton("💬 Support", url="https://t.me/Frozensupport1")],
+        [InlineKeyboardButton("❓ Help", callback_data="show_help")]
+    ]
+    reply_markup = InlineKeyboardMarkup(buttons)
+
+    # Send the image with caption and buttons
+    await message.reply_photo(
+        photo="https://files.catbox.moe/4o3ied.jpg",
+        caption=caption,
+        reply_markup=reply_markup
+    )
+
+@bot.on_callback_query(filters.regex("show_help"))
+async def show_help_callback(_, callback_query):
+    # Main help menu with category options
+    help_text = "Choose a category to see available commands:"
+    buttons = [
+        [InlineKeyboardButton("🎵 Music Commands", callback_data="music_commands")],
+        [InlineKeyboardButton("👥 Group Commands", callback_data="group_commands")],
+        [InlineKeyboardButton("🏠 Home", callback_data="go_back")]
+    ]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    await callback_query.message.edit_text(help_text, reply_markup=reply_markup)
+
+@bot.on_callback_query(filters.regex("music_commands"))
+async def music_commands_callback(_, callback_query):
+    # Music-related commands help text
+    music_help_text = (
+        "Here are the music commands:\n\n"
+        "✨ /play <song name> - Play a song\n"
+        "✨ /stop - Stop the music\n"
+        "✨ /pause - Pause the music\n"
+        "✨ /resume - Resume the music\n"
+        "✨ /skip - Skip the current song\n"
+        "✨ /reboot - Reboot the bot\n"
+        "✨ /ping - Show bot status and uptime\n"
+        "✨ /clear - Clear the queue\n"
+    )
+    buttons = [
+        [InlineKeyboardButton("🔙 Back", callback_data="show_help")]
+    ]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    await callback_query.message.edit_text(music_help_text, reply_markup=reply_markup)
+
+@bot.on_callback_query(filters.regex("group_commands"))
+async def group_commands_callback(_, callback_query):
+    # Group-related commands help text (plain text, no Markdown)
+    group_help_text = (
+        "Welcome to the bot!\n\n"
+        "Here's what I can do for you in groups:\n"
+        "- /id: Get your Telegram ID (in DM) or the group ID (in a group).\n"
+        "- /kick, /ban, /unban, /mute, /unmute: Manage users in the group.\n"
+        "- /promote, /demote: Promote or demote users.\n"
+        "- /purge: Remove messages in bulk. Reply to a message to start purging from.\n"
+        "- /report: Report a message to group admins.\n"
+        "- /bcast: Broadcast a message to all registered chats.\n\n"
+        "Enjoy using the bot! For more info or support, visit: https://t.me/Frozensupport1"
+    )
+    buttons = [
+        [InlineKeyboardButton("🔙 Back", callback_data="show_help")]
+    ]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    await callback_query.message.edit_text(group_help_text, reply_markup=reply_markup)
+
+
+@bot.on_callback_query(filters.regex("go_back"))
+async def go_back_callback(_, callback_query):
+    # Re-create the start screen (with image, caption, and buttons)
+    current_time = time.time()
+    uptime_seconds = int(current_time - bot_start_time)
+    uptime_str = str(timedelta(seconds=uptime_seconds))
+    user_mention = callback_query.from_user.mention
+    caption = (
+        f"👋 нєу {user_mention} 💠, 🥀\n\n"
+        "🎶 Wᴇʟᴄᴏᴍᴇ ᴛᴏ Fʀᴏᴢᴇɴ 🥀 ᴍᴜsɪᴄ! 🎵\n\n"
+        "➻ 🚀 A Sᴜᴘᴇʀғᴀsᴛ & Pᴏᴡᴇʀғᴜʟ Tᴇʟᴇɢʀᴀᴍ Mᴜsɪᴄ Bᴏᴛ ᴡɪᴛʜ ᴀᴍᴀᴢɪɴɢ ғᴇᴀᴛᴜʀᴇs. ✨\n\n"
+        "🎧 Sᴜᴘᴘᴏʀᴛᴇᴅ Pʟᴀᴛғᴏʀᴍs: ʏᴏᴜᴛᴜʙᴇ, sᴘᴏᴛɪғʏ, ʀᴇssᴏ, ᴀᴘᴘʟᴇ ᴍᴜsɪᴄ, sᴏᴜɴᴅᴄʟᴏᴜᴅ.\n\n"
+        "🔹 Kᴇʏ Fᴇᴀᴛᴜʀᴇs:\n"
+        "🎵 Playlist Support for your favorite tracks.\n"
+        "🤖 AI Chat for engaging conversations.\n"
+        "🖼️ Image Generation with AI creativity.\n"
+        "👥 Group Management tools for admins.\n"
+        "💡 And many more exciting features!\n\n"
+        f"**Uptime:** `{uptime_str}`\n\n"
+        "──────────────────\n"
+        "๏ ᴄʟɪᴄᴋ ᴛʜᴇ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ ғᴏʀ ᴍᴏᴅᴜʟᴇ ᴀɴᴅ ᴄᴏᴍᴍᴀɴᴅ ɪɴғᴏ.."
+    )
+    buttons = [
+        [InlineKeyboardButton("➕ Add me", url="https://t.me/vcmusiclubot?startgroup=true"),
+         InlineKeyboardButton("💬 Support", url="https://t.me/Frozensupport1")],
+        [InlineKeyboardButton("❓ Help", callback_data="show_help")]
+    ]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    await callback_query.message.edit_media(
+        media=InputMediaPhoto(media="https://files.catbox.moe/4o3ied.jpg", caption=caption),
+        reply_markup=reply_markup
+    )
+
+
+
 @bot.on_message(filters.group & filters.regex(r'^/play(?: (?P<query>.+))?$'))
 async def play_handler(_, message):
     chat_id = message.chat.id
