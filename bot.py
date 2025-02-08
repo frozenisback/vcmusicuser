@@ -22,6 +22,9 @@ from pytgcalls.types import Update
 from pytgcalls import filters as fl
 from pytgcalls.types import GroupCallParticipant
 import requests
+from io import BytesIO
+from PIL import ImageEnhance
+
 
 
 # Bot and Assistant session strings 
@@ -114,50 +117,6 @@ async def fetch_youtube_link(query):
     
 
 
-async def add_watermark_to_thumbnail(thumbnail_url, watermark_text="ᴘᴏᴡᴇʀᴇᴅ ʙʏ ғʀᴏᴢᴇɴ ʙᴏᴛs"):
-    try:
-        # Fetch the thumbnail image
-        async with aiohttp.ClientSession() as session:
-            async with session.get(thumbnail_url) as response:
-                if response.status != 200:
-                    raise Exception("Failed to fetch thumbnail image.")
-                image_data = await response.read()
-
-        # Open the image using Pillow
-        image = Image.open(BytesIO(image_data)).convert("RGBA")
-
-        # Create a drawing context
-        draw = ImageDraw.Draw(image)
-
-        # Load a font (ensure this font file is available or replace it with one that exists on your system)
-        font = ImageFont.truetype("arial.ttf", size=28)  # Adjust font size if needed
-
-        # Calculate text size and position
-        text_bbox = draw.textbbox((0, 0), watermark_text, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
-        x = 20  # Padding of 20px from the left
-        y = image.height - text_height - 20  # Padding of 20px from the bottom
-
-        # Create a solid black rectangle behind the text for better visibility
-        rect_x1 = x - 5
-        rect_y1 = y - 5
-        rect_x2 = x + text_width + 5
-        rect_y2 = y + text_height + 5
-        draw.rectangle([rect_x1, rect_y1, rect_x2, rect_y2], fill=(0, 0, 0, 255))  # Solid black
-
-        # Add the neon-colored, bold text watermark
-        neon_color = (57, 255, 20)  # Neon green
-        draw.text((x, y), watermark_text, font=font, fill=neon_color)
-
-        # Save the watermarked image to an in-memory buffer
-        output_buffer = BytesIO()
-        image.save(output_buffer, format="PNG")
-        output_buffer.seek(0)
-        return output_buffer
-
-    except Exception as e:
-        raise Exception(f"Error adding watermark: {str(e)}")
 
 async def skip_to_next_song(chat_id, message):
     """Skips to the next song in the queue and starts playback."""
@@ -206,116 +165,6 @@ async def is_user_admin(obj: Union[Message, CallbackQuery]) -> bool:
         return True
 
 
-
-@bot.on_message(filters.command("start"))
-async def start_handler(_, message):
-    # Calculate uptime
-    current_time = time.time()
-    uptime_seconds = int(current_time - bot_start_time)
-    uptime_str = str(timedelta(seconds=uptime_seconds))
-
-    # Mention the user
-    user_mention = message.from_user.mention
-
-    # Caption with bot info and uptime
-    caption = (
-        f"👋 нєу {user_mention} 💠, 🥀\n\n"
-        "🎶 Wᴇʟᴄᴏᴍᴇ ᴛᴏ Fʀᴏᴢᴇɴ 🥀 ᴍᴜsɪᴄ! 🎵\n\n"
-        "➻ 🚀 A Sᴜᴘᴇʀғᴀsᴛ & Pᴏᴡᴇʀғᴜʟ Tᴇʟᴇɢʀᴀᴍ Mᴜsɪᴄ Bᴏᴛ ᴡɪᴛʜ ᴀᴍᴀᴢɪɴɢ ғᴇᴀᴛᴜʀᴇs. ✨\n\n"
-        "🎧 Sᴜᴘᴘᴏʀᴛᴇᴅ Pʟᴀᴛғᴏʀᴍs: ʏᴏᴜᴛᴜʙᴇ, sᴘᴏᴛɪғʏ, ʀᴇssᴏ, ᴀᴘᴘʟᴇ ᴍᴜsɪᴄ, sᴏᴜɴᴅᴄʟᴏᴜᴅ.\n\n"
-        "🔹 Kᴇʏ Fᴇᴀᴛᴜʀᴇs:\n"
-        "🎵 Playlist Support for your favorite tracks.\n"
-        "🤖 AI Chat for engaging conversations.\n"
-        "🖼️ Image Generation with AI creativity.\n"
-        "👥 Group Management tools for admins.\n"
-        "💡 And many more exciting features!\n\n"
-        f"**Uptime:** `{uptime_str}`\n\n"
-        "──────────────────\n"
-        "๏ ᴄʟɪᴄᴋ ᴛʜᴇ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ ғᴏʀ ᴍᴏᴅᴜʟᴇ ᴀɴᴅ ᴄᴏᴍᴍᴀɴᴅ ɪɴғᴏ.."
-    )
-
-    # Buttons
-    buttons = [
-        [InlineKeyboardButton("➕ Add me ", url="https://t.me/vcmusiclubot?startgroup=true"),
-         InlineKeyboardButton("💬 Support", url="https://t.me/Frozensupport1")],
-        [InlineKeyboardButton("❓ Help", callback_data="show_help")]
-    ]
-
-    reply_markup = InlineKeyboardMarkup(buttons)
-
-    # Send the image with the caption and buttons
-    await message.reply_photo(
-        photo="https://files.catbox.moe/4o3ied.jpg",
-        caption=caption,
-        reply_markup=reply_markup
-    )
-
-@bot.on_callback_query(filters.regex("show_help"))
-async def show_help_callback(_, callback_query):
-    help_text = (
-        "Here are the commands you can use:\n\n"
-        "✨/play <song name> - Play a song\n"
-        "✨/stop - Stop the music\n"
-        "✨/pause - Pause the music\n"
-        "✨/resume - Resume the music\n"
-        "✨/skip - Skip the current song\n"
-        "✨/reboot - Reboot the bot\n"
-        "✨/ping - Show bot status and uptime\n"
-        "✨/clear - Clear the queue\n"
-    )
-
-    # Buttons including the "Back" button
-    buttons = [
-        [InlineKeyboardButton("➕ ᴀᴅᴅ ᴍᴇ 💕", url="https://t.me/vcmusiclubot?startgroup=true"),
-         InlineKeyboardButton("💬 ғʀᴏᴢᴇɴ sᴜᴘᴘᴏʀᴛ ❄️", url="https://t.me/Frozensupport1")],
-        [InlineKeyboardButton("🔙 ʙᴀᴄᴋ 💕", callback_data="go_back")]
-    ]
-
-    reply_markup = InlineKeyboardMarkup(buttons)
-
-    await callback_query.message.edit_text(help_text, reply_markup=reply_markup)
-
-@bot.on_callback_query(filters.regex("go_back"))
-async def go_back_callback(_, callback_query):
-    # Calculate uptime
-    current_time = time.time()
-    uptime_seconds = int(current_time - bot_start_time)
-    uptime_str = str(timedelta(seconds=uptime_seconds))
-
-    # Mention the user
-    user_mention = callback_query.from_user.mention
-
-    # Caption with bot info and uptime
-    caption = (
-        f"👋 нєу {user_mention} 💠, 🥀\n\n"
-        "🎶 Wᴇʟᴄᴏᴍᴇ ᴛᴏ Fʀᴏᴢᴇɴ 🥀 ᴍᴜsɪᴄ! 🎵\n\n"
-        "➻ 🚀 A Sᴜᴘᴇʀғᴀsᴛ & Pᴏᴡᴇʀғᴜʟ Tᴇʟᴇɢʀᴀᴍ Mᴜsɪᴄ Bᴏᴛ ᴡɪᴛʜ ᴀᴍᴀᴢɪɴɢ ғᴇᴀᴛᴜʀᴇs. ✨\n\n"
-        "🎧 Sᴜᴘᴘᴏʀᴛᴇᴅ Pʟᴀᴛғᴏʀᴍs: ʏᴏᴜᴛᴜʙᴇ, sᴘᴏᴛɪғʏ, ʀᴇssᴏ, ᴀᴘᴘʟᴇ ᴍᴜsɪᴄ, sᴏᴜɴᴅᴄʟᴏᴜᴅ.\n\n"
-        "🔹 Kᴇʏ Fᴇᴀᴛᴜʀᴇs:\n"
-        "🎵 Playlist Support for your favorite tracks.\n"
-        "🤖 AI Chat for engaging conversations.\n"
-        "🖼️ Image Generation with AI creativity.\n"
-        "👥 Group Management tools for admins.\n"
-        "💡 And many more exciting features!\n\n"
-        f"**Uptime:** `{uptime_str}`\n\n"
-        "──────────────────\n"
-        "๏ ᴄʟɪᴄᴋ ᴛʜᴇ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ ғᴏʀ ᴍᴏᴅᴜʟᴇ ᴀɴᴅ ᴄᴏᴍᴍᴀɴᴅ ɪɴғᴏ.."
-    )
-
-    # Buttons
-    buttons = [
-        [InlineKeyboardButton("➕ ᴀᴅᴅ ᴍᴇ 💕", url="https://t.me/vcmusiclubot?startgroup=true"),
-         InlineKeyboardButton("💬 ғʀᴏᴢᴇɴ sᴜᴘᴘᴏʀᴛ ❄️", url="https://t.me/Frozensupport1")],
-        [InlineKeyboardButton("❓ ʜᴇʟᴘ", callback_data="show_help")]
-    ]
-
-    reply_markup = InlineKeyboardMarkup(buttons)
-
-    await callback_query.message.edit_media(
-        media=InputMediaPhoto(media="https://files.catbox.moe/4o3ied.jpg", caption=caption),
-        reply_markup=reply_markup
-    )
-
 @bot.on_message(filters.group & filters.regex(r'^/play(?: (?P<query>.+))?$'))
 async def play_handler(_, message):
     chat_id = message.chat.id
@@ -349,9 +198,6 @@ async def play_handler(_, message):
 
 async def process_play_command(message, query):
     chat_id = message.chat.id
-
-    # Check if the chat already has an active voice chat.
-    # We assume call_py.group_call returns a truthy value if a voice chat is active.
 
     processing_message = await message.reply("❄️")
     
@@ -407,13 +253,9 @@ async def process_play_command(message, query):
             return
 
         readable_duration = iso8601_to_human_readable(video_duration)
-        try:
-            watermarked_thumbnail = await add_watermark_to_thumbnail(thumbnail_url)
-        except Exception as e:
-            await processing_message.edit(
-                f"❌ Error processing thumbnail: {str(e)}\n\n support - @frozensupport1"
-            )
-            return
+        
+        # Use the thumbnail URL directly (no watermark processing)
+        watermarked_thumbnail = thumbnail_url
 
         if chat_id in chat_containers and len(chat_containers[chat_id]) >= QUEUE_LIMIT:
             await processing_message.edit("❌ The queue is full (limit 5). Please wait until some songs finish playing or clear the queue.")
@@ -434,28 +276,18 @@ async def process_play_command(message, query):
         if len(chat_containers[chat_id]) == 1:
             await start_playback_task(chat_id, processing_message)
         else:
-            control_buttons = InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton("⏭ Skip", callback_data="skip"),
-                        InlineKeyboardButton("🗑 Clear", callback_data="clear")
-                    ]
-                ]
-            )
-            await message.reply_photo(
-                photo=watermarked_thumbnail,
-                caption=(
-                    f"✨ ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:\n\n"
-                    f"✨**Title:** {video_title}\n"
-                    f"✨**Duration:** {readable_duration}\n"
-                    f"✨**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
-                    f"✨**Queue number:** {len(chat_containers[chat_id]) - 1}\n"
-                ),
-                reply_markup=control_buttons
+            # Instead of sending a photo with the thumbnail, just send a text reply.
+            await message.reply(
+                f"✨ ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:\n\n"
+                f"✨**Title:** {video_title}\n"
+                f"✨**Duration:** {readable_duration}\n"
+                f"✨**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
+                f"✨**Queue number:** {len(chat_containers[chat_id]) - 1}\n"
             )
             await processing_message.delete()
     except Exception as e:
         await processing_message.edit(f"❌ Error: {str(e)}")
+
 
 
 # Assuming bot, call_py, playback_tasks, and chat_containers are already defined
