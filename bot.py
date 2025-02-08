@@ -30,8 +30,8 @@ import urllib.parse
 # Bot and Assistant session strings 
 API_ID = 29385418  # Replace with your actual API ID
 API_HASH = "5737577bcb32ea1aac1ac394b96c4b10"  # Replace with your actual API Hash
-BOT_TOKEN = "7391282954:AAFevS8wquYQRSYW2BDs9Jcm-L9pE1ZXSUE"  # Replace with your bot token
-ASSISTANT_SESSION = "BQHAYsoATAqjNlBYwdEplpfcJhlAZgg82W1B7ZQVWIRWsOa2hZ8TrbcwUrYCSq6TQqYggMnBglulKX6OtEbFsGeFDQyal52ElSuuqrItHDkJT8Up3GBbACF2hQkQuywLlAqp2_OrXXEs7YPwiAYmyw90F-tX_VjOP7AjSsaUI_Fq4dCDBds30BBRcR-J6zBcvwBNSauXP3zf6NI8-Hs8oKJTHIKQjSARxVAqa19HXQ49s741GeA5Dpp-paNAN_FOiAKZqEJAtpRzTi0NxEstK5-8YKkrFayRs6Qd7Vy20Ex4p_Zhq6fVVlBxTgw71YYD2XqH5k6rX4FMWSp9D6ObEyG-8eAsTgAAAAHUQvNiAA"
+BOT_TOKEN = "7598576464:AAHTQqNDdgD_DyzOfo_ET2an0OTLtd-S7io"  # Replace with your bot token
+ASSISTANT_SESSION = "BQHAYsoAdHATLqH8s5h-yw_8sBEHJjZeYK3MbehzlNnEPGVW8tVtd0e-Lkb5nckAZPfyft2pH-Enk5M2_LcEXlZhfvIO800Xo4b2u3mFVQYKrpjrykK0GEuXauL0DdqDQ_kzZTl1Zy6anNpMNEI5QWOae0FdPYfnPaOjcXOv-fe9nYke-pw2TzZSByfsHaLBb5j-XAb3uJvQqWnEEGZqNQzihnmOwO5wZGmR2nVWftfpbfnJuf6CJ100vW_HNlBYskHs4HTcT8fe4bdr6mdC6bHVW3EHbes5l5cV04MQnuzyfWb7TR15MBERJo-Z2otWAqYPw-G3_BIwPosiB2SYE1rTTjKGdQAAAAG4QLY7AA"
 bot = Client("music_bot1", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
 call_py = PyTgCalls(assistant)
