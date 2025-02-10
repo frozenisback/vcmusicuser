@@ -562,7 +562,7 @@ async def start_playback_task(chat_id, message):
         # --- API CALL WITH ERROR HANDLING AND FALLBACK ---
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(api_url, timeout=10) as resp:
+                async with session.get(api_url, timeout=20) as resp:
                     if resp.status != 200:
                         raise Exception(f"API responded with status {resp.status}")
                     data = await resp.json()
