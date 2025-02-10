@@ -398,61 +398,102 @@ async def process_play_command(message, query):
             return
 
     try:
-        video_url, video_title, video_duration, thumbnail_url = await fetch_youtube_link(query)
-        if not video_url:
-            await processing_message.edit(
-                "❌ Could not find the song. Try another query. \n\n support - @frozensupport1"
-            )
-            return
-
-        duration_seconds = isodate.parse_duration(video_duration).total_seconds()
-        if duration_seconds > MAX_DURATION_SECONDS:
-            await processing_message.edit("❌ Streams longer than 2 hours are not allowed on Frozen Music.")
-            return
-
-        readable_duration = iso8601_to_human_readable(video_duration)
-        
-        # Use the thumbnail URL directly (no watermark processing)
-        watermarked_thumbnail = thumbnail_url
-
-        if chat_id in chat_containers and len(chat_containers[chat_id]) >= QUEUE_LIMIT:
-            await processing_message.edit("❌ The queue is full (limit 10). Please wait until some songs finish playing or clear the queue.")
-            return
-
-        if chat_id not in chat_containers:
-            chat_containers[chat_id] = []
-
-        chat_containers[chat_id].append({
-            "url": video_url,
-            "title": video_title,
-            "duration": readable_duration,
-            "duration_seconds": duration_seconds,
-            "requester": message.from_user.first_name if message.from_user else "Unknown",
-            "thumbnail": watermarked_thumbnail
-        })
-
-        if len(chat_containers[chat_id]) == 1:
-            await start_playback_task(chat_id, processing_message)
-        else:
-            queue_buttons = InlineKeyboardMarkup(
-                [
+        # Call your API (which may now return either a single video or a playlist)
+        result = await fetch_youtube_link(query)
+        # If the new API returns a playlist:
+        if isinstance(result, dict) and "playlist" in result:
+            playlist_items = result["playlist"]
+            if not playlist_items:
+                await processing_message.edit("❌ No videos found in the playlist.")
+                return
+            if chat_id not in chat_containers:
+                chat_containers[chat_id] = []
+            for item in playlist_items:
+                duration_seconds = isodate.parse_duration(item["duration"]).total_seconds()
+                readable_duration = iso8601_to_human_readable(item["duration"])
+                chat_containers[chat_id].append({
+                    "url": item["link"],
+                    "title": item["title"],
+                    "duration": readable_duration,
+                    "duration_seconds": duration_seconds,
+                    "requester": message.from_user.first_name if message.from_user else "Unknown",
+                    "thumbnail": item["thumbnail"]
+                })
+            # If the queue was empty before, start playback immediately.
+            if len(chat_containers[chat_id]) == len(playlist_items):
+                await start_playback_task(chat_id, processing_message)
+            else:
+                queue_buttons = InlineKeyboardMarkup(
                     [
-                        InlineKeyboardButton(text="⏭ Skip", callback_data="skip"),
-                        InlineKeyboardButton(text="🗑 Clear", callback_data="clear")
+                        [
+                            InlineKeyboardButton(text="⏭ Skip", callback_data="skip"),
+                            InlineKeyboardButton(text="🗑 Clear", callback_data="clear")
+                        ]
                     ]
-                ]
-            )
-            await message.reply(
-                f"✨ ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:\n\n"
-                f"✨**Title:** {video_title}\n"
-                f"✨**Duration:** {readable_duration}\n"
-                f"✨**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
-                f"✨**Queue number:** {len(chat_containers[chat_id]) - 1}\n",
-                reply_markup=queue_buttons
-            )
-            await processing_message.delete()
+                )
+                await message.reply(
+                    f"✨ Playlist added to queue. Total {len(chat_containers[chat_id])} songs.",
+                    reply_markup=queue_buttons
+                )
+                await processing_message.delete()
+        else:
+            # Else, assume a single video response.
+            video_url, video_title, video_duration, thumbnail_url = result
+            if not video_url:
+                await processing_message.edit(
+                    "❌ Could not find the song. Try another query. \n\n support - @frozensupport1"
+                )
+                return
+
+            duration_seconds = isodate.parse_duration(video_duration).total_seconds()
+            if duration_seconds > MAX_DURATION_SECONDS:
+                await processing_message.edit("❌ Streams longer than 2 hours are not allowed on Frozen Music.")
+                return
+
+            readable_duration = iso8601_to_human_readable(video_duration)
+            
+            # Use the thumbnail URL directly
+            watermarked_thumbnail = thumbnail_url
+
+            if chat_id in chat_containers and len(chat_containers[chat_id]) >= QUEUE_LIMIT:
+                await processing_message.edit("❌ The queue is full (limit 10). Please wait until some songs finish playing or clear the queue.")
+                return
+
+            if chat_id not in chat_containers:
+                chat_containers[chat_id] = []
+
+            chat_containers[chat_id].append({
+                "url": video_url,
+                "title": video_title,
+                "duration": readable_duration,
+                "duration_seconds": duration_seconds,
+                "requester": message.from_user.first_name if message.from_user else "Unknown",
+                "thumbnail": watermarked_thumbnail
+            })
+
+            if len(chat_containers[chat_id]) == 1:
+                await start_playback_task(chat_id, processing_message)
+            else:
+                queue_buttons = InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(text="⏭ Skip", callback_data="skip"),
+                            InlineKeyboardButton(text="🗑 Clear", callback_data="clear")
+                        ]
+                    ]
+                )
+                await message.reply(
+                    f"✨ Added to queue:\n\n"
+                    f"✨**Title:** {video_title}\n"
+                    f"✨**Duration:** {readable_duration}\n"
+                    f"✨**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
+                    f"✨**Queue number:** {len(chat_containers[chat_id]) - 1}\n",
+                    reply_markup=queue_buttons
+                )
+                await processing_message.delete()
     except Exception as e:
         await processing_message.edit(f"❌ Error: {str(e)}")
+
 
 
 async def fallback_local_playback(chat_id, message, song_info):
