@@ -30,7 +30,7 @@ import urllib.parse
 # Bot and Assistant session strings 
 API_ID = 29385418  # Replace with your actual API ID
 API_HASH = "5737577bcb32ea1aac1ac394b96c4b10"  # Replace with your actual API Hash
-BOT_TOKEN = "7391282954:AAE3gxY1CJBiDEWfOEs90avzu0ykpiRB6Cg"  # Replace with your bot token
+BOT_TOKEN = "7598576464:AAEnPRX6hQSpvuH6Y1Qedp3GOPfPSEJ9V2c"  # Replace with your bot token
 ASSISTANT_SESSION = "BQHAYsoAJ9RdtV1ZdC0mlgJ7alGjC9oLREK2LffYsrp6wk3H0yoYwx6Utt71TDGTiFQ6-lkLt-5mZOWFQPjXVjjADigxuXOgcDIl7VCGDwMgB6RH-PLofhBKXWxEfQyXViEtmDQI6xG3PXSy7ik4q5Mpv-pVfORq9vEBTtZDuZGDK5peo-VbSXpsbK3fHr3YwWMApDp4MlPZFChf93WmyvOpNVRmEzVX05vgUATC7m3Z9BXbEhaLtrL_v0d1JjMXLVQSJks_9JdSpwtwxFRX2PTRZm9U0UsAol9KSPFDb2wm6dTp9Mvi9L_ClWYAlObIUPc0E-geSF9tIOoz3YP6S9rVW6PmIQAAAAG4QLY7AA"
 bot = Client("music_bot1", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
