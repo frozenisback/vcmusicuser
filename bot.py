@@ -398,9 +398,9 @@ async def process_play_command(message, query):
             return
 
     try:
-        # Call your API (which may now return either a single video or a playlist)
+        # Call your API, which may return either a single video or a playlist.
         result = await fetch_youtube_link(query)
-        # If the new API returns a playlist:
+        # If the API returns a playlist:
         if isinstance(result, dict) and "playlist" in result:
             playlist_items = result["playlist"]
             if not playlist_items:
@@ -419,7 +419,7 @@ async def process_play_command(message, query):
                     "requester": message.from_user.first_name if message.from_user else "Unknown",
                     "thumbnail": item["thumbnail"]
                 })
-            # If the queue was empty before, start playback immediately.
+            # If the queue was empty before adding the playlist, start playback immediately.
             if len(chat_containers[chat_id]) == len(playlist_items):
                 await start_playback_task(chat_id, processing_message)
             else:
@@ -452,7 +452,7 @@ async def process_play_command(message, query):
 
             readable_duration = iso8601_to_human_readable(video_duration)
             
-            # Use the thumbnail URL directly
+            # Use the thumbnail URL directly (no watermark processing)
             watermarked_thumbnail = thumbnail_url
 
             if chat_id in chat_containers and len(chat_containers[chat_id]) >= QUEUE_LIMIT:
