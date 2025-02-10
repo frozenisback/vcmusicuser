@@ -38,6 +38,7 @@ call_py = PyTgCalls(assistant)
 
 ASSISTANT_USERNAME = "@Frozensupporter1"
 ASSISTANT_CHAT_ID = 7386215995
+API_ASSISTANT_USERNAME = "@xyz9372"
 
 # API Endpoints
 API_URL = "https://odd-block-a945.tenopno.workers.dev/search?title="
@@ -89,6 +90,15 @@ async def is_assistant_in_chat(chat_id):
         print(f"Error checking assistant in chat: {e}")
         return False
 
+async def is_api_assistant_in_chat(chat_id):
+    try:
+        member = await bot.get_chat_member(chat_id, API_ASSISTANT_USERNAME)
+        return member.status is not None
+    except Exception as e:
+        print(f"Error checking API assistant in chat: {e}")
+        return False
+
+
 def iso8601_to_human_readable(iso_duration):
     try:
         duration = isodate.parse_duration(iso_duration)
@@ -118,8 +128,6 @@ async def fetch_youtube_link(query):
     except Exception as e:
         raise Exception(f"Failed to fetch YouTube link: {str(e)}")
     
-
-
 
 async def skip_to_next_song(chat_id, message):
     """Skips to the next song in the queue and starts playback."""
@@ -447,75 +455,174 @@ async def process_play_command(message, query):
         await processing_message.edit(f"❌ Error: {str(e)}")
 
 
+async def fallback_local_playback(chat_id, message, song_info):
+    # Set playback mode to local
+    playback_mode[chat_id] = "local"
+    try:
+        if chat_id in playback_tasks:
+            playback_tasks[chat_id].cancel()
+
+        video_url = song_info.get('url')
+        if not video_url:
+            print(f"Invalid video URL for song: {song_info}")
+            chat_containers[chat_id].pop(0)
+            return
+
+        # Inform the user about fallback to local playback
+        try:
+            await message.edit(f"⏳ Falling back to local playback for {song_info['title']}...")
+        except Exception as edit_error:
+            message = await bot.send_message(chat_id, f"⏳ Falling back to local playback for {song_info['title']}...")
+
+        # Proceed with downloading and playing locally
+        media_path = await download_audio(video_url)
+
+        await call_py.play(
+            chat_id,
+            MediaStream(
+                media_path,
+                video_flags=MediaStream.Flags.IGNORE
+            )
+        )
+
+        playback_tasks[chat_id] = asyncio.current_task()
+
+        control_buttons = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(text="▶️", callback_data="pause"),
+                    InlineKeyboardButton(text="⏸", callback_data="resume"),
+                    InlineKeyboardButton(text="⏭", callback_data="skip"),
+                    InlineKeyboardButton(text="⏹", callback_data="stop")
+                ],
+                [
+                    InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
+                    InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1"),
+                ]
+            ]
+        )
+
+        await message.reply_photo(
+            photo=song_info['thumbnail'],
+            caption=(
+                f"✨ **NOW PLAYING (Local Playback)**\n\n"
+                f"✨**Title:** {song_info['title']}\n\n"
+                f"✨**Duration:** {song_info['duration']}\n\n"
+                f"✨**Requested by:** {song_info['requester']}"
+            ),
+            reply_markup=control_buttons
+        )
+        await message.delete()
+    except Exception as fallback_error:
+        print(f"Error during fallback local playback: {fallback_error}")
+        # Optionally notify the user or log further.
+
 async def start_playback_task(chat_id, message):
-    """
-    Starts playback for the given chat.
-    If the local VC limit is reached, the external API is used.
-    """
     print(f"Current local VC count: {len(playback_tasks)}; Current chat: {chat_id}")
 
     # Use the external API if local VC limit has been reached.
     if chat_id not in playback_tasks and len(playback_tasks) >= LOCAL_VC_LIMIT:
+        # NEW: Check if the API assistant is in the chat; if not, invite it.
+        if not await is_api_assistant_in_chat(chat_id):
+            invite_link = await extract_invite_link(bot, chat_id)
+            if invite_link:
+                # Send the join command to the API assistant using its username.
+                await bot.send_message(API_ASSISTANT_USERNAME, f"/join {invite_link}")
+                if message:
+                    await message.edit("⏳ API Assistant is joining...")
+                else:
+                    await bot.send_message(chat_id, "⏳ API Assistant is joining...")
+                # Wait (with retries) for the API assistant to join.
+                for _ in range(10):
+                    await asyncio.sleep(3)
+                    if await is_api_assistant_in_chat(chat_id):
+                        if message:
+                            await message.edit("✅ API Assistant joined!")
+                        else:
+                            await bot.send_message(chat_id, "✅ API Assistant joined!")
+                        break
+                else:
+                    if message:
+                        await message.edit("❌ API Assistant failed to join. Please unban @xyz9372.")
+                    else:
+                        await bot.send_message(chat_id, "❌ API Assistant failed to join. Please unban @xyz9372.")
+                    return
+
+        # Inform the user that we're calling Frozen Play API.
+        if message:
+            await message.edit("⏳ Calling Frozen Play API...")
+        else:
+            await bot.send_message(chat_id, "⏳ Calling Frozen Play API...")
+
         song_info = chat_containers[chat_id][0]
         video_title = song_info.get('title', 'Unknown')
         encoded_title = urllib.parse.quote(video_title)
         api_url = f"https://py-tgcalls-api1.onrender.com/play?chatid={chat_id}&title={encoded_title}"
+
+        # --- API CALL WITH ERROR HANDLING AND FALLBACK ---
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(api_url) as resp:
+                async with session.get(api_url, timeout=10) as resp:
+                    if resp.status != 200:
+                        raise Exception(f"API responded with status {resp.status}")
                     data = await resp.json()
-            # Record the API playback details.
-            record = {
-                "chat_id": chat_id,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                "song_title": video_title,
-                "api_response": data
-            }
-            api_playback_records.append(record)
-            # Set playback mode to API for this chat.
-            playback_mode[chat_id] = "api"
-            
-            # Define the inline control buttons.
-            control_buttons = InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(text="▶️", callback_data="pause"),
-                        InlineKeyboardButton(text="⏸", callback_data="resume"),
-                        InlineKeyboardButton(text="⏭", callback_data="skip"),
-                        InlineKeyboardButton(text="⏹", callback_data="stop")
-                    ],
-                    [
-                        InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
-                        InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1"),
-                    ]
-                ]
-            )
-            
-            external_notice = (
-                "Note: Bot is using an external API to play (beta). "
-                "If any issues occur, please contact support - @frozensupport1"
-            )
-            caption = (
-                f"{external_notice}\n\n"
-                f"✨ **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**\n\n"
-                f"✨**Title:** {song_info['title']}\n\n"
-                f"✨**Duration:** {song_info['duration']}\n\n"
-                f"✨**Requested by:** {song_info['requester']}"
-            )
-            
-            # Use the caption with the external notice
-            await bot.send_photo(
-                chat_id,
-                photo=song_info['thumbnail'],
-                caption=caption,
-                reply_markup=control_buttons
-            )
-
         except Exception as e:
-            await message.reply(f"❌ API Error: {str(e)}")
-        return  # Exit the local playback branch.
+            error_text = f"❌ Frozen Play API Error: {str(e)}\nFalling back to local playback..."
+            if message:
+                await message.edit(error_text)
+            else:
+                await bot.send_message(chat_id, error_text)
+            # Call fallback to local playback.
+            await fallback_local_playback(chat_id, message, song_info)
+            return
+        # --- End API error handling and fallback ---
 
-    # Otherwise, use local playback.
+        # Record the API playback details.
+        record = {
+            "chat_id": chat_id,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "song_title": video_title,
+            "api_response": data
+        }
+        api_playback_records.append(record)
+        playback_mode[chat_id] = "api"
+
+        control_buttons = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(text="▶️", callback_data="pause"),
+                    InlineKeyboardButton(text="⏸", callback_data="resume"),
+                    InlineKeyboardButton(text="⏭", callback_data="skip"),
+                    InlineKeyboardButton(text="⏹", callback_data="stop")
+                ],
+                [
+                    InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
+                    InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1"),
+                ]
+            ]
+        )
+
+        external_notice = (
+            "Note: Bot is using Frozen Play API to play (beta). "
+            "If any issues occur, fallback to local playback will be initiated."
+        )
+        caption = (
+            f"{external_notice}\n\n"
+            f"✨ **NOW PLAYING**\n\n"
+            f"✨**Title:** {song_info['title']}\n\n"
+            f"✨**Duration:** {song_info['duration']}\n\n"
+            f"✨**Requested by:** {song_info['requester']}"
+        )
+
+        await bot.send_photo(
+            chat_id,
+            photo=song_info['thumbnail'],
+            caption=caption,
+            reply_markup=control_buttons
+        )
+        return  # Exit the external API branch.
+
+    # --- Local Playback Branch (if external API branch is not used) ---
     playback_mode[chat_id] = "local"
     try:
         if chat_id in playback_tasks:
@@ -570,7 +677,7 @@ async def start_playback_task(chat_id, message):
             await message.reply_photo(
                 photo=song_info['thumbnail'],
                 caption=(
-                    f"✨ **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**\n\n"
+                    f"✨ **NOW PLAYING**\n\n"
                     f"✨**Title:** {song_info['title']}\n\n"
                     f"✨**Duration:** {song_info['duration']}\n\n"
                     f"✨**Requested by:** {song_info['requester']}"
