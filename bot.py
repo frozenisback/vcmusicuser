@@ -903,24 +903,26 @@ async def download_audio(url):
     """Downloads the audio from a given URL and returns the file path.
     Uses caching to avoid re-downloading the same file.
     """
-    # Return the cached file path if it exists
     if url in download_cache:
-        return download_cache[url]
+        return download_cache[url]  # Return cached file path if available
 
     try:
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
         file_name = temp_file.name
         download_url = f"{DOWNLOAD_API_URL}{url}"
+
         async with aiohttp.ClientSession() as session:
-            async with session.get(download_url) as response:
+            async with session.get(download_url, timeout=35) as response:  # Increased timeout to 35 seconds
                 if response.status == 200:
                     with open(file_name, 'wb') as f:
                         f.write(await response.read())
-                    # Cache the file path for this URL
-                    download_cache[url] = file_name
+
+                    download_cache[url] = file_name  # Cache the file path
                     return file_name
                 else:
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
+    except asyncio.TimeoutError:
+        raise Exception("❌ Download API took too long to respond. Please try again.")
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
     
