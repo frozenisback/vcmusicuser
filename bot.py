@@ -53,7 +53,7 @@ chat_last_command = {}
 chat_pending_commands = {}
 QUEUE_LIMIT = 10
 MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
-LOCAL_VC_LIMIT = 4 
+LOCAL_VC_LIMIT = 2 
 api_playback_records = []
 playback_mode = {}  # Stores "local" or "api" for each chat
 
