@@ -38,7 +38,7 @@ call_py = PyTgCalls(assistant)
 
 ASSISTANT_USERNAME = "@Frozensupporter1"
 ASSISTANT_CHAT_ID = 7386215995
-API_ASSISTANT_USERNAME = "@xyz09723"
+API_ASSISTANT_USERNAME = "@Frozensupporter1"
 
 # API Endpoints
 API_URL = "https://odd-block-a945.tenopno.workers.dev/search?title="
@@ -53,7 +53,7 @@ chat_last_command = {}
 chat_pending_commands = {}
 QUEUE_LIMIT = 10
 MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
-LOCAL_VC_LIMIT = 2 
+LOCAL_VC_LIMIT = 4
 api_playback_records = []
 playback_mode = {}  # Stores "local" or "api" for each chat
 
@@ -646,7 +646,7 @@ async def start_playback_task(chat_id, message):
         # --- API CALL WITH ERROR HANDLING AND FALLBACK ---
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(api_url, timeout=20) as resp:
+                async with session.get(api_url, timeout=30) as resp:
                     if resp.status != 200:
                         raise Exception(f"API responded with status {resp.status}")
                     data = await resp.json()
