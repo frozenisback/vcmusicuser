@@ -592,16 +592,30 @@ async def start_playback_task(chat_id, message):
 
     # Use the external API if local VC limit has been reached.
     if chat_id not in playback_tasks and len(playback_tasks) >= LOCAL_VC_LIMIT:
-        # NEW: Check if the API assistant is in the chat; if not, invite it.
+        # NEW: Check if the API assistant is in the chat; if not, invite it via the new API endpoint.
         if not await is_api_assistant_in_chat(chat_id):
             invite_link = await extract_invite_link(bot, chat_id)
             if invite_link:
-                # Send the join command to the API assistant using its username.
-                await bot.send_message(API_ASSISTANT_USERNAME, f"/join {invite_link}")
+                # Use the new endpoint: /join?input=<invite_link>
+                join_api_url = f"https://py-tgcalls-api1.onrender.com/join?input={urllib.parse.quote(invite_link)}"
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(join_api_url, timeout=20) as join_resp:
+                            if join_resp.status != 200:
+                                raise Exception(f"Join API responded with status {join_resp.status}")
+                except Exception as e:
+                    error_text = f"❌ API Assistant join error: {str(e)}. Please check the API endpoint."
+                    if message:
+                        await message.edit(error_text)
+                    else:
+                        await bot.send_message(chat_id, error_text)
+                    return
+
                 if message:
-                    await message.edit("⏳ API Assistant is joining...")
+                    await message.edit("⏳ API Assistant is joining via API endpoint...")
                 else:
-                    await bot.send_message(chat_id, "⏳ API Assistant is joining...")
+                    await bot.send_message(chat_id, "⏳ API Assistant is joining via API endpoint...")
+
                 # Wait (with retries) for the API assistant to join.
                 for _ in range(10):
                     await asyncio.sleep(3)
@@ -613,9 +627,9 @@ async def start_playback_task(chat_id, message):
                         break
                 else:
                     if message:
-                        await message.edit("❌ API Assistant failed to join. Please unban @xyz9372.")
+                        await message.edit("❌ API Assistant failed to join. Please check the API endpoint.")
                     else:
-                        await bot.send_message(chat_id, "❌ API Assistant failed to join. Please unban @xyz9372.")
+                        await bot.send_message(chat_id, "❌ API Assistant failed to join. Please check the API endpoint.")
                     return
 
         # Inform the user that we're calling Frozen Play API.
@@ -645,6 +659,7 @@ async def start_playback_task(chat_id, message):
             # Call fallback to local playback.
             await fallback_local_playback(chat_id, message, song_info)
             return
+
         # --- End API error handling and fallback ---
 
         # Record the API playback details.
