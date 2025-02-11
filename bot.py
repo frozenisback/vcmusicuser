@@ -38,7 +38,7 @@ call_py = PyTgCalls(assistant)
 
 ASSISTANT_USERNAME = "@Frozensupporter1"
 ASSISTANT_CHAT_ID = 7386215995
-API_ASSISTANT_USERNAME = "@Frozensupporter1"
+API_ASSISTANT_USERNAME = "@xyz09723"
 
 # API Endpoints
 API_URL = "https://odd-block-a945.tenopno.workers.dev/search?title="
