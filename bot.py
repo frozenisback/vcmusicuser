@@ -132,10 +132,19 @@ async def fetch_youtube_link(query):
 async def skip_to_next_song(chat_id, message):
     """Skips to the next song in the queue and starts playback."""
     if chat_id not in chat_containers or not chat_containers[chat_id]:
+        # Update playback records since the voice chat is ending
+        record = {
+            "chat_id": chat_id,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "event": "vc_ended",
+            "mode": playback_mode.get(chat_id, "unknown")
+        }
+        api_playback_records.append(record)
+        playback_mode.pop(chat_id, None)
+        
         await message.edit("❌ No more songs in the queue.")
         await leave_voice_chat(chat_id)
         return
-
 
     await message.edit("⏭ Skipping to the next song...")
     await start_playback_task(chat_id, message)
@@ -189,12 +198,15 @@ async def stop_playback(chat_id):
             "chat_id": chat_id,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
             "event": "stop",
-            "api_response": data
+            "api_response": data,
+            "mode": playback_mode.get(chat_id, "unknown")
         }
         api_playback_records.append(record)
+        playback_mode.pop(chat_id, None)  # Clear playback mode for the chat
         await bot.send_message(chat_id, f"API Stop: {data['message']}")
     except Exception as e:
         await bot.send_message(chat_id, f"❌ API Stop Error: {str(e)}")
+
 
 
 @bot.on_message(filters.command("start"))
@@ -390,11 +402,29 @@ async def process_play_command(message, query):
                     "assistant id - 7386215995 \n"
                     "support - @frozensupport1"
                 )
+                # Update playback records for assistant join failure
+                record = {
+                    "chat_id": chat_id,
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                    "event": "assistant_join_failed",
+                    "mode": playback_mode.get(chat_id, "unknown")
+                }
+                api_playback_records.append(record)
+                playback_mode.pop(chat_id, None)
                 return
         else:
             await processing_message.edit(
                 "❌ Please give bot invite link permission\n\n support - @frozensupport1"
             )
+            # Update playback records if invite link is missing
+            record = {
+                "chat_id": chat_id,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "event": "invite_link_missing",
+                "mode": playback_mode.get(chat_id, "unknown")
+            }
+            api_playback_records.append(record)
+            playback_mode.pop(chat_id, None)
             return
 
     try:
@@ -493,7 +523,6 @@ async def process_play_command(message, query):
                 await processing_message.delete()
     except Exception as e:
         await processing_message.edit(f"❌ Error: {str(e)}")
-
 
 
 async def fallback_local_playback(chat_id, message, song_info):
@@ -790,6 +819,16 @@ async def callback_query_handler(client, callback_query):
 
     elif data == "skip":
         if chat_id in chat_containers and chat_containers[chat_id]:
+            # Update playback records for a skip event
+            record = {
+                "chat_id": chat_id,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "event": "skip",
+                "mode": mode
+            }
+            api_playback_records.append(record)
+            playback_mode.pop(chat_id, None)
+
             skipped_song = chat_containers[chat_id].pop(0)
             if mode == "local":
                 try:
@@ -843,6 +882,18 @@ async def callback_query_handler(client, callback_query):
         # Clear the queue first
         if chat_id in chat_containers:
             chat_containers[chat_id].clear()
+        
+        # Update playback records for a stop event for local mode
+        if mode == "local":
+            record = {
+                "chat_id": chat_id,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "event": "stop",
+                "mode": mode
+            }
+            api_playback_records.append(record)
+            playback_mode.pop(chat_id, None)
+
         try:
             if mode == "local":
                 await call_py.leave_call(chat_id)
@@ -858,9 +909,21 @@ async def callback_query_handler(client, callback_query):
             await callback_query.answer("❌ Error stopping playback.", show_alert=True)
 
 
+
 @call_py.on_update(fl.stream_end)
 async def stream_end_handler(_: PyTgCalls, update: Update):
     chat_id = update.chat_id
+
+    # Update playback records for a natural end event
+    record = {
+        "chat_id": chat_id,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "event": "natural_end",
+        "mode": playback_mode.get(chat_id, "unknown")
+    }
+    api_playback_records.append(record)
+    playback_mode.pop(chat_id, None)
+
     if chat_id in chat_containers and chat_containers[chat_id]:
         skipped_song = chat_containers[chat_id].pop(0)
         await asyncio.sleep(3)  # Delay to ensure the stream has ended
@@ -892,6 +955,7 @@ async def leave_voice_chat(chat_id):
     if chat_id in playback_tasks:
         playback_tasks[chat_id].cancel()
         del playback_tasks[chat_id]
+
 
 # Add a callback query handler to handle button presses
 
@@ -950,6 +1014,15 @@ async def stop_handler(client, message):
             else:
                 await message.reply(f"❌ An error occurred while leaving the voice chat: {str(e)}\n\n support - @frozensupport1")
             return
+        # Update playback records for a stop event in local mode
+        record = {
+            "chat_id": chat_id,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "event": "stop",
+            "mode": mode
+        }
+        api_playback_records.append(record)
+        playback_mode.pop(chat_id, None)
     else:
         try:
             await stop_playback(chat_id)
@@ -972,6 +1045,7 @@ async def stop_handler(client, message):
         del playback_tasks[chat_id]
 
     await message.reply("⏹ Stopped the music and cleared the queue.")
+
 
 @bot.on_message(filters.group & filters.command("pause"))
 async def skip_handler(client, message):
@@ -1023,6 +1097,16 @@ async def skip_handler(client, message):
     # Determine the playback mode (default to local).
     mode = playback_mode.get(chat_id, "local")
 
+    # Update playback records for a skip event
+    record = {
+        "chat_id": chat_id,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "event": "skip",
+        "mode": mode
+    }
+    api_playback_records.append(record)
+    playback_mode.pop(chat_id, None)
+
     if mode == "local":
         try:
             await call_py.leave_call(chat_id)
@@ -1063,34 +1147,42 @@ async def reboot_handler(_, message):
     chat_id = message.chat.id
 
     try:
+        # Remove audio files for songs in the queue for this chat.
         if chat_id in chat_containers:
             for song in chat_containers[chat_id]:
                 try:
                     os.remove(song.get('file_path', ''))
                 except Exception as e:
-                    print(f"Error deleting file: {e}")
-            await call_py.leave_call(chat_id)
-
-            # Remove stored audio files for each song in the queue
-            for song in chat_containers[chat_id]:
-                try:
-                    os.remove(song.get('file_path', ''))
-                except Exception as e:
-                    print(f"Error deleting file: {e}")
-
-            # Clear the queue for this chat
+                    print(f"Error deleting file for chat {chat_id}: {e}")
+            # Clear the queue for this chat.
             chat_containers.pop(chat_id, None)
+        
+        # Cancel any playback tasks for this chat.
+        if chat_id in playback_tasks:
+            playback_tasks[chat_id].cancel()
+            del playback_tasks[chat_id]
 
-            # Cancel the playback task if it exists
-            if chat_id in playback_tasks:
-                playback_tasks[chat_id].cancel()
-                del playback_tasks[chat_id]
+        # Remove chat-specific cooldown and pending command entries.
+        chat_last_command.pop(chat_id, None)
+        chat_pending_commands.pop(chat_id, None)
 
-            await message.reply("♻️ Rebooted for this chat and queue is cleared.")
-        else:
-            await message.reply("❌ No active queue to clear in this chat.")
+        # Remove playback mode for this chat.
+        playback_mode.pop(chat_id, None)
+
+        # Clear any API playback records for this chat.
+        global api_playback_records
+        api_playback_records = [record for record in api_playback_records if record.get("chat_id") != chat_id]
+
+        # Leave the voice chat for this chat.
+        try:
+            await call_py.leave_call(chat_id)
+        except Exception as e:
+            print(f"Error leaving call for chat {chat_id}: {e}")
+
+        await message.reply("♻️ Rebooted for this chat. All data for this chat has been cleared.")
     except Exception as e:
-        await message.reply(f"❌ Failed to reboot. Error: {str(e)}\n\n support - @frozensupport1")
+        await message.reply(f"❌ Failed to reboot for this chat. Error: {str(e)}\n\n support - @frozensupport1")
+
 
 @bot.on_message(filters.command("ping"))
 async def ping_handler(_, message):
