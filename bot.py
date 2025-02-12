@@ -127,6 +127,10 @@ async def fetch_youtube_link(query):
                     raise Exception(f"API returned status code {response.status}")
     except Exception as e:
         raise Exception(f"Failed to fetch YouTube link: {str(e)}")
+
+async def keep_alive():
+    while True:
+        await asyncio.sleep(60)
     
 
 async def skip_to_next_song(chat_id, message):
@@ -1355,8 +1359,8 @@ if __name__ == "__main__":
         print("Bot and assistant started successfully. Running now...")
 
         # Block execution until Ctrl+C is pressed
-        idle()
-
+        asyncio.run(keep_alive())
+        
     except KeyboardInterrupt:
         print("Bot stopped by user.")
     except Exception as e:
