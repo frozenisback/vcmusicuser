@@ -1359,8 +1359,8 @@ if __name__ == "__main__":
         print("Bot and assistant started successfully. Running now...")
 
         # Block execution until Ctrl+C is pressed
-        asyncio.run(keep_alive())
-        
+        idle()
+
     except KeyboardInterrupt:
         print("Bot stopped by user.")
     except Exception as e:
