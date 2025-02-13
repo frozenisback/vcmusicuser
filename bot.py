@@ -73,11 +73,19 @@ async def extract_invite_link(client, chat_id):
         chat_info = await client.get_chat(chat_id)
         if chat_info.invite_link:
             return chat_info.invite_link
-        else:
-            return f"https://t.me/{chat_info.username}" if chat_info.username else None
-    except Exception as e:
-        print(f"Error extracting invite link: {e}")
+        elif chat_info.username:
+            return f"https://t.me/{chat_info.username}"
         return None
+    except ValueError as e:
+        if "Peer id invalid" in str(e):
+            print(f"Invalid peer ID for chat {chat_id}. Skipping invite link extraction.")
+            return None
+        else:
+            raise e  # re-raise if it's another ValueError
+    except Exception as e:
+        print(f"Error extracting invite link for chat {chat_id}: {e}")
+        return None
+
 
 async def is_assistant_in_chat(chat_id):
     try:
