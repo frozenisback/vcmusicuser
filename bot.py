@@ -65,7 +65,43 @@ async def process_pending_command(chat_id, delay):
     if chat_id in chat_pending_commands:
         message, cooldown_reply = chat_pending_commands.pop(chat_id)
         await cooldown_reply.delete()  # Delete the cooldown notification
-        await play_handler(bot, message)  # Use `bot` instead of `app`
+        await play_handler(bot, message) # Use `bot` instead of `app`
+
+def global_exception_handler(loop, context):
+    message = context.get("message", "No message")
+    exception = context.get("exception")
+    error_text = f"Global exception caught:\nMessage: {message}"
+    if exception:
+        error_text += f"\nException: {exception}"
+    print(error_text)
+    # Log the error to support
+    loop.create_task(bot.send_message(7856124770, error_text))
+
+loop = asyncio.get_event_loop()
+loop.set_exception_handler(global_exception_handler)
+
+def safe_handler(func):
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            # Attempt to extract a chat ID (if available)
+            chat_id = "Unknown"
+            try:
+                # If your function is a message handler, the second argument is typically the Message object.
+                if len(args) >= 2:
+                    chat_id = args[1].chat.id
+                elif "message" in kwargs:
+                    chat_id = kwargs["message"].chat.id
+            except Exception:
+                chat_id = "Unknown"
+            error_text = (
+                f"Error in handler `{func.__name__}` (chat id: {chat_id}):\n\n{str(e)}"
+            )
+            print(error_text)
+            # Log the error to support
+            await bot.send_message(7856124770, error_text)
+    return wrapper
 
 
 async def extract_invite_link(client, chat_id):
@@ -220,7 +256,6 @@ async def stop_playback(chat_id):
         await bot.send_message(chat_id, f"API Stop: {data['message']}")
     except Exception as e:
         await bot.send_message(chat_id, f"❌ API Stop Error: {str(e)}")
-
 
 
 @bot.on_message(filters.command("start"))
