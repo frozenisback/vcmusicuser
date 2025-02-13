@@ -25,6 +25,8 @@ import requests
 from io import BytesIO
 from PIL import ImageEnhance
 import urllib.parse
+from flask import Flask
+from threading import Thread
 
 
 # Bot and Assistant session strings 
@@ -1332,6 +1334,16 @@ async def stream_ended_handler(_, message):
         # In case no queue exists or is empty, notify users
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
+# Define a simple Flask app
+flask_app = Flask(__name__)
+
+@flask_app.route("/")
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    # Start Flask on host 0.0.0.0 and port 8080
+    flask_app.run(host="0.0.0.0", port=8080)
 
 if __name__ == "__main__":
     try:
@@ -1343,6 +1355,11 @@ if __name__ == "__main__":
         # Ping each API base URL one by one
         ping_api(API_URL, "Search API")
         ping_api(DOWNLOAD_API_URL, "Download API")
+        
+        # Start the Flask server in a separate thread
+        flask_thread = Thread(target=run_flask)
+        flask_thread.start()
+        print("Flask server started on port 8080.")
 
         print("Starting bot...")
         print("Starting assistant...")
@@ -1355,7 +1372,6 @@ if __name__ == "__main__":
         if not assistant.is_connected:
             assistant.start()
 
-        # (Auto-cleaner has been removed as per your request.)
         print("Bot and assistant started successfully. Running now...")
 
         # Block execution until Ctrl+C is pressed
