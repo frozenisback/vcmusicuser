@@ -1417,15 +1417,12 @@ if __name__ == "__main__":
 
         print("Bot and assistant started successfully. Running now...")
 
-        # Block execution until Ctrl+C is pressed
+        # Block execution indefinitely
         idle()
 
     except KeyboardInterrupt:
-        print("Bot stopped by user.")
+        # If you press Ctrl+C, just print a message and continue running.
+        print("KeyboardInterrupt received. Bot is still running. To stop it, please kill the terminal process.")
     except Exception as e:
         print(f"An error occurred: {e}")
-    finally:
-        print("Stopping bot, assistant, and call client...")
-        bot.stop()
-        assistant.stop()
-        call_py.stop()
+
