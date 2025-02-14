@@ -1388,6 +1388,8 @@ def run_flask():
     # Start Flask on host 0.0.0.0 and port 8080
     flask_app.run(host="0.0.0.0", port=8080)
 
+import asyncio
+
 if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
@@ -1417,14 +1419,18 @@ if __name__ == "__main__":
 
         print("Bot and assistant started successfully. Running now...")
 
-        # Block execution indefinitely (Replaces idle())
-        while True:
-            time.sleep(60)  # Sleep for 60 seconds to keep the script running
+        async def keep_alive_loop():
+            while True:
+                await asyncio.sleep(60)  # Sleep asynchronously to avoid blocking
+
+        loop = asyncio.get_event_loop()
+        loop.create_task(keep_alive_loop())  # Run the infinite loop
+        idle()  # Keep Pyrogram's event loop running
 
     except KeyboardInterrupt:
-        # If you press Ctrl+C, just print a message and continue running.
         print("KeyboardInterrupt received. Bot is still running. To stop it, please kill the terminal process.")
     except Exception as e:
         print(f"An error occurred: {e}")
+
 
 
