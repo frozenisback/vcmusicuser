@@ -48,8 +48,8 @@ ASSISTANT_CHAT_ID = 7386215995
 API_ASSISTANT_USERNAME = "@Frozensupporter1"
 
 # API Endpoints
-API_URL = "https://odd-block-a945.tenopno.workers.dev/search?title="
-DOWNLOAD_API_URL = "https://frozen-youtube-api-search-link-ksog.onrender.com/download?url="
+API_URL = os.environ.get("API_URL")
+DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
 
 # Containers for song queues per chat/group
 chat_containers = {}
