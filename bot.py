@@ -27,13 +27,18 @@ from PIL import ImageEnhance
 import urllib.parse
 from flask import Flask
 from threading import Thread
+from dotenv import load_dotenv
 
 
 # Bot and Assistant session strings 
-API_ID = 29385418  # Replace with your actual API ID
-API_HASH = "5737577bcb32ea1aac1ac394b96c4b10"  # Replace with your actual API Hash
-BOT_TOKEN = "7598576464:AAEnPRX6hQSpvuH6Y1Qedp3GOPfPSEJ9V2c"  # Replace with your bot token
-ASSISTANT_SESSION = "BQHAYsoAqTAZjk7rd5OPSZvdtnvYcZ1sfA1ujD5NhVP4y9EewcqqjxmqFjp0L6_ZwUxsx61gezdM6QvJ-z6U2FrpOoNybM0pox4dqs8Pkvz66NyrgawQE_IqtlKUezwb_MYM4SDgqKbIm2thREBa2R6ad2GtYN9uHB6Zq6BVSNPno6z2yROGSYOZlwfC2Imfc1RU2afAEe4MhgzS_Ft5WCcQo7LrGg9517hxaTTMQe-wQrzg_afyseZ8IDBmUvs3vCa2G9i6uzBlnn8PxnN5qn4OJ0aAujBpScWOnBlU6OVNJEyfN8V2Rv37onZhjK5TAWEajekK0T4I6e9_rOy7cViiqgXgjwAAAAG4QLY7AA"
+# Optionally load variables from a .env file (make sure you install python-dotenv)
+load_dotenv()
+
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+ASSISTANT_SESSION = os.environ.get("ASSISTANT_SESSION")
+
 bot = Client("music_bot1", bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
 call_py = PyTgCalls(assistant)
