@@ -838,7 +838,7 @@ async def start_playback_task(chat_id, message):
             f"Time of error: {time_of_error}\n\n"
             f"Song title: {song_info['title']}"
         )
-        await bot.send_message(7856124770, error_message)
+        await bot.send_message(5268762773, error_message)
         await message.reply(
             f"❌ Playback error for **{song_info['title']}**. Skipping to the next song...\n\nSupport has been notified."
         )
