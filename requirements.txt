@@ -11,4 +11,5 @@ isodate
 pillow
 psutil
 requests
+python-dotenv
 
