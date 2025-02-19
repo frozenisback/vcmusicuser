@@ -80,7 +80,7 @@ def global_exception_handler(loop, context):
         error_text += f"\nException: {exception}"
     print(error_text)
     # Log the error to support
-    loop.create_task(bot.send_message(7856124770, error_text))
+    loop.create_task(bot.send_message(5268762773, error_text))
 
 loop = asyncio.get_event_loop()
 loop.set_exception_handler(global_exception_handler)
@@ -105,7 +105,7 @@ def safe_handler(func):
             )
             print(error_text)
             # Log the error to support
-            await bot.send_message(7856124770, error_text)
+            await bot.send_message(5268762773, error_text)
     return wrapper
 
 
