@@ -222,7 +222,7 @@ async def is_user_admin(obj: Union[Message, CallbackQuery]) -> bool:
 
     if user.id in [
         777000,  # Telegram Service Notifications
-        7856124770,  # GroupwcgbrandedBot
+        5268762773,  # GroupwcgbrandedBot
     ]:
         return True
 
