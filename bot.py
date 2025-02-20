@@ -1382,6 +1382,15 @@ async def stream_ended_handler(_, message):
         # In case no queue exists or is empty, notify users
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
+from flask import Flask
+from multiprocessing import Process
+import asyncio
+import time
+import os
+import sys
+
+# (Keep all your other imports, ping_api, call_py, bot, assistant, idle, etc.)
+
 # Define a simple Flask app
 flask_app = Flask(__name__)
 
@@ -1393,9 +1402,7 @@ def run_flask():
     # Start Flask on host 0.0.0.0 and port 8080
     flask_app.run(host="0.0.0.0", port=8080)
 
-import asyncio
-
-if __name__ == "__main__":
+def run_bot():
     try:
         print("Starting Frozen Music Bot...")
         print("Loading all modules...")
@@ -1405,11 +1412,6 @@ if __name__ == "__main__":
         # Ping each API base URL one by one
         ping_api(API_URL, "Search API")
         ping_api(DOWNLOAD_API_URL, "Download API")
-        
-        # Start the Flask server in a separate thread
-        flask_thread = Thread(target=run_flask)
-        flask_thread.start()
-        print("Flask server started on port 8080.")
 
         print("Starting bot...")
         print("Starting assistant...")
@@ -1424,18 +1426,48 @@ if __name__ == "__main__":
 
         print("Bot and assistant started successfully. Running now...")
 
+        # Keep the process alive with an async loop (to avoid blocking)
         async def keep_alive_loop():
             while True:
-                await asyncio.sleep(60)  # Sleep asynchronously to avoid blocking
-
+                await asyncio.sleep(60)
         loop = asyncio.get_event_loop()
-        loop.create_task(keep_alive_loop())  # Run the infinite loop
-        idle()  # Keep Pyrogram's event loop running
+        loop.create_task(keep_alive_loop())
 
-    except KeyboardInterrupt:
-        print("KeyboardInterrupt received. Bot is still running. To stop it, please kill the terminal process.")
+        # This call blocks the process; if it ever returns the process will exit.
+        idle()
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"Bot encountered an exception: {e}")
+        raise e
+
+if __name__ == "__main__":
+    while True:
+        # Start the Flask server in its own process
+        flask_process = Process(target=run_flask)
+        flask_process.start()
+        print("Flask server started on port 8080.")
+
+        # Start the bot in its own process
+        bot_process = Process(target=run_bot)
+        bot_process.start()
+
+        # Monitor the bot process.
+        # Even if it exits with a "normal" (0) exit code, we treat that as a crash.
+        while True:
+            if not bot_process.is_alive():
+                print("Bot process has died. Restarting both processes...")
+                break
+            time.sleep(10)
+
+        # Terminate the Flask process if it's still running.
+        if flask_process.is_alive():
+            flask_process.terminate()
+            flask_process.join()
+
+        # Ensure bot process resources are cleaned up.
+        bot_process.join()
+
+        # Wait a few seconds before restarting.
+        time.sleep(5)
 
 
 
