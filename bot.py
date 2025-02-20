@@ -1064,9 +1064,6 @@ async def download_audio(url):
 @bot.on_message(filters.group & filters.command(["stop", "end"]))
 async def stop_handler(client, message):
     chat_id = message.chat.id
-    if not message.from_user:
-        await message.reply("❌ Error: No user information available for this command.")
-        return
     user_id = message.from_user.id
 
     # Check admin rights
