@@ -14,7 +14,6 @@ import uuid
 import tempfile
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from PIL import Image, ImageDraw, ImageFont
-import aiohttp
 from io import BytesIO
 from pyrogram.enums import ChatType, ChatMemberStatus
 from typing import Union
@@ -22,12 +21,13 @@ from pytgcalls.types import Update
 from pytgcalls import filters as fl
 from pytgcalls.types import GroupCallParticipant
 import requests
-from io import BytesIO
-from PIL import ImageEnhance
 import urllib.parse
 from flask import Flask
 from threading import Thread
 from dotenv import load_dotenv
+import json    # Required for persisting the download cache
+import sys     # Required for force restarting the bot using os.execv
+
 
 
 # Bot and Assistant session strings 
@@ -1030,27 +1030,52 @@ async def leave_voice_chat(chat_id):
 
 
 
-download_cache = {}  # Global cache dictionary
+DOWNLOAD_CACHE_FILE = "download_cache.json"
+
+# Load the download cache from disk.
+def load_download_cache():
+    if os.path.exists(DOWNLOAD_CACHE_FILE):
+        try:
+            with open(DOWNLOAD_CACHE_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            print("Error loading download cache:", e)
+    return {}
+
+# Save the download cache to disk.
+def save_download_cache(cache):
+    try:
+        with open(DOWNLOAD_CACHE_FILE, "w") as f:
+            json.dump(cache, f)
+    except Exception as e:
+        print("Error saving download cache:", e)
+
+# Global cache dictionary loaded from file.
+download_cache = load_download_cache()
 
 async def download_audio(url):
     """Downloads the audio from a given URL and returns the file path.
-    Uses caching to avoid re-downloading the same file.
+    Uses a persistent cache to avoid re-downloading the same file.
     """
+    # Return cached file if available.
     if url in download_cache:
-        return download_cache[url]  # Return cached file path if available
+        return download_cache[url]
 
     try:
+        # Create a temporary file to store the downloaded audio.
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
         file_name = temp_file.name
         download_url = f"{DOWNLOAD_API_URL}{url}"
 
         async with aiohttp.ClientSession() as session:
-            async with session.get(download_url, timeout=35) as response:  # Increased timeout to 35 seconds
+            async with session.get(download_url, timeout=35) as response:
                 if response.status == 200:
                     with open(file_name, 'wb') as f:
                         f.write(await response.read())
-
-                    download_cache[url] = file_name  # Cache the file path
+                    
+                    # Cache the downloaded file path and persist the cache.
+                    download_cache[url] = file_name
+                    save_download_cache(download_cache)
                     return file_name
                 else:
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
@@ -1383,6 +1408,10 @@ async def stream_ended_handler(_, message):
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
 # Define a simple Flask app
+from flask import Flask
+from threading import Thread
+import asyncio
+
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
@@ -1392,8 +1421,6 @@ def home():
 def run_flask():
     # Start Flask on host 0.0.0.0 and port 8080
     flask_app.run(host="0.0.0.0", port=8080)
-
-import asyncio
 
 if __name__ == "__main__":
     try:
