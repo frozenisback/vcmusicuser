@@ -23,6 +23,7 @@ from pytgcalls.types import GroupCallParticipant
 import requests
 import urllib.parse
 from flask import Flask
+from flask import request
 from threading import Thread
 from dotenv import load_dotenv
 import json    # Required for persisting the download cache
@@ -1408,7 +1409,8 @@ async def stream_ended_handler(_, message):
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
 # Define a simple Flask app
-from flask import Flask
+# Define a simple Flask app
+from flask import Flask, request
 from threading import Thread
 import asyncio
 
@@ -1417,6 +1419,15 @@ flask_app = Flask(__name__)
 @flask_app.route("/")
 def home():
     return "Bot is running!"
+
+# Add the webhook route here:
+@flask_app.route("/webhook", methods=["POST"])
+def webhook_handler():
+    update = request.get_json(force=True)
+    # Schedule the update for processing on the bot’s asyncio event loop.
+    loop = asyncio.get_event_loop()
+    asyncio.run_coroutine_threadsafe(bot._process_update(update), loop)
+    return "OK", 200
 
 def run_flask():
     # Start Flask on host 0.0.0.0 and port 8080
