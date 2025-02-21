@@ -1418,19 +1418,19 @@ import asyncio
 
 MAIN_LOOP = None
 
-# Define a simple Flask app
+# Define a simple Flask app.
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
     return "Bot is running!"
 
-# Webhook route to receive updates from Telegram.
+# Webhook route: This endpoint receives updates from Telegram.
 @flask_app.route("/webhook", methods=["POST"])
 def webhook_handler():
     update = request.get_json(force=True)
-    # Use the global MAIN_LOOP that we set in the main block.
-    asyncio.run_coroutine_threadsafe(bot._process_update(update), MAIN_LOOP)
+    # Instead of bot._process_update (which doesn't exist), use the public dispatcher:
+    asyncio.run_coroutine_threadsafe(bot.dispatch.process(update), MAIN_LOOP)
     return "OK", 200
 
 def run_flask():
