@@ -1416,31 +1416,39 @@ from flask import Flask, request
 from threading import Thread
 import asyncio
 
+MAIN_LOOP = None
+
+# Define a simple Flask app
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
     return "Bot is running!"
 
-# Add the webhook route here:
+# Webhook route to receive updates from Telegram.
 @flask_app.route("/webhook", methods=["POST"])
 def webhook_handler():
     update = request.get_json(force=True)
-    # Use the global event loop that was stored in MAIN_LOOP
+    # Use the global MAIN_LOOP that we set in the main block.
     asyncio.run_coroutine_threadsafe(bot._process_update(update), MAIN_LOOP)
     return "OK", 200
 
-
 def run_flask():
-    # Start Flask on host 0.0.0.0 and port 8080
+    # Start Flask on host 0.0.0.0 and port 8080.
     flask_app.run(host="0.0.0.0", port=8080)
 
 if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
-        # ... [other startup prints and API pings]
+        print("Loading all modules...")
+        print("Loading database...")
+        print("Loading APIs...")
 
-        # Start the Flask server in a separate thread
+        # Ping each API base URL one by one.
+        ping_api(API_URL, "Search API")
+        ping_api(DOWNLOAD_API_URL, "Download API")
+        
+        # Start the Flask server in a separate thread.
         flask_thread = Thread(target=run_flask)
         flask_thread.start()
         print("Flask server started on port 8080.")
@@ -1448,33 +1456,31 @@ if __name__ == "__main__":
         print("Starting bot...")
         print("Starting assistant...")
 
-        # Start the PyTgCalls (voice call) client
+        # Start the PyTgCalls (voice call) client.
         call_py.start()
 
-        # Start the bot and assistant clients
+        # Start the bot and assistant clients.
         bot.start()
         if not assistant.is_connected:
             assistant.start()
 
         print("Bot and assistant started successfully. Running now...")
 
-        # Get and store the event loop
+        # Get and store the event loop in the global MAIN_LOOP.
         loop = asyncio.get_event_loop()
-        global MAIN_LOOP
         MAIN_LOOP = loop
 
         async def keep_alive_loop():
             while True:
                 await asyncio.sleep(60)  # Sleep asynchronously to avoid blocking
 
-        loop.create_task(keep_alive_loop())  # Run the infinite loop
-        idle()  # Keep Pyrogram's event loop running
+        loop.create_task(keep_alive_loop())  # Run the infinite loop.
+        idle()  # Keep Pyrogram's event loop running.
 
     except KeyboardInterrupt:
         print("KeyboardInterrupt received. Bot is still running. To stop it, please kill the terminal process.")
     except Exception as e:
         print(f"An error occurred: {e}")
-
 
 
 
