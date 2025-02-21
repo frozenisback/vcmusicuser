@@ -34,6 +34,8 @@ import sys     # Required for force restarting the bot using os.execv
 # Bot and Assistant session strings 
 # Optionally load variables from a .env file (make sure you install python-dotenv)
 load_dotenv()
+MAIN_LOOP = None
+
 
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
@@ -1424,10 +1426,10 @@ def home():
 @flask_app.route("/webhook", methods=["POST"])
 def webhook_handler():
     update = request.get_json(force=True)
-    # Schedule the update for processing on the bot’s asyncio event loop.
-    loop = asyncio.get_event_loop()
-    asyncio.run_coroutine_threadsafe(bot._process_update(update), loop)
+    # Use the global event loop that was stored in MAIN_LOOP
+    asyncio.run_coroutine_threadsafe(bot._process_update(update), MAIN_LOOP)
     return "OK", 200
+
 
 def run_flask():
     # Start Flask on host 0.0.0.0 and port 8080
@@ -1436,14 +1438,8 @@ def run_flask():
 if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
-        print("Loading all modules...")
-        print("Loading database...")
-        print("Loading APIs...")
+        # ... [other startup prints and API pings]
 
-        # Ping each API base URL one by one
-        ping_api(API_URL, "Search API")
-        ping_api(DOWNLOAD_API_URL, "Download API")
-        
         # Start the Flask server in a separate thread
         flask_thread = Thread(target=run_flask)
         flask_thread.start()
@@ -1462,11 +1458,15 @@ if __name__ == "__main__":
 
         print("Bot and assistant started successfully. Running now...")
 
+        # Get and store the event loop
+        loop = asyncio.get_event_loop()
+        global MAIN_LOOP
+        MAIN_LOOP = loop
+
         async def keep_alive_loop():
             while True:
                 await asyncio.sleep(60)  # Sleep asynchronously to avoid blocking
 
-        loop = asyncio.get_event_loop()
         loop.create_task(keep_alive_loop())  # Run the infinite loop
         idle()  # Keep Pyrogram's event loop running
 
@@ -1474,6 +1474,7 @@ if __name__ == "__main__":
         print("KeyboardInterrupt received. Bot is still running. To stop it, please kill the terminal process.")
     except Exception as e:
         print(f"An error occurred: {e}")
+
 
 
 
