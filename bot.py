@@ -1429,9 +1429,9 @@ def home():
 @flask_app.route("/webhook", methods=["POST"])
 def webhook_handler():
     update = request.get_json(force=True)
-    # Instead of bot._process_update (which doesn't exist), use the public dispatcher:
-    asyncio.run_coroutine_threadsafe(bot.dispatch.process(update), MAIN_LOOP)
+    asyncio.run_coroutine_threadsafe(bot._handle_update(update), MAIN_LOOP)
     return "OK", 200
+
 
 def run_flask():
     # Start Flask on host 0.0.0.0 and port 8080.
