@@ -28,7 +28,9 @@ from threading import Thread
 from dotenv import load_dotenv
 import json    # Required for persisting the download cache
 import sys 
-from http.server import HTTPServer, BaseHTTPRequestHandler# Required for force restarting the bot using os.execv
+from http.server import HTTPServer, BaseHTTPRequestHandler 
+import threading
+#Required for force restarting the bot using os.execv
 
 
 
