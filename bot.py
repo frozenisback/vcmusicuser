@@ -27,7 +27,8 @@ from flask import request
 from threading import Thread
 from dotenv import load_dotenv
 import json    # Required for persisting the download cache
-import sys     # Required for force restarting the bot using os.execv
+import sys 
+from http.server import HTTPServer, BaseHTTPRequestHandler# Required for force restarting the bot using os.execv
 
 
 
@@ -1412,30 +1413,52 @@ async def stream_ended_handler(_, message):
 
 # Define a simple Flask app
 # Define a simple Flask app
-from flask import Flask, request
-from threading import Thread
-import asyncio
-
 MAIN_LOOP = None
 
-# Define a simple Flask app.
-flask_app = Flask(__name__)
+class WebhookHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        # Health-check endpoint.
+        if self.path == "/":
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot is running!")
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-@flask_app.route("/")
-def home():
-    return "Bot is running!"
+    def do_POST(self):
+        # Webhook endpoint: process updates sent from Telegram.
+        if self.path == "/webhook":
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                update = json.loads(post_data.decode("utf-8"))
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Invalid JSON")
+                return
 
-# Webhook route: This endpoint receives updates from Telegram.
-@flask_app.route("/webhook", methods=["POST"])
-def webhook_handler():
-    update = request.get_json(force=True)
-    asyncio.run_coroutine_threadsafe(bot._handle_update(update), MAIN_LOOP)
-    return "OK", 200
+            # Forward the update to your bot's update handler using the main event loop.
+            asyncio.run_coroutine_threadsafe(bot._handle_update(update), MAIN_LOOP)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
 
+def run_http_server():
+    # Use the PORT provided by Render (defaults to 8080 if not set)
+    port = int(os.environ.get("PORT", 8080))
+    httpd = HTTPServer(("", port), WebhookHandler)
+    print(f"HTTP server running on port {port}")
+    httpd.serve_forever()
 
-def run_flask():
-    # Start Flask on host 0.0.0.0 and port 8080.
-    flask_app.run(host="0.0.0.0", port=8080)
+# Start the HTTP server in a separate daemon thread.
+server_thread = threading.Thread(target=run_http_server, daemon=True)
+server_thread.start()
+print("HTTP server started.")
 
 if __name__ == "__main__":
     try:
@@ -1444,15 +1467,10 @@ if __name__ == "__main__":
         print("Loading database...")
         print("Loading APIs...")
 
-        # Ping each API base URL one by one.
+        # Ping external API endpoints to ensure they're reachable.
         ping_api(API_URL, "Search API")
         ping_api(DOWNLOAD_API_URL, "Download API")
         
-        # Start the Flask server in a separate thread.
-        flask_thread = Thread(target=run_flask)
-        flask_thread.start()
-        print("Flask server started on port 8080.")
-
         print("Starting bot...")
         print("Starting assistant...")
 
@@ -1466,16 +1484,17 @@ if __name__ == "__main__":
 
         print("Bot and assistant started successfully. Running now...")
 
-        # Get and store the event loop in the global MAIN_LOOP.
-        loop = asyncio.get_event_loop()
-        MAIN_LOOP = loop
+        # Retrieve and store the event loop for webhook scheduling.
+        MAIN_LOOP = asyncio.get_event_loop()
 
+        # Optional: a simple keep-alive coroutine to ensure the event loop stays active.
         async def keep_alive_loop():
             while True:
-                await asyncio.sleep(60)  # Sleep asynchronously to avoid blocking
+                await asyncio.sleep(60)
+        MAIN_LOOP.create_task(keep_alive_loop())
 
-        loop.create_task(keep_alive_loop())  # Run the infinite loop.
-        idle()  # Keep Pyrogram's event loop running.
+        # Use idle() to keep Pyrogram's event loop running indefinitely.
+        idle()
 
     except KeyboardInterrupt:
         print("KeyboardInterrupt received. Bot is still running. To stop it, please kill the terminal process.")
