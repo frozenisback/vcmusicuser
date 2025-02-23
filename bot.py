@@ -1148,14 +1148,11 @@ async def stop_handler(client, message):
 
 
 @bot.on_message(filters.group & filters.command("pause"))
-async def skip_handler(client, message):
+async def pause_handler(client, message):
     chat_id = message.chat.id
-    user_id = message.from_user.id
-
     if not await is_user_admin(message):
         await message.reply("❌ You need to be an admin to use this command.")
         return
-
     try:
         await call_py.pause_stream(chat_id)
         await message.reply("⏸ Paused the stream.")
@@ -1163,14 +1160,11 @@ async def skip_handler(client, message):
         await message.reply(f"❌ Failed to pause the stream. Error: {str(e)}\n\n support - @frozensupport1 ")
 
 @bot.on_message(filters.group & filters.command("resume"))
-async def skip_handler(client, message):
+async def resume_handler(client, message):
     chat_id = message.chat.id
-    user_id = message.from_user.id
-
     if not await is_user_admin(message):
         await message.reply("❌ You need to be an admin to use this command.")
         return
-
     try:
         await call_py.resume_stream(chat_id)
         await message.reply("▶️ Resumed the stream.")
@@ -1442,7 +1436,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 return
 
             # Forward the update to your bot's update handler using the main event loop.
-            asyncio.run_coroutine_threadsafe(bot.process_update(update), MAIN_LOOP)
+            asyncio.run_coroutine_threadsafe(bot._process_update(update), MAIN_LOOP)
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")
