@@ -393,7 +393,7 @@ async def go_back_callback(_, callback_query):
 
 
 
-@bot.on_message(filters.group & filters.regex(r'^/play(?:\s+@?\S+)?(?:\s+(?P<query>.+))?$'))
+@bot.on_message(filters.group & filters.regex(r'^/play(?:\s+(?:@\S+))?(?:\s+(?P<query>.+))?$'))
 async def play_handler(_, message):
     chat_id = message.chat.id
     now = time.time()
