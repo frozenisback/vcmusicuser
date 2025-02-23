@@ -1447,8 +1447,8 @@ async def stream_ended_handler(_, message):
 
 
 MAIN_LOOP = None
-last_activity_time = time.time()
-BOT_CHAT_ID = 7598576464  
+ASSISTANT_CHAT_ID = 7598576464
+BOT_CHAT_ID = 7598576464
 
 async def restart_bot():
     print("[WATCHDOG] Restarting bot...")
@@ -1467,84 +1467,25 @@ async def restart_bot():
     
     print("[WATCHDOG] Bot reconnected successfully.")
 
-async def check_bot_status():
+@bot.on_message(filters.command("ping_ok"))
+async def handle_ping_response(_, message):
+    if message.chat.id == BOT_CHAT_ID:
+        print("[STATUS] Bot responded in time.")
+
+async def send_ping_loop():
     while True:
-        await asyncio.sleep(600)
         try:
-            if not assistant.is_connected:
-                print("[ERROR] Assistant bot is not connected. Restarting assistant...")
-                assistant.run()
-            
-            if not bot.is_connected:
-                print("[ERROR] Bot is not connected. Restarting bot...")
-                bot.run()
-                
-            await assistant.send_message(ASSISTANT_CHAT_ID, "Ping check")
-            
-            start_time = time.time()
-            async for message in assistant.get_chat_history(ASSISTANT_CHAT_ID, limit=5):
-                if message.text == "Ping OK" and (time.time() - start_time) <= 5:
-                    print("[STATUS] Bot responded in time.")
-                    return
-                
-            print("[ALERT] Bot did not respond in time. Restarting...")
-            await restart_bot()
+            await assistant.send_message(BOT_CHAT_ID, "/ping_ok")
+            await asyncio.sleep(5)
         except Exception as e:
-            print(f"[ERROR] Issue with ping check: {e}")
+            print(f"[ERROR] Failed to send ping check: {e}")
             await restart_bot()
+        await asyncio.sleep(15)
 
 async def keep_alive_loop():
     while True:
         print("[KEEP ALIVE] Bot is running...")
         await asyncio.sleep(300)
-
-class WebhookHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/":
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is running!")
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-    def do_POST(self):
-        if self.path == "/webhook":
-            content_length = int(self.headers.get("Content-Length", 0))
-            post_data = self.rfile.read(content_length)
-            try:
-                update_data = json.loads(post_data.decode("utf-8"))
-                update = Update.de_json(update_data, bot)
-            except Exception:
-                self.send_response(400)
-                self.end_headers()
-                self.wfile.write(b"Invalid JSON")
-                return
-
-            future = asyncio.run_coroutine_threadsafe(bot.process_new_updates([update]), MAIN_LOOP)
-            def handle_future(fut):
-                try:
-                    fut.result()
-                except Exception as e:
-                    print(f"Error processing update: {e}")
-                    asyncio.run(restart_bot())
-            
-            future.add_done_callback(handle_future)
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"OK")
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-def run_http_server():
-    port = int(os.environ.get("PORT", 8080))
-    httpd = HTTPServer(("", port), WebhookHandler)
-    print(f"HTTP server running on port {port}")
-    httpd.serve_forever()
-
-server_thread = threading.Thread(target=run_http_server, daemon=True)
-server_thread.start()
 
 if __name__ == "__main__":
     try:
@@ -1557,7 +1498,7 @@ if __name__ == "__main__":
         
         MAIN_LOOP = asyncio.get_event_loop()
         MAIN_LOOP.create_task(keep_alive_loop())
-        MAIN_LOOP.create_task(check_bot_status())
+        MAIN_LOOP.create_task(send_ping_loop())
         
         idle()
     except KeyboardInterrupt:
@@ -1565,5 +1506,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(restart_bot())
+
 
 
