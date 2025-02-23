@@ -1414,7 +1414,10 @@ import os
 import sys
 import time
 import threading
+import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from pyrogram import Client
+from pyrogram.types import Update
 
 MAIN_LOOP = None
 last_activity_time = time.time()  # Track last bot activity
@@ -1467,14 +1470,15 @@ class WebhookHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", 0))
             post_data = self.rfile.read(content_length)
             try:
-                update = json.loads(post_data.decode("utf-8"))
+                update_data = json.loads(post_data.decode("utf-8"))
+                update = Update.de_json(update_data, bot)
             except Exception:
                 self.send_response(400)
                 self.end_headers()
                 self.wfile.write(b"Invalid JSON")
                 return
 
-            future = asyncio.run_coroutine_threadsafe(bot._process_update(update), MAIN_LOOP)
+            future = asyncio.run_coroutine_threadsafe(bot.process_new_updates([update]), MAIN_LOOP)
             def handle_future(fut):
                 try:
                     fut.result()
@@ -1520,6 +1524,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         restart_bot()
+
 
 
 
