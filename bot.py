@@ -30,14 +30,8 @@ import json    # Required for persisting the download cache
 import sys 
 from http.server import HTTPServer, BaseHTTPRequestHandler 
 import threading
-#Required for force restarting the bot using os.execv
 
-
-
-# Bot and Assistant session strings 
-# Optionally load variables from a .env file (make sure you install python-dotenv)
 load_dotenv()
-MAIN_LOOP = None
 
 
 API_ID = int(os.environ.get("API_ID"))
@@ -1450,19 +1444,10 @@ async def stream_ended_handler(_, message):
         # In case no queue exists or is empty, notify users
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
-import asyncio
-import os
-import sys
-import time
-import threading
-import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from pyrogram import Client
-from pyrogram.types import Update
 
 MAIN_LOOP = None
 last_activity_time = time.time()
-ASSISTANT_CHAT_ID = 7598576464
+BOT_CHAT_ID = 7598576464  
 
 async def restart_bot():
     print("[WATCHDOG] Restarting bot...")
@@ -1579,4 +1564,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(restart_bot())
+
 
