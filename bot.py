@@ -1420,40 +1420,62 @@ from pyrogram import Client
 from pyrogram.types import Update
 
 MAIN_LOOP = None
-last_activity_time = time.time()  # Track last bot activity
+last_activity_time = time.time()
+ASSISTANT_CHAT_ID = 7598576464
 
-def restart_bot():
-    print("[WATCHDOG] Restarting bot...")
-    os.execv(sys.executable, [sys.executable] + sys.argv)
+import asyncio
+import os
+import sys
+import time
+import threading
+import json
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from pyrogram import Client
+from pyrogram.types import Update
 
-async def keep_alive_loop():
-    while True:
-        print("[KEEP ALIVE] Bot is running...")
-        await asyncio.sleep(300)
+MAIN_LOOP = None
+last_activity_time = time.time()
+ASSISTANT_CHAT_ID = 7598576464
 
-async def activity_monitor():
-    global last_activity_time
-    while True:
-        await asyncio.sleep(600)
-        if time.time() - last_activity_time > 1800:  # No activity in 30 mins
-            print("[WATCHDOG] No activity detected. Restarting bot...")
-            restart_bot()
+async def restart_bot():
+    print("[FROZEN - WATCHDOG] Restarting bot...")
+    try:
+        await bot.update_profile(first_name="Restarting please wait...")
+    except Exception as e:
+        print(f"[ERROR] Failed to change bot name before restart: {e}")
+    
+    await bot.stop()
+    await bot.start()
+    
+    try:
+        await bot.update_profile(first_name="vc music bot [Fʀᴏᴢᴇɴ 🥀 ᴍᴜsɪᴄ]✨")
+    except Exception as e:
+        print(f"[ERROR] Failed to restore bot name after restart: {e}")
+    
+    print("[WATCHDOG] Bot reconnected successfully.")
 
 async def check_bot_status():
     while True:
         await asyncio.sleep(600)
         try:
-            await bot.send_message(ASSISTANT_CHAT_ID, "Ping check")
+            await assistant.send_message(ASSISTANT_CHAT_ID, "Ping check")
+            
+            start_time = time.time()
+            async for message in assistant.get_chat_history(ASSISTANT_CHAT_ID, limit=5):
+                if message.text == "Ping OK" and (time.time() - start_time) <= 5:
+                    print("[STATUS] Bot responded in time.")
+                    return
+                
+            print("[ALERT] Bot did not respond in time. Restarting...")
+            await restart_bot()
         except Exception as e:
-            print(f"[ALERT] Bot seems frozen: {e}")
-            restart_bot()
+            print(f"[ERROR] Issue with ping check: {e}")
+            await restart_bot()
 
-async def monitor_pyrogram():
+async def keep_alive_loop():
     while True:
+        print("[KEEP ALIVE] Bot is running...")
         await asyncio.sleep(300)
-        if not bot.is_connected:
-            print("[ERROR] Bot disconnected. Restarting...")
-            restart_bot()
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -1484,10 +1506,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
                     fut.result()
                 except Exception as e:
                     print(f"Error processing update: {e}")
-                    restart_bot()
+                    asyncio.run(restart_bot())
             
             future.add_done_callback(handle_future)
-
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")
@@ -1507,23 +1528,21 @@ server_thread.start()
 if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
-        call_py.start()
         bot.start()
-        if not assistant.is_connected:
-            assistant.start()
+        assistant.start()
         print("Bot started successfully.")
         
         MAIN_LOOP = asyncio.get_event_loop()
         MAIN_LOOP.create_task(keep_alive_loop())
-        MAIN_LOOP.create_task(activity_monitor())
         MAIN_LOOP.create_task(check_bot_status())
-        MAIN_LOOP.create_task(monitor_pyrogram())
+        
         idle()
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
         print(f"Critical Error: {e}")
-        restart_bot()
+        asyncio.run(restart_bot())
+
 
 
 
