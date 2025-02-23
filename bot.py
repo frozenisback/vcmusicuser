@@ -1442,7 +1442,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 return
 
             # Forward the update to your bot's update handler using the main event loop.
-            asyncio.run_coroutine_threadsafe(bot._handle_update(update), MAIN_LOOP)
+            asyncio.run_coroutine_threadsafe(bot.process_update(update), MAIN_LOOP)
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")
