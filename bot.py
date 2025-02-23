@@ -1446,6 +1446,7 @@ async def stream_ended_handler(_, message):
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
 
+
 MAIN_LOOP = None
 ASSISTANT_CHAT_ID = 7598576464
 BOT_CHAT_ID = 7598576464
@@ -1486,6 +1487,54 @@ async def keep_alive_loop():
     while True:
         print("[KEEP ALIVE] Bot is running...")
         await asyncio.sleep(300)
+
+class WebhookHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/":
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot is running!")
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_POST(self):
+        if self.path == "/webhook":
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                update_data = json.loads(post_data.decode("utf-8"))
+                update = Update.de_json(update_data, bot)
+            except Exception:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Invalid JSON")
+                return
+
+            future = asyncio.run_coroutine_threadsafe(bot.process_new_updates([update]), MAIN_LOOP)
+            def handle_future(fut):
+                try:
+                    fut.result()
+                except Exception as e:
+                    print(f"Error processing update: {e}")
+                    asyncio.run(restart_bot())
+            
+            future.add_done_callback(handle_future)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+def run_http_server():
+    port = int(os.environ.get("PORT", 8080))
+    httpd = HTTPServer(("", port), WebhookHandler)
+    print(f"HTTP server running on port {port}")
+    httpd.serve_forever()
+
+server_thread = threading.Thread(target=run_http_server, daemon=True)
+server_thread.start()
 
 if __name__ == "__main__":
     try:
