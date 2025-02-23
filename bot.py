@@ -1435,8 +1435,26 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 self.wfile.write(b"Invalid JSON")
                 return
 
-            # Forward the update to your bot's update handler using the main event loop.
-            asyncio.run_coroutine_threadsafe(bot._process_update(update), MAIN_LOOP)
+            # Process the update using the internal method and capture its future.
+            future = asyncio.run_coroutine_threadsafe(bot._process_update(update), MAIN_LOOP)
+
+            # Callback to handle exceptions after processing the update.
+            def handle_future(fut):
+                try:
+                    fut.result()  # This will raise an exception if one occurred.
+                except Exception as e:
+                    error_text = f"Error processing update: {e}"
+                    print(error_text)
+                    # If the error message suggests a minor issue, log and continue.
+                    if "chat id" in str(e).lower() or "invalid" in str(e).lower():
+                        print("Minor error encountered. Continuing...")
+                    else:
+                        print("Major error encountered. Restarting bot...")
+                        # Restart the bot process.
+                        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+            future.add_done_callback(handle_future)
+
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")
