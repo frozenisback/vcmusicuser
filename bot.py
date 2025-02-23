@@ -1407,22 +1407,6 @@ async def stream_ended_handler(_, message):
         # In case no queue exists or is empty, notify users
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
-# Define a simple Flask app
-# Define a simple Flask app
-import asyncio
-import os
-import sys
-import time
-import threading
-import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from pyrogram import Client
-from pyrogram.types import Update
-
-MAIN_LOOP = None
-last_activity_time = time.time()
-ASSISTANT_CHAT_ID = 7598576464
-
 import asyncio
 import os
 import sys
@@ -1438,7 +1422,7 @@ last_activity_time = time.time()
 ASSISTANT_CHAT_ID = 7598576464
 
 async def restart_bot():
-    print("[FROZEN - WATCHDOG] Restarting bot...")
+    print("[WATCHDOG] Restarting bot...")
     try:
         await bot.update_profile(first_name="Restarting please wait...")
     except Exception as e:
@@ -1458,6 +1442,14 @@ async def check_bot_status():
     while True:
         await asyncio.sleep(600)
         try:
+            if not assistant.is_connected:
+                print("[ERROR] Assistant bot is not connected. Restarting assistant...")
+                assistant.run()
+            
+            if not bot.is_connected:
+                print("[ERROR] Bot is not connected. Restarting bot...")
+                bot.run()
+                
             await assistant.send_message(ASSISTANT_CHAT_ID, "Ping check")
             
             start_time = time.time()
@@ -1528,8 +1520,10 @@ server_thread.start()
 if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
-        bot.start()
-        assistant.start()
+        call_py.start()
+        bot.run()
+        if not assistant.is_connected:
+            assistant.run()
         print("Bot started successfully.")
         
         MAIN_LOOP = asyncio.get_event_loop()
@@ -1542,9 +1536,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(restart_bot())
-
-
-
-
-
 
