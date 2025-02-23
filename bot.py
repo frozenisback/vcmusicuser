@@ -1353,6 +1353,49 @@ async def join(client: Client, message: Message):
         else:
             await processing_msg.edit(f"**ERROR:** \n\n{error_message}")
 
+import requests
+
+API_WORKER_URL = "https://boradcasteapi.frozenbotsweb.workers.dev"
+BOT_ID = "7598576464"  # Your bot's ID
+
+async def register_chat_silently(chat_id):
+    """Silently register chat ID with the broadcast API."""
+    try:
+        requests.post(
+            f"{API_WORKER_URL}/register",
+            json={"botId": BOT_ID, "chatId": str(chat_id)}
+        )
+    except Exception as e:
+        print(f"Error registering chat: {e}")
+
+@bot.on_message(filters.command(""))
+async def auto_register(_, message):
+    """Register the chat when any command is used."""
+    chat_id = message.chat.id
+    await register_chat_silently(chat_id)
+
+@bot.on_message(filters.user(ADMIN_ID) & filters.command("broadcast"))
+async def broadcast_handler(_, message):
+    """Send a broadcast message to all registered chats."""
+    if len(message.command) < 2:
+        await message.reply("❌ Please provide a message to broadcast.")
+        return
+
+    broadcast_text = " ".join(message.command[1:])
+    
+    response = requests.post(
+        f"{API_WORKER_URL}/broadcast",
+        json={
+            "botId": BOT_ID,  # Correct bot ID added here
+            "token": BOT_TOKEN,
+            "message": broadcast_text
+        }
+    )
+    
+    result = response.json()
+    await message.reply(f"📢 Broadcast Status: {result}")
+
+
 @bot.on_message(filters.video_chat_ended)
 async def clear_queue_on_vc_end(_, message: Message):
     chat_id = message.chat.id
