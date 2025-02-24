@@ -1445,10 +1445,31 @@ async def stream_ended_handler(_, message):
         # In case no queue exists or is empty, notify users
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
+@bot.on_message(filters.command("ping_ok"))
+async def handle_ping_response(_, message):
+    if message.chat.id == ASSISTANT_CHAT_ID:
+        print("[STATUS] Bot responded in time.")
+
+@bot.on_message(filters.regex(r"^#srestart$") & filters.user(5268762773))
+async def owner_simple_restart_handler(_, message):
+    await message.reply("♻️ Simple restart initiated as per owner command...")
+    await simple_restart()
+
+# This handler will update the code (git pull, pip install) and then restart the bot.
 @bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
-async def owner_restart_handler(_, message):
-    await message.reply("♻️ Restarting bot as per owner command...")
-    await restart_bot()
+async def owner_update_restart_handler(_, message):
+    await message.reply("♻️ Update restart initiated: Updating code and restarting bot...")
+    await update_restart()
+
+# In your keep-alive or ping loop, you can call simple_restart() automatically when needed:
+async def send_ping_loop():
+    while True:
+        try:
+            await assistant.send_message(BOT_USERNAME, "/ping_ok")
+        except Exception as e:
+            print(f"[ERROR] Failed to send ping check: {e}")
+            await simple_restart()
+        await asyncio.sleep(10)
 
 
 
@@ -1457,36 +1478,70 @@ ASSISTANT_CHAT_ID = 7386215995
 BOT_CHAT_ID = 7598576464
 BOT_USERNAME = "@vcmusiclubot"
 
-async def restart_bot():
-    print("[WATCHDOG] Restarting bot...")
+async def simple_restart():
+    support_chat_id = -1001810811394
+    log_message = "[WATCHDOG] Simple restart initiated..."
+    print(log_message)
+    await bot.send_message(support_chat_id, log_message)
     try:
         await bot.update_profile(first_name="Restarting please wait...")
     except Exception as e:
-        print(f"[ERROR] Failed to change bot name before restart: {e}")
-    
-    await bot.stop()
-    await bot.start()
+        error_message = f"[ERROR] Failed to change bot name before simple restart: {e}"
+        print(error_message)
+        await bot.send_message(support_chat_id, error_message)
     
     try:
+        await bot.stop()
+        await asyncio.sleep(5)  # Wait for 5 seconds before restarting.
+        await bot.start()
         await bot.update_profile(first_name="vc music bot [Fʀᴏᴢᴇɴ 🥀 ᴍᴜsɪᴄ]✨")
+        success_message = "[WATCHDOG] Simple restart completed successfully!"
+        print(success_message)
+        await bot.send_message(support_chat_id, success_message)
     except Exception as e:
-        print(f"[ERROR] Failed to restore bot name after restart: {e}")
-    
-    print("[WATCHDOG] Bot reconnected successfully.")
+        error_message = f"[ERROR] Failed during simple restart: {e}"
+        print(error_message)
+        await bot.send_message(support_chat_id, error_message)
 
-@bot.on_message(filters.command("ping_ok"))
-async def handle_ping_response(_, message):
-    if message.chat.id == ASSISTANT_CHAT_ID:
-        print("[STATUS] Bot responded in time.")
+# Update restart: pulls the latest code from the repo, reinstalls dependencies,
+# then starts a new process running the updated main file (bot.py), preserving the download cache.
+async def update_restart():
+    support_chat_id = -1001810811394
+    log_message = "[WATCHDOG] Update restart initiated: updating code and dependencies..."
+    print(log_message)
+    await bot.send_message(support_chat_id, log_message)
 
-async def send_ping_loop():
-    while True:
-        try:
-            await assistant.send_message(BOT_USERNAME, "/ping_ok")
-        except Exception as e:
-            print(f"[ERROR] Failed to send ping check: {e}")
-            await restart_bot()
-        await asyncio.sleep(10)  # Adjust this value as needed (10-15 seconds)
+    try:
+        # Pull latest code from the repository.
+        result = subprocess.run(["git", "pull"], capture_output=True, text=True)
+        update_log = result.stdout + "\n" + result.stderr
+        await bot.send_message(support_chat_id, f"[UPDATE] Git pull output:\n{update_log}")
+    except Exception as e:
+        error_message = f"[ERROR] Git pull failed: {e}"
+        print(error_message)
+        await bot.send_message(support_chat_id, error_message)
+        return  # Abort update restart
+
+    try:
+        # Reinstall dependencies.
+        req_result = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], capture_output=True, text=True)
+        req_log = req_result.stdout + "\n" + req_result.stderr
+        await bot.send_message(support_chat_id, f"[UPDATE] Requirements installation output:\n{req_log}")
+    except Exception as e:
+        error_message = f"[ERROR] Reinstalling requirements failed: {e}"
+        print(error_message)
+        await bot.send_message(support_chat_id, error_message)
+        return  # Abort update restart
+
+    try:
+        # Launch the updated bot process.
+        await bot.send_message(support_chat_id, "[WATCHDOG] Update restart: Launching new process...")
+        subprocess.Popen([sys.executable, "bot.py"])  # Main file of the repo.
+        await bot.stop()
+    except Exception as e:
+        error_message = f"[ERROR] Failed to restart after update: {e}"
+        print(error_message)
+        await bot.send_message(support_chat_id, error_message)  # Adjust this value as needed (10-15 seconds)
 
 
 async def keep_alive_loop():
