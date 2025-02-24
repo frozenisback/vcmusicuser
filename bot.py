@@ -1483,18 +1483,11 @@ async def simple_restart():
     log_message = "[WATCHDOG] Simple restart initiated..."
     print(log_message)
     await bot.send_message(support_chat_id, log_message)
-    try:
-        await bot.update_profile(first_name="Restarting please wait...")
-    except Exception as e:
-        error_message = f"[ERROR] Failed to change bot name before simple restart: {e}"
-        print(error_message)
-        await bot.send_message(support_chat_id, error_message)
-    
+
     try:
         await bot.stop()
-        await asyncio.sleep(5)  # Wait for 5 seconds before restarting.
+        await asyncio.sleep(5)  # Wait before restarting
         await bot.start()
-        await bot.update_profile(first_name="vc music bot [Fʀᴏᴢᴇɴ 🥀 ᴍᴜsɪᴄ]✨")
         success_message = "[WATCHDOG] Simple restart completed successfully!"
         print(success_message)
         await bot.send_message(support_chat_id, success_message)
@@ -1502,6 +1495,7 @@ async def simple_restart():
         error_message = f"[ERROR] Failed during simple restart: {e}"
         print(error_message)
         await bot.send_message(support_chat_id, error_message)
+
 
 # Update restart: pulls the latest code from the repo, reinstalls dependencies,
 # then starts a new process running the updated main file (bot.py), preserving the download cache.
