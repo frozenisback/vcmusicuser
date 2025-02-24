@@ -1453,8 +1453,9 @@ async def owner_restart_handler(_, message):
 
 
 MAIN_LOOP = None
-ASSISTANT_CHAT_ID = 7598576464
+ASSISTANT_CHAT_ID = 7386215995
 BOT_CHAT_ID = 7598576464
+BOT_USERNAME = "@vcmusiclubot"
 
 async def restart_bot():
     print("[WATCHDOG] Restarting bot...")
@@ -1481,7 +1482,7 @@ async def handle_ping_response(_, message):
 async def send_ping_loop():
     while True:
         try:
-            await assistant.send_message(BOT_CHAT_ID, "/ping_ok")
+            await assistant.send_message(BOT_USERNAME, "/ping_ok")
         except Exception as e:
             print(f"[ERROR] Failed to send ping check: {e}")
             await restart_bot()
