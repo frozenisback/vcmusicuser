@@ -1490,20 +1490,22 @@ async def simple_restart():
 
     try:
         await bot.stop()
-        await asyncio.sleep(3)  # Short delay before restart
-        
-        python_executable = sys.executable  # Get the path to the current Python interpreter
-        script_path = os.path.abspath(sys.argv[0])  # Get the bot script path
+        await asyncio.sleep(3)
+        python_executable = sys.executable
+        script_path = os.path.abspath(sys.argv[0])
 
-        # Start a new process for the bot
         subprocess.Popen([python_executable, script_path], close_fds=True)
-        print("[WATCHDOG] Restarting bot...")
-
-        os._exit(0)  # Terminate current process
+        os._exit(0)
     except Exception as e:
-        error_message = f"[ERROR] Failed during simple restart: {e}"
-        print(error_message)
-        await bot.send_message(support_chat_id, error_message)
+        print(f"[ERROR] Local restart failed: {e}")
+        await bot.send_message(support_chat_id, "⚠ Local restart failed. Trying Render API...")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(RENDER_DEPLOY_URL) as response:
+                if response.status == 200:
+                    await bot.send_message(support_chat_id, "✅ Restart triggered on Render.")
+                else:
+                    await bot.send_message(support_chat_id, f"❌ Render restart failed: {response.status} {await response.text()}")
 
 
 
