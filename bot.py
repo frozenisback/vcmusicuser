@@ -30,6 +30,7 @@ import json    # Required for persisting the download cache
 import sys 
 from http.server import HTTPServer, BaseHTTPRequestHandler 
 import threading
+import subprocess
 
 load_dotenv()
 
@@ -1445,10 +1446,11 @@ async def stream_ended_handler(_, message):
         # In case no queue exists or is empty, notify users
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
-@bot.on_message(filters.command("ping_ok"))
+@bot.on_message(filters.command("frozen_check"))
 async def handle_ping_response(_, message):
     if message.chat.id == ASSISTANT_CHAT_ID:
         print("[STATUS] Bot responded in time.")
+        await message.delete()
 
 @bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
 async def owner_simple_restart_handler(_, message):
@@ -1459,7 +1461,7 @@ async def owner_simple_restart_handler(_, message):
 async def send_ping_loop():
     while True:
         try:
-            await assistant.send_message(BOT_USERNAME, "/ping_ok")
+            await assistant.send_message(BOT_USERNAME, "/frozen_check")
         except Exception as e:
             print(f"[ERROR] Failed to send ping check: {e}")
             await simple_restart()
@@ -1472,14 +1474,6 @@ ASSISTANT_CHAT_ID = 7386215995
 BOT_CHAT_ID = 7598576464
 BOT_USERNAME = "@vcmusiclubot"
 
-import subprocess
-import sys
-import os
-
-import subprocess
-import sys
-import os
-import aiohttp
 
 # Check for Render API endpoint (set this in environment variables if needed)
 RENDER_DEPLOY_URL = os.getenv("RENDER_DEPLOY_URL", "https://api.render.com/deploy/srv-cuqb40bv2p9s739h68i0?key=oegMCHfLr9I")
@@ -1517,11 +1511,6 @@ async def simple_restart():
         print(error_message)
         await bot.send_message(support_chat_id, error_message)
 
-
-
-
-# Update restart: pulls the latest code from the repo, reinstalls dependencies,
-# then starts a new process running the updated main file (bot.py), preserving the download cache.  # Adjust this value as needed (10-15 seconds)
 
 
 async def keep_alive_loop():
