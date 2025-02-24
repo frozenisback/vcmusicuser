@@ -1490,7 +1490,7 @@ async def simple_restart():
             async with aiohttp.ClientSession() as session:
                 async with session.get(RENDER_DEPLOY_URL) as response:
                     if response.status == 200:
-                        await bot.send_message(support_chat_id, "✅ Restart triggered via Render API.")
+                        await bot.send_message(support_chat_id, "✅ Restart triggered via Frozen_Api")
                         return  # Exit without restarting locally
                     else:
                         await bot.send_message(support_chat_id, f"❌ Render restart failed: {response.status} {await response.text()}")
