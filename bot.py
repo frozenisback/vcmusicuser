@@ -1476,7 +1476,7 @@ async def restart_bot():
 
 @bot.on_message(filters.command("ping_ok"))
 async def handle_ping_response(_, message):
-    if message.chat.id == BOT_CHAT_ID:
+    if message.chat.id == ASSISTANT_CHAT_ID:
         print("[STATUS] Bot responded in time.")
 
 async def send_ping_loop():
