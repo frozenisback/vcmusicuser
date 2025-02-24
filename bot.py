@@ -1445,6 +1445,11 @@ async def stream_ended_handler(_, message):
         # In case no queue exists or is empty, notify users
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
+@bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
+async def owner_restart_handler(_, message):
+    await message.reply("♻️ Restarting bot as per owner command...")
+    await restart_bot()
+
 
 
 MAIN_LOOP = None
