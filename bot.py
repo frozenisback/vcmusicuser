@@ -1454,7 +1454,7 @@ async def handle_ping_response(_, message):
 
 @bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
 async def owner_simple_restart_handler(_, message):
-    await message.reply("♻️ Simple restart initiated as per owner command...")
+    await message.reply("♻️ [WATCHDOG] restart initiated as per owner command...")
     await simple_restart()
 
 
