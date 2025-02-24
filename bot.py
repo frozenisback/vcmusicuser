@@ -1478,6 +1478,10 @@ ASSISTANT_CHAT_ID = 7386215995
 BOT_CHAT_ID = 7598576464
 BOT_USERNAME = "@vcmusiclubot"
 
+import subprocess
+import sys
+import os
+
 async def simple_restart():
     support_chat_id = -1001810811394
     log_message = "[WATCHDOG] Simple restart initiated..."
@@ -1486,15 +1490,21 @@ async def simple_restart():
 
     try:
         await bot.stop()
-        await asyncio.sleep(5)  # Wait before restarting
-        await bot.start()
-        success_message = "[WATCHDOG] Simple restart completed successfully!"
-        print(success_message)
-        await bot.send_message(support_chat_id, success_message)
+        await asyncio.sleep(3)  # Short delay before restart
+        
+        python_executable = sys.executable  # Get the path to the current Python interpreter
+        script_path = os.path.abspath(sys.argv[0])  # Get the bot script path
+
+        # Start a new process for the bot
+        subprocess.Popen([python_executable, script_path], close_fds=True)
+        print("[WATCHDOG] Restarting bot...")
+
+        os._exit(0)  # Terminate current process
     except Exception as e:
         error_message = f"[ERROR] Failed during simple restart: {e}"
         print(error_message)
         await bot.send_message(support_chat_id, error_message)
+
 
 
 # Update restart: pulls the latest code from the repo, reinstalls dependencies,
