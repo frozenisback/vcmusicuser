@@ -1477,11 +1477,11 @@ async def send_ping_loop():
     while True:
         try:
             await assistant.send_message(BOT_CHAT_ID, "/ping_ok")
-            await asyncio.sleep(5)
         except Exception as e:
             print(f"[ERROR] Failed to send ping check: {e}")
             await restart_bot()
-        await asyncio.sleep(15)
+        await asyncio.sleep(10)  # Adjust this value as needed (10-15 seconds)
+
 
 async def keep_alive_loop():
     while True:
