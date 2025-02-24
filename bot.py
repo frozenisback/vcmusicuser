@@ -1575,7 +1575,13 @@ if __name__ == "__main__":
             assistant.run()
         print("Bot started successfully.")
         
+        # Get the main event loop and send a startup message with the current time
         MAIN_LOOP = asyncio.get_event_loop()
+        import datetime
+        start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        support_chat_id = -1001810811394
+        MAIN_LOOP.create_task(bot.send_message(support_chat_id, f"Bot started at {start_time}"))
+        
         MAIN_LOOP.create_task(keep_alive_loop())
         MAIN_LOOP.create_task(send_ping_loop())
         
@@ -1585,6 +1591,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(restart_bot())
+
 
 
 
