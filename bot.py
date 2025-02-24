@@ -1476,12 +1476,34 @@ import subprocess
 import sys
 import os
 
+import subprocess
+import sys
+import os
+import aiohttp
+
+# Check for Render API endpoint (set this in environment variables if needed)
+RENDER_DEPLOY_URL = os.getenv("RENDER_DEPLOY_URL", "https://api.render.com/deploy/srv-cuqb40bv2p9s739h68i0?key=oegMCHfLr9I")
+
 async def simple_restart():
     support_chat_id = -1001810811394
-    log_message = "[WATCHDOG] Simple restart initiated..."
+    log_message = "[WATCHDOG] Checking if restart is needed..."
     print(log_message)
     await bot.send_message(support_chat_id, log_message)
 
+    if RENDER_DEPLOY_URL:
+        # If Render API is available, trigger a restart via API
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(RENDER_DEPLOY_URL) as response:
+                    if response.status == 200:
+                        await bot.send_message(support_chat_id, "✅ Restart triggered via Render API.")
+                        return  # Exit without restarting locally
+                    else:
+                        await bot.send_message(support_chat_id, f"❌ Render restart failed: {response.status} {await response.text()}")
+        except Exception as e:
+            await bot.send_message(support_chat_id, f"⚠ Render API restart failed: {e}. Trying local restart...")
+
+    # If Render API failed or not set, do a local restart
     try:
         await bot.stop()
         await asyncio.sleep(3)
@@ -1491,15 +1513,10 @@ async def simple_restart():
         subprocess.Popen([python_executable, script_path], close_fds=True)
         os._exit(0)
     except Exception as e:
-        print(f"[ERROR] Local restart failed: {e}")
-        await bot.send_message(support_chat_id, "⚠ Local restart failed. Trying Render API...")
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.get(RENDER_DEPLOY_URL) as response:
-                if response.status == 200:
-                    await bot.send_message(support_chat_id, "✅ Restart triggered on Render.")
-                else:
-                    await bot.send_message(support_chat_id, f"❌ Render restart failed: {response.status} {await response.text()}")
+        error_message = f"❌ Local restart failed: {e}"
+        print(error_message)
+        await bot.send_message(support_chat_id, error_message)
+
 
 
 
