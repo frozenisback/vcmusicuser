@@ -152,42 +152,6 @@ async def is_api_assistant_in_chat(chat_id):
         print(f"Error checking API assistant in chat: {e}")
         return False
 
-import asyncpg
-
-# Use the provided PostgreSQL connection string.
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://frozen_user:DLyMRZZNzANmcrUM1XC148q7nQ66EiKV@dpg-cutk28tds78s7390k760-a.oregon-postgres.render.com/frozen")
-
-db_pool = None
-
-async def init_db():
-    """Initialize the database connection pool and ensure the download_cache table exists."""
-    global db_pool
-    db_pool = await asyncpg.create_pool(DATABASE_URL)
-    async with db_pool.acquire() as connection:
-        await connection.execute("""
-            CREATE TABLE IF NOT EXISTS download_cache (
-                url TEXT PRIMARY KEY,
-                file_path TEXT NOT NULL
-            )
-        """)
-
-async def get_cached_file(url: str) -> str:
-    """Retrieve the cached file path for a given URL from the database."""
-    async with db_pool.acquire() as connection:
-        row = await connection.fetchrow("SELECT file_path FROM download_cache WHERE url=$1", url)
-        if row:
-            return row["file_path"]
-    return None
-
-async def set_cached_file(url: str, file_path: str):
-    """Store (or update) the file path for a given URL in the database."""
-    async with db_pool.acquire() as connection:
-        await connection.execute("""
-            INSERT INTO download_cache (url, file_path) VALUES ($1, $2)
-            ON CONFLICT (url) DO UPDATE SET file_path = EXCLUDED.file_path
-        """, url, file_path)
-
-
 
 def iso8601_to_human_readable(iso_duration):
     try:
@@ -1069,29 +1033,27 @@ async def leave_voice_chat(chat_id):
 
 
 
+download_cache = {}  # Global cache dictionary
+
 async def download_audio(url):
     """Downloads the audio from a given URL and returns the file path.
-    Uses a persistent cache (stored in PostgreSQL) to avoid re-downloading the same file.
+    Uses caching to avoid re-downloading the same file.
     """
-    # Check for a cached file in the DB.
-    cached_file = await get_cached_file(url)
-    if cached_file:
-        return cached_file
+    if url in download_cache:
+        return download_cache[url]  # Return cached file path if available
 
     try:
-        # Create a temporary file to store the downloaded audio.
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
         file_name = temp_file.name
         download_url = f"{DOWNLOAD_API_URL}{url}"
 
         async with aiohttp.ClientSession() as session:
-            async with session.get(download_url, timeout=35) as response:
+            async with session.get(download_url, timeout=35) as response:  # Increased timeout to 35 seconds
                 if response.status == 200:
                     with open(file_name, 'wb') as f:
                         f.write(await response.read())
-                    
-                    # Cache the downloaded file path in the DB.
-                    await set_cached_file(url, file_name)
+
+                    download_cache[url] = file_name  # Cache the file path
                     return file_name
                 else:
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
@@ -1631,10 +1593,6 @@ if __name__ == "__main__":
         import asyncio
         import datetime
 
-        # Initialize the database pool and ensure the download_cache table exists.
-        asyncio.get_event_loop().run_until_complete(init_db())
-        print("Database initialized successfully.")
-
         print("Starting Frozen Music Bot...")
         call_py.start()
         bot.run()
@@ -1656,6 +1614,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(simple_restart())
+
 
 
 
