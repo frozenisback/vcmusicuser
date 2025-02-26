@@ -1515,16 +1515,16 @@ async def send_ping_loop():
         try:
             await assistant.send_message(BOT_USERNAME, "/frozen_check")
             try:
-                # Wait for the frozen_check response for up to 10 seconds.
-                await asyncio.wait_for(frozen_check_event.wait(), timeout=10)
-                frozen_check_event.clear()  # Reset the event for the next iteration.
+                # Wait for the frozen_check response for up to 3 seconds.
+                await asyncio.wait_for(frozen_check_event.wait(), timeout=3)
+                frozen_check_event.clear()  # Reset for the next iteration.
             except asyncio.TimeoutError:
-                print("[ERROR] Frozen check response not received, restarting...")
+                print("[ERROR] Frozen check response not received within 3 seconds, restarting...")
                 await simple_restart()
         except Exception as e:
             print(f"[ERROR] Failed to send ping check: {e}")
             await simple_restart()
-        await asyncio.sleep(10)
+        await asyncio.sleep(10)  # Wait 10 seconds before sending the next ping.
 
 
 
