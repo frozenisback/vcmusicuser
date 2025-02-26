@@ -63,7 +63,9 @@ QUEUE_LIMIT = 5
 MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
 LOCAL_VC_LIMIT = 0
 api_playback_records = []
-playback_mode = {}  # Stores "local" or "api" for each chat
+playback_mode = {}
+frozen_check_event = asyncio.Event()
+# Stores "local" or "api" for each chat
 
 
 async def process_pending_command(chat_id, delay):
@@ -149,6 +151,42 @@ async def is_api_assistant_in_chat(chat_id):
     except Exception as e:
         print(f"Error checking API assistant in chat: {e}")
         return False
+
+import asyncpg
+
+# Use the provided PostgreSQL connection string.
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://frozen_user:DLyMRZZNzANmcrUM1XC148q7nQ66EiKV@dpg-cutk28tds78s7390k760-a.oregon-postgres.render.com/frozen")
+
+db_pool = None
+
+async def init_db():
+    """Initialize the database connection pool and ensure the download_cache table exists."""
+    global db_pool
+    db_pool = await asyncpg.create_pool(DATABASE_URL)
+    async with db_pool.acquire() as connection:
+        await connection.execute("""
+            CREATE TABLE IF NOT EXISTS download_cache (
+                url TEXT PRIMARY KEY,
+                file_path TEXT NOT NULL
+            )
+        """)
+
+async def get_cached_file(url: str) -> str:
+    """Retrieve the cached file path for a given URL from the database."""
+    async with db_pool.acquire() as connection:
+        row = await connection.fetchrow("SELECT file_path FROM download_cache WHERE url=$1", url)
+        if row:
+            return row["file_path"]
+    return None
+
+async def set_cached_file(url: str, file_path: str):
+    """Store (or update) the file path for a given URL in the database."""
+    async with db_pool.acquire() as connection:
+        await connection.execute("""
+            INSERT INTO download_cache (url, file_path) VALUES ($1, $2)
+            ON CONFLICT (url) DO UPDATE SET file_path = EXCLUDED.file_path
+        """, url, file_path)
+
 
 
 def iso8601_to_human_readable(iso_duration):
@@ -1031,36 +1069,14 @@ async def leave_voice_chat(chat_id):
 
 
 
-DOWNLOAD_CACHE_FILE = "download_cache.json"
-
-# Load the download cache from disk.
-def load_download_cache():
-    if os.path.exists(DOWNLOAD_CACHE_FILE):
-        try:
-            with open(DOWNLOAD_CACHE_FILE, "r") as f:
-                return json.load(f)
-        except Exception as e:
-            print("Error loading download cache:", e)
-    return {}
-
-# Save the download cache to disk.
-def save_download_cache(cache):
-    try:
-        with open(DOWNLOAD_CACHE_FILE, "w") as f:
-            json.dump(cache, f)
-    except Exception as e:
-        print("Error saving download cache:", e)
-
-# Global cache dictionary loaded from file.
-download_cache = load_download_cache()
-
 async def download_audio(url):
     """Downloads the audio from a given URL and returns the file path.
-    Uses a persistent cache to avoid re-downloading the same file.
+    Uses a persistent cache (stored in PostgreSQL) to avoid re-downloading the same file.
     """
-    # Return cached file if available.
-    if url in download_cache:
-        return download_cache[url]
+    # Check for a cached file in the DB.
+    cached_file = await get_cached_file(url)
+    if cached_file:
+        return cached_file
 
     try:
         # Create a temporary file to store the downloaded audio.
@@ -1074,9 +1090,8 @@ async def download_audio(url):
                     with open(file_name, 'wb') as f:
                         f.write(await response.read())
                     
-                    # Cache the downloaded file path and persist the cache.
-                    download_cache[url] = file_name
-                    save_download_cache(download_cache)
+                    # Cache the downloaded file path in the DB.
+                    await set_cached_file(url, file_name)
                     return file_name
                 else:
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
@@ -1084,6 +1099,7 @@ async def download_audio(url):
         raise Exception("❌ Download API took too long to respond. Please try again.")
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
+
     
 
 
@@ -1484,7 +1500,9 @@ async def leave_voice_chat(chat_id):
 async def handle_ping_response(_, message):
     if message.chat.id == ASSISTANT_CHAT_ID:
         print("[STATUS] Bot responded in time.")
-        await message.delete()
+        await message.reply_text("frozen check successful ✨")
+        frozen_check_event.set()
+
 
 @bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
 async def owner_simple_restart_handler(_, message):
@@ -1496,10 +1514,18 @@ async def send_ping_loop():
     while True:
         try:
             await assistant.send_message(BOT_USERNAME, "/frozen_check")
+            try:
+                # Wait for the frozen_check response for up to 10 seconds.
+                await asyncio.wait_for(frozen_check_event.wait(), timeout=10)
+                frozen_check_event.clear()  # Reset the event for the next iteration.
+            except asyncio.TimeoutError:
+                print("[ERROR] Frozen check response not received, restarting...")
+                await simple_restart()
         except Exception as e:
             print(f"[ERROR] Failed to send ping check: {e}")
             await simple_restart()
         await asyncio.sleep(10)
+
 
 
 
@@ -1602,29 +1628,35 @@ server_thread.start()
 
 if __name__ == "__main__":
     try:
+        import asyncio
+        import datetime
+
+        # Initialize the database pool and ensure the download_cache table exists.
+        asyncio.get_event_loop().run_until_complete(init_db())
+        print("Database initialized successfully.")
+
         print("Starting Frozen Music Bot...")
         call_py.start()
         bot.run()
         if not assistant.is_connected:
             assistant.run()
         print("Bot started successfully.")
-        
+
         # Get the main event loop and send a startup message with the current time
         MAIN_LOOP = asyncio.get_event_loop()
-        import datetime
         start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         support_chat_id = -1001810811394
         MAIN_LOOP.create_task(bot.send_message(support_chat_id, f"Bot started at {start_time}"))
-        
         MAIN_LOOP.create_task(keep_alive_loop())
         MAIN_LOOP.create_task(send_ping_loop())
-        
+
         idle()
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
         print(f"Critical Error: {e}")
-        asyncio.run(restart_bot())
+        asyncio.run(simple_restart())
+
 
 
 
