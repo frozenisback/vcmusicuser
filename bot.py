@@ -1427,24 +1427,58 @@ async def stream_ended_handler(_, message):
     # Extract the chat ID from the message
     chat_id = int(message.matches[0]['chat_id'])
     
-    # If a queue exists for this chat and it contains songs:
+    # Update playback records for a natural end event
+    record = {
+        "chat_id": chat_id,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        "event": "natural_end",
+        "mode": playback_mode.get(chat_id, "unknown")
+    }
+    api_playback_records.append(record)
+    playback_mode.pop(chat_id, None)
+    
     if chat_id in chat_containers and chat_containers[chat_id]:
-        # Remove the finished song from the queue (assumed to be at the start)
-        chat_containers[chat_id].pop(0)
+        # Remove the finished song from the queue and get its record
+        skipped_song = chat_containers[chat_id].pop(0)
+        await asyncio.sleep(3)  # Delay to ensure the stream has fully ended
         
-        # Check if there are still songs in the queue
+        # Attempt to remove the song file
+        try:
+            os.remove(skipped_song.get('file_path', ''))
+        except Exception as e:
+            print(f"Error deleting file: {e}")
+        
+        # If there are still songs in the queue, play the next song
         if chat_containers[chat_id]:
-            # Notify users that the bot is skipping to the next song
             await bot.send_message(chat_id, "⏭ Skipping to the next song...")
-            # Start playing the next song
             await start_playback_task(chat_id, message)
         else:
-            # Notify users that there are no more songs in the queue
-            await message.reply("🚪 No songs left in the queue.")
-            # Removed leave chat call
+            await bot.send_message(chat_id, "❌ No more songs in the queue.\n Leaving the voice chat.💕\n\n support - @frozensupport1")
+            await leave_voice_chat(chat_id)
     else:
-        # In case no queue exists or is empty, notify users
+        # In case no queue exists or is empty
         await bot.send_message(chat_id, "🚪 No songs left in the queue.")
+
+
+async def leave_voice_chat(chat_id):
+    try:
+        await call_py.leave_call(chat_id)
+    except Exception as e:
+        print(f"Error leaving the voice chat: {e}")
+
+    if chat_id in chat_containers:
+        for song in chat_containers[chat_id]:
+            try:
+                os.remove(song.get('file_path', ''))
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+        chat_containers.pop(chat_id)
+
+    if chat_id in playback_tasks:
+        playback_tasks[chat_id].cancel()
+        del playback_tasks[chat_id]
+
+
 
 @bot.on_message(filters.command("frozen_check"))
 async def handle_ping_response(_, message):
