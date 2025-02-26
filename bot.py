@@ -181,10 +181,6 @@ async def fetch_youtube_link(query):
                     raise Exception(f"API returned status code {response.status}")
     except Exception as e:
         raise Exception(f"Failed to fetch YouTube link: {str(e)}")
-
-async def keep_alive():
-    while True:
-        await asyncio.sleep(60)
     
 
 async def skip_to_next_song(chat_id, message):
@@ -1605,7 +1601,6 @@ if __name__ == "__main__":
         start_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         support_chat_id = -1001810811394
         MAIN_LOOP.create_task(bot.send_message(support_chat_id, f"Bot started at {start_time}"))
-        MAIN_LOOP.create_task(keep_alive_loop())
         MAIN_LOOP.create_task(send_ping_loop())
 
         idle()
