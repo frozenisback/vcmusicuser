@@ -1456,7 +1456,7 @@ async def leave_voice_chat(chat_id):
 @bot.on_message(filters.command("frozen_check") & filters.chat(ASSISTANT_CHAT_ID))
 async def frozen_check_command(_, message):
     await message.reply_text("frozen check successful ✨")
-    frozen_check_event.set()
+
 
 
 
