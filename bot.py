@@ -64,7 +64,6 @@ MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
 LOCAL_VC_LIMIT = 3
 api_playback_records = []
 playback_mode = {}
-frozen_check_event = asyncio.Event()
 # Stores "local" or "api" for each chat
 
 
@@ -1454,12 +1453,11 @@ async def leave_voice_chat(chat_id):
 
 
 
-@bot.on_message(filters.command("frozen_check"))
-async def handle_ping_response(_, message):
-    if message.chat.id == ASSISTANT_CHAT_ID:
-        print("[STATUS] Bot responded in time.")
-        await message.reply_text("frozen check successful ✨")
-        frozen_check_event.set()
+@bot.on_message(filters.command("frozen_check") & filters.chat(ASSISTANT_CHAT_ID))
+async def frozen_check_command(_, message):
+    await message.reply_text("frozen check successful ✨")
+    frozen_check_event.set()
+
 
 
 @bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
