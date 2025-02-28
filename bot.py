@@ -1705,8 +1705,6 @@ if __name__ == "__main__":
     import asyncio
     MAIN_LOOP = asyncio.get_event_loop()
     bot.start()
-    bot.set_webhook("https://vcmusicuser-xeoi.onrender.com/webhook")
-    # Start your HTTP server in a separate thread (as you already do)
     server_thread = threading.Thread(target=run_http_server, daemon=True)
     server_thread.start()
     MAIN_LOOP.run_forever()
