@@ -1708,7 +1708,7 @@ if __name__ == "__main__":
 
         print("Starting Frozen Music Bot...")
         call_py.start()
-        bot.start()
+        bot.run()
         if not assistant.is_connected:
             assistant.run()
         print("Bot started successfully.")
@@ -1719,5 +1719,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(simple_restart())
+
 
 
