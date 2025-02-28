@@ -1702,21 +1702,13 @@ server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
 if __name__ == "__main__":
-    try:
-        import asyncio
-        import datetime
+    import asyncio
+    MAIN_LOOP = asyncio.get_event_loop()
+    bot.start()
+    bot.set_webhook("https://vcmusicuser-xeoi.onrender.com/webhook")
+    # Start your HTTP server in a separate thread (as you already do)
+    server_thread = threading.Thread(target=run_http_server, daemon=True)
+    server_thread.start()
+    MAIN_LOOP.run_forever()
 
-        print("Starting Frozen Music Bot...")
-        call_py.start()
-        bot.run()
-        if not assistant.is_connected:
-            assistant.run()
-        print("Bot started successfully.")
-
-        idle()
-    except KeyboardInterrupt:
-        print("Bot is still running. Kill the process to stop.")
-    except Exception as e:
-        print(f"Critical Error: {e}")
-        asyncio.run(simple_restart())
 
