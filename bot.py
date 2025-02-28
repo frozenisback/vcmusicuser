@@ -64,6 +64,10 @@ MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
 LOCAL_VC_LIMIT = 3
 api_playback_records = []
 playback_mode = {}
+# Global dictionaries for the new feature
+last_played_song = {}    # Maps chat_id to the info of the last played song
+last_suggestions = {}    # Maps chat_id to the list of suggestion objects
+
 # Stores "local" or "api" for each chat
 
 
@@ -74,18 +78,73 @@ async def process_pending_command(chat_id, delay):
         await cooldown_reply.delete()  # Delete the cooldown notification
         await play_handler(bot, message) # Use `bot` instead of `app`
 
-def global_exception_handler(loop, context):
-    message = context.get("message", "No message")
-    exception = context.get("exception")
-    error_text = f"Global exception caught:\nMessage: {message}"
-    if exception:
-        error_text += f"\nException: {exception}"
-    print(error_text)
-    # Log the error to support
-    loop.create_task(bot.send_message(5268762773, error_text))
 
-loop = asyncio.get_event_loop()
-loop.set_exception_handler(global_exception_handler)
+async def show_suggestions(chat_id, last_song_url, status_message=None):
+    try:
+        suggestions_api = f"https://odd-block-a945.tenopno.workers.dev/related?input={urllib.parse.quote(last_song_url)}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(suggestions_api) as resp:
+                if resp.status != 200:
+                    error_text = f"Suggestions API returned status {resp.status} for chat {chat_id} using URL: {last_song_url}"
+                    print(error_text)
+                    await bot.send_message(5268762773, error_text)
+                    if status_message:
+                        try:
+                            await status_message.edit("❌ Failed to fetch suggestions from the API.")
+                        except Exception as e:
+                            print("Error editing status message:", e)
+                            await bot.send_message(chat_id, "❌ Failed to fetch suggestions from the API.")
+                    else:
+                        await bot.send_message(chat_id, "❌ Failed to fetch suggestions from the API.")
+                    return
+                data = await resp.json()
+                suggestions = data.get("suggestions", [])
+                if not suggestions:
+                    error_text = "No suggestions returned from API."
+                    print(error_text)
+                    await bot.send_message(5268762773, f"Suggestions API error in chat {chat_id}: {error_text}")
+                    if status_message:
+                        try:
+                            await status_message.edit("❌ No suggestions available from the API.")
+                        except Exception as e:
+                            print("Error editing status message:", e)
+                            await bot.send_message(chat_id, "❌ No suggestions available from the API.")
+                    else:
+                        await bot.send_message(chat_id, "❌ No suggestions available from the API.")
+                    return
+                # Save suggestions for later use in callback queries.
+                last_suggestions[chat_id] = suggestions
+                # Build inline buttons with callback data "suggestion|<index>"
+                buttons = [
+                    [InlineKeyboardButton(text=suggestion.get("title", "Suggestion"), callback_data=f"suggestion|{i}")]
+                    for i, suggestion in enumerate(suggestions)
+                ]
+                markup = InlineKeyboardMarkup(buttons)
+                new_text = "✨ No more songs in the queue. Here are some suggestions based on the last played song: ✨"
+                if status_message:
+                    try:
+                        await status_message.edit(new_text, reply_markup=markup)
+                    except Exception as e:
+                        print("Error editing status message in show_suggestions:", e)
+                        await bot.send_message(chat_id, new_text, reply_markup=markup)
+                else:
+                    await bot.send_message(chat_id, new_text, reply_markup=markup)
+    except Exception as e:
+        error_text = f"Error fetching suggestions: {str(e)}"
+        print(error_text)
+        await bot.send_message(5268762773, f"Suggestions API error in chat {chat_id}: {error_text}")
+        if status_message:
+            try:
+                await status_message.edit(f"❌ Error fetching suggestions: {str(e)}")
+            except Exception as ex:
+                print("Error editing status message:", ex)
+                await bot.send_message(chat_id, f"❌ Error fetching suggestions: {str(e)}")
+        else:
+            await bot.send_message(chat_id, f"❌ Error fetching suggestions: {str(e)}")
+        await leave_voice_chat(chat_id)
+
+
+
 
 def safe_handler(func):
     async def wrapper(*args, **kwargs):
@@ -644,11 +703,10 @@ async def start_playback_task(chat_id, message):
 
     # Use the external API if local VC limit has been reached.
     if chat_id not in playback_tasks and len(playback_tasks) >= LOCAL_VC_LIMIT:
-        # NEW: Check if the API assistant is in the chat; if not, invite it via the new API endpoint.
+        # External API branch
         if not await is_api_assistant_in_chat(chat_id):
             invite_link = await extract_invite_link(bot, chat_id)
             if invite_link:
-                # Use the new endpoint: /join?input=<invite_link>
                 join_api_url = f"https://py-tgcalls-api1.onrender.com/join?input={urllib.parse.quote(invite_link)}"
                 try:
                     async with aiohttp.ClientSession() as session:
@@ -668,7 +726,6 @@ async def start_playback_task(chat_id, message):
                 else:
                     await bot.send_message(chat_id, "⏳ API Assistant is joining via API endpoint...")
 
-                # Wait (with retries) for the API assistant to join.
                 for _ in range(10):
                     await asyncio.sleep(3)
                     if await is_api_assistant_in_chat(chat_id):
@@ -684,18 +741,18 @@ async def start_playback_task(chat_id, message):
                         await bot.send_message(chat_id, "❌ API Assistant failed to join. Please check the API endpoint.")
                     return
 
-        # Inform the user that we're calling Frozen Play API.
         if message:
             await message.edit("⏳ Calling Frozen Play API...")
         else:
             await bot.send_message(chat_id, "⏳ Calling Frozen Play API...")
 
+        # Fetch the current song from the queue.
         song_info = chat_containers[chat_id][0]
+        last_played_song[chat_id] = song_info  # Save the current song as last played
         video_title = song_info.get('title', 'Unknown')
         encoded_title = urllib.parse.quote(video_title)
         api_url = f"https://py-tgcalls-api1.onrender.com/play?chatid={chat_id}&title={encoded_title}"
 
-        # --- API CALL WITH ERROR HANDLING AND FALLBACK ---
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(api_url, timeout=30) as resp:
@@ -708,13 +765,9 @@ async def start_playback_task(chat_id, message):
                 await message.edit(error_text)
             else:
                 await bot.send_message(chat_id, error_text)
-            # Call fallback to local playback.
             await fallback_local_playback(chat_id, message, song_info)
             return
 
-        # --- End API error handling and fallback ---
-
-        # Record the API playback details.
         record = {
             "chat_id": chat_id,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -767,6 +820,7 @@ async def start_playback_task(chat_id, message):
 
         if chat_id in chat_containers and chat_containers[chat_id]:
             song_info = chat_containers[chat_id][0]
+            last_played_song[chat_id] = song_info  # Save the current song as last played
             video_url = song_info.get('url')
             if not video_url:
                 print(f"Invalid video URL for song: {song_info}")
@@ -863,9 +917,7 @@ async def callback_query_handler(client, callback_query):
             try:
                 await call_py.pause_stream(chat_id)
                 await callback_query.answer("⏸ Playback paused.")
-                await client.send_message(
-                    chat_id, f"⏸ Playback paused by {user.first_name}."
-                )
+                await client.send_message(chat_id, f"⏸ Playback paused by {user.first_name}.")
             except Exception as e:
                 await callback_query.answer("❌ Error pausing playback.", show_alert=True)
         else:
@@ -876,9 +928,7 @@ async def callback_query_handler(client, callback_query):
             try:
                 await call_py.resume_stream(chat_id)
                 await callback_query.answer("▶️ Playback resumed.")
-                await client.send_message(
-                    chat_id, f"▶️ Playback resumed by {user.first_name}."
-                )
+                await client.send_message(chat_id, f"▶️ Playback resumed by {user.first_name}.")
             except Exception as e:
                 await callback_query.answer("❌ Error resuming playback.", show_alert=True)
         else:
@@ -919,16 +969,38 @@ async def callback_query_handler(client, callback_query):
                 except Exception as e:
                     print(f"Error deleting file: {e}")
 
-            # Send a message on chat indicating who skipped the song.
-            await client.send_message(
-                chat_id, f"⏩ {user.first_name} skipped **{skipped_song['title']}**."
-            )
+            await client.send_message(chat_id, f"⏩ {user.first_name} skipped **{skipped_song['title']}**.")
 
             if chat_id in chat_containers and chat_containers[chat_id]:
                 await callback_query.answer("⏩ Skipped! Playing the next song...")
                 await start_playback_task(chat_id, callback_query.message)
             else:
-                await callback_query.answer("⏩ Skipped! No more songs in the queue.")
+                await callback_query.answer("⏩ Skipped! No more songs in the queue. Fetching suggestions...")
+                # Use the last played song info to fetch suggestions
+                last_song = last_played_song.get(chat_id)
+                if last_song and last_song.get('url'):
+                    try:
+                        await callback_query.message.edit(
+                            f"⏩ Skipped **{skipped_song['title']}**.\n\n😔 No more songs in the queue. Fetching song suggestions..."
+                        )
+                    except Exception as e:
+                        print("Error editing callback message:", e)
+                        await bot.send_message(
+                            chat_id,
+                            f"⏩ Skipped **{skipped_song['title']}**.\n\n😔 No more songs in the queue. Fetching song suggestions..."
+                        )
+                    await show_suggestions(chat_id, last_song.get('url'), status_message=callback_query.message)
+                else:
+                    try:
+                        await callback_query.message.edit(
+                            f"⏩ Skipped **{skipped_song['title']}**.\n\n😔 No more songs in the queue and no last played song available. ❌"
+                        )
+                    except Exception as e:
+                        print("Error editing callback message:", e)
+                        await bot.send_message(
+                            chat_id,
+                            f"⏩ Skipped **{skipped_song['title']}**.\n\n😔 No more songs in the queue and no last played song available. ❌"
+                        )
         else:
             await callback_query.answer("❌ No songs in the queue to skip.")
 
@@ -946,11 +1018,8 @@ async def callback_query_handler(client, callback_query):
             await callback_query.answer("❌ No songs in the queue to clear.", show_alert=True)
 
     elif data == "stop":
-        # Clear the queue first
         if chat_id in chat_containers:
             chat_containers[chat_id].clear()
-        
-        # Update playback records for a stop event for local mode
         if mode == "local":
             record = {
                 "chat_id": chat_id,
@@ -960,21 +1029,49 @@ async def callback_query_handler(client, callback_query):
             }
             api_playback_records.append(record)
             playback_mode.pop(chat_id, None)
-
         try:
             if mode == "local":
                 await call_py.leave_call(chat_id)
             else:
                 await stop_playback(chat_id)
             await callback_query.answer("🛑 Playback stopped and queue cleared.")
-            await client.send_message(
-                chat_id,
-                f"🛑 Playback stopped and queue cleared by {user.first_name}."
-            )
+            await client.send_message(chat_id, f"🛑 Playback stopped and queue cleared by {user.first_name}.")
         except Exception as e:
             print("Stop error:", e)
             await callback_query.answer("❌ Error stopping playback.", show_alert=True)
 
+    elif data.startswith("suggestion|"):
+        try:
+            parts = data.split("|")
+            index = int(parts[1])
+        except Exception:
+            await callback_query.answer("Invalid selection.", show_alert=True)
+            return
+
+        suggestions = last_suggestions.get(chat_id, [])
+        if index < 0 or index >= len(suggestions):
+            await callback_query.answer("Invalid suggestion selection.", show_alert=True)
+            return
+
+        suggestion = suggestions[index]
+        duration_iso = suggestion.get("duration")
+        readable_duration = iso8601_to_human_readable(duration_iso) if duration_iso else "Unknown"
+        song_data = {
+            "url": suggestion.get("link"),
+            "title": suggestion.get("title"),
+            "duration": readable_duration,
+            "duration_seconds": isodate.parse_duration(duration_iso).total_seconds() if duration_iso else 0,
+            "requester": "Suggestion",
+            "thumbnail": suggestion.get("thumbnail")
+        }
+        if chat_id not in chat_containers:
+            chat_containers[chat_id] = []
+        chat_containers[chat_id].append(song_data)
+        await callback_query.answer("Song added from suggestions. Starting playback...")
+        if len(chat_containers[chat_id]) == 1:
+            await start_playback_task(chat_id, callback_query.message)
+        else:
+            await client.send_message(chat_id, f"Added **{song_data['title']}** to the queue from suggestions.")
 
 
 @call_py.on_update(fl.stream_end)
@@ -992,18 +1089,42 @@ async def stream_end_handler(_: PyTgCalls, update: Update):
     playback_mode.pop(chat_id, None)
 
     if chat_id in chat_containers and chat_containers[chat_id]:
+        # Remove the finished song from the queue.
         skipped_song = chat_containers[chat_id].pop(0)
-        await asyncio.sleep(3)  # Delay to ensure the stream has ended
+        await asyncio.sleep(3)  # Delay to ensure the stream has fully ended
         try:
             os.remove(skipped_song.get('file_path', ''))
         except Exception as e:
             print(f"Error deleting file: {e}")
 
         if chat_id in chat_containers and chat_containers[chat_id]:
-            await start_playback_task(chat_id, None)  # Start the next song
+            # If there are more songs, start the next one.
+            await start_playback_task(chat_id, None)
         else:
-            await bot.send_message(chat_id, "❌ No more songs in the queue.\n Leaving the voice chat.💕\n\n support - @frozensupport1")
-            await leave_voice_chat(chat_id)  # Leave the voice chat
+            # Queue is empty; fetch suggestions if last played song is available.
+            last_song = last_played_song.get(chat_id)
+            if last_song and last_song.get('url'):
+                # Send one status message and pass it to show_suggestions.
+                status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
+                await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
+            else:
+                await bot.send_message(
+                    chat_id,
+                    "❌ No more songs in the queue.\nLeaving the voice chat. 💕\n\nSupport: @frozensupport1"
+                )
+                await leave_voice_chat(chat_id)
+    else:
+        # No songs in the queue.
+        last_song = last_played_song.get(chat_id)
+        if last_song and last_song.get('url'):
+            status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
+            await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
+        else:
+            await bot.send_message(
+                chat_id,
+                "❌ No more songs in the queue.\nLeaving the voice chat. 💕\n\nSupport: @frozensupport1"
+            )
+            await leave_voice_chat(chat_id) 
 
 async def leave_voice_chat(chat_id):
     try:
@@ -1022,9 +1143,6 @@ async def leave_voice_chat(chat_id):
     if chat_id in playback_tasks:
         playback_tasks[chat_id].cancel()
         del playback_tasks[chat_id]
-
-
-# Add a callback query handler to handle button presses
 
 
 
@@ -1159,7 +1277,7 @@ async def skip_handler(client, message):
     # Determine the playback mode (default to local).
     mode = playback_mode.get(chat_id, "local")
 
-    # Update playback records for a skip event
+    # Update playback records for a skip event.
     record = {
         "chat_id": chat_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -1193,13 +1311,40 @@ async def skip_handler(client, message):
 
     # Check if there are any more songs in the queue.
     if not chat_containers.get(chat_id):
-        await status_message.edit(
-            f"⏩ Skipped **{skipped_song['title']}**.\n\n❌ No more songs in the queue."
-        )
+        # Try to edit the status message with a new message that includes emojis.
+        try:
+            await status_message.edit(
+                f"⏩ Skipped **{skipped_song['title']}**.\n\n😔 No more songs in the queue. Fetching song suggestions..."
+            )
+        except Exception as e:
+            print(f"Error editing message: {e}")
+            await status_message.delete()
+            status_message = await bot.send_message(
+                chat_id,
+                f"⏩ Skipped **{skipped_song['title']}**.\n\n😔 No more songs in the queue. Fetching song suggestions..."
+            )
+        # Use the last played song info to fetch suggestions.
+        last_song = last_played_song.get(chat_id)
+        if last_song and last_song.get('url'):
+            print(f"Fetching suggestions using URL: {last_song.get('url')}")
+            await show_suggestions(chat_id, last_song.get('url'))
+        else:
+            try:
+                await status_message.edit(
+                    f"⏩ Skipped **{skipped_song['title']}**.\n\n😔 No more songs in the queue and no last played song available. ❌"
+                )
+            except Exception as e:
+                await bot.send_message(
+                    chat_id,
+                    f"⏩ Skipped **{skipped_song['title']}**.\n\n😔 No more songs in the queue and no last played song available. ❌"
+                )
     else:
-        await status_message.edit(
-            f"⏩ Skipped **{skipped_song['title']}**.\n\n💕 Playing the next song..."
-        )
+        try:
+            await status_message.edit(
+                f"⏩ Skipped **{skipped_song['title']}**.\n\n💕 Playing the next song..."
+            )
+        except Exception as e:
+            print(f"Error editing message: {e}")
         await skip_to_next_song(chat_id, status_message)
 
 
@@ -1411,46 +1556,38 @@ async def stream_ended_handler(_, message):
     playback_mode.pop(chat_id, None)
     
     if chat_id in chat_containers and chat_containers[chat_id]:
-        # Remove the finished song from the queue and get its record
+        # Remove the finished song from the queue.
         skipped_song = chat_containers[chat_id].pop(0)
         await asyncio.sleep(3)  # Delay to ensure the stream has fully ended
         
-        # Attempt to remove the song file
         try:
             os.remove(skipped_song.get('file_path', ''))
         except Exception as e:
             print(f"Error deleting file: {e}")
         
-        # If there are still songs in the queue, play the next song
         if chat_containers[chat_id]:
             await bot.send_message(chat_id, "⏭ Skipping to the next song...")
             await start_playback_task(chat_id, message)
         else:
-            await bot.send_message(chat_id, "❌ No more songs in the queue.\n Leaving the voice chat.💕\n\n support - @frozensupport1")
-            await leave_voice_chat(chat_id)
+            # Queue is empty; fetch suggestions.
+            last_song = last_played_song.get(chat_id)
+            if last_song and last_song.get('url'):
+                status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
+                await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
+            else:
+                await bot.send_message(
+                    chat_id,
+                    "❌ No more songs in the queue.\nLeaving the voice chat. 💕\n\nSupport: @frozensupport1"
+                )
+                await leave_voice_chat(chat_id)
     else:
-        # In case no queue exists or is empty
-        await bot.send_message(chat_id, "🚪 No songs left in the queue.")
-
-
-async def leave_voice_chat(chat_id):
-    try:
-        await call_py.leave_call(chat_id)
-    except Exception as e:
-        print(f"Error leaving the voice chat: {e}")
-
-    if chat_id in chat_containers:
-        for song in chat_containers[chat_id]:
-            try:
-                os.remove(song.get('file_path', ''))
-            except Exception as e:
-                print(f"Error deleting file: {e}")
-        chat_containers.pop(chat_id)
-
-    if chat_id in playback_tasks:
-        playback_tasks[chat_id].cancel()
-        del playback_tasks[chat_id]
-
+        # No songs in the queue.
+        last_song = last_played_song.get(chat_id)
+        if last_song and last_song.get('url'):
+            status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
+            await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
+        else:
+            await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
 
 @bot.on_message(filters.command("frozen_check") & filters.chat(ASSISTANT_CHAT_ID))
@@ -1464,24 +1601,6 @@ async def frozen_check_command(_, message):
 async def owner_simple_restart_handler(_, message):
     await message.reply("♻️ [WATCHDOG] restart initiated as per owner command...")
     await simple_restart()
-
-
-async def send_ping_loop():
-    while True:
-        try:
-            await assistant.send_message(BOT_USERNAME, "/frozen_check")
-            try:
-                # Wait for the frozen_check response for up to 3 seconds.
-                await asyncio.wait_for(frozen_check_event.wait(), timeout=3)
-                frozen_check_event.clear()  # Reset for the next iteration.
-            except asyncio.TimeoutError:
-                print("[ERROR] Frozen check response not received within 3 seconds, restarting...")
-                await simple_restart()
-        except Exception as e:
-            print(f"[ERROR] Failed to send ping check: {e}")
-            await simple_restart()
-        await asyncio.sleep(10)  # Wait 10 seconds before sending the next ping.
-
 
 
 
@@ -1600,10 +1719,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(simple_restart())
-
-
-
-
-
-
-
