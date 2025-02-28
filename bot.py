@@ -1701,21 +1701,52 @@ def run_http_server():
 server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
+import asyncio
+import datetime
+from aiohttp import web
+
+# Define your webhook handler
+async def webhook_handler(request):
+    # Confirm that the request is to the webhook endpoint (route ensures this)
+    try:
+        payload = await request.json()
+    except Exception as err:
+        return web.Response(text=f"Invalid JSON: {err}", status=400)
+    
+    # Process the webhook payload here
+    print("Received webhook payload:", payload)
+    # For example, you might call a function to process the update:
+    # process_update(payload)
+    
+    return web.Response(text="Webhook received", status=200)
+
+# Initialize the web application and routes
+def init_webhook_app():
+    app = web.Application()
+    # Add the webhook route; this route only handles POST requests to /webhook.
+    app.router.add_post('/webhook', webhook_handler)
+    return app
+
 if __name__ == "__main__":
     try:
-        import asyncio
-        import datetime
+        print("Starting Frozen Music Bot with Webhook...")
 
-        print("Starting Frozen Music Bot...")
-        call_py.start()
-        bot.run()
-        if not assistant.is_connected:
-            assistant.run()
+        # If you have any preliminary startup actions, run them here.
+        call_py.start()  # Assuming call_py.start() sets up other necessary components.
+        
+        # Create the webhook server app
+        app = init_webhook_app()
+
+        # Start the webhook server (blocking call)
+        web.run_app(app, host="0.0.0.0", port=8000)
+
         print("Bot started successfully.")
 
-        idle()
+        # If you need to keep other processes running, ensure they're integrated properly.
+        idle()  # Note: This might be unreachable if web.run_app is blocking.
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(simple_restart())
+
