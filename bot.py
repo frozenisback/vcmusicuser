@@ -1589,7 +1589,7 @@ if __name__ == "__main__":
 
         print("Starting Frozen Music Bot...")
         call_py.start()
-        bot.run()
+        set_webhook()
         if not assistant.is_connected:
             assistant.run()
         print("Bot started successfully.")
