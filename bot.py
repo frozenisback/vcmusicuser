@@ -1534,15 +1534,6 @@ async def keep_alive_loop():
         print("[KEEP ALIVE] Bot is running...")
         await asyncio.sleep(300)
 
-def set_webhook():
-    """Set the webhook URL from the environment variable."""
-    webhook_url = os.environ.get("WEBHOOK_URL")
-    if webhook_url:
-        bot.set_webhook(url=webhook_url)
-        print(f"Webhook set to: {webhook_url}")
-    else:
-        print("No WEBHOOK_URL provided in environment variables.")
-
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -1566,15 +1557,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 self.wfile.write(b"Invalid JSON")
                 return
 
-            future = asyncio.run_coroutine_threadsafe(
-                bot.process_new_updates([update]), MAIN_LOOP
-            )
+            future = asyncio.run_coroutine_threadsafe(bot.process_new_updates([update]), MAIN_LOOP)
             def handle_future(fut):
                 try:
                     fut.result()
                 except Exception as e:
                     print(f"Error processing update: {e}")
-                    # Restart the bot if needed.
                     asyncio.run(restart_bot())
             
             future.add_done_callback(handle_future)
@@ -1591,37 +1579,22 @@ def run_http_server():
     print(f"HTTP server running on port {port}")
     httpd.serve_forever()
 
-async def simple_restart():
-    """Ensure the bot is connected before sending a restart message."""
-    if not bot.is_connected:
-        await bot.start()  # Start the bot if it hasn’t been started.
-    await bot.send_message(support_chat_id, log_message)
-
-def main():
-    # Start HTTP server in a separate thread.
-    server_thread = threading.Thread(target=run_http_server, daemon=True)
-    server_thread.start()
-
-    print("Starting Frozen Music Bot...")
-    call_py.start()
-
-    # Ensure the bot client is started before setting the webhook.
-    if not bot.is_connected:
-        # Use asyncio.run to start the bot if it's not running.
-        asyncio.run(bot.start())
-
-    set_webhook()
-
-    # Start the assistant if it's not connected.
-    if not assistant.is_connected:
-        assistant.run()
-
-    print("Bot started successfully.")
-    idle()
+server_thread = threading.Thread(target=run_http_server, daemon=True)
+server_thread.start()
 
 if __name__ == "__main__":
     try:
-        main()
+        import asyncio
+        import datetime
+
+        print("Starting Frozen Music Bot...")
+        call_py.start()
+        bot.run()
+        if not assistant.is_connected:
+            assistant.run()
+        print("Bot started successfully.")
+
+        idle()
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
