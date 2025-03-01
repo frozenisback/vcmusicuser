@@ -2110,32 +2110,32 @@ if __name__ == "__main__":
     try:
         import asyncio
         import datetime
-        from threading import Thread
         from flask import Flask
+        from threading import Thread
+        import os
 
-        print("Starting Frozen Music Bot...")
-
-        # Create and start the Flask app
+        # Set up a Flask app to serve as a simple HTTP server
         app = Flask(__name__)
 
         @app.route("/")
         def index():
             return "Bot server is running."
 
-        # Start Flask in a separate thread
-        server_thread = Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))))
+        # Start the Flask server in a separate thread so it runs concurrently with the bot
+        server_thread = Thread(
+            target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))),
+            daemon=True
+        )
         server_thread.start()
 
-        # Start the Telegram bot
+        print("Starting Frozen Music Bot...")
         call_py.start()
         bot.run()
-        
         if not assistant.is_connected:
             assistant.run()
-
         print("Bot started successfully.")
+
         idle()
-        
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
