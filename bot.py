@@ -499,7 +499,7 @@ async def play_handler(_, message):
                 InlineKeyboardButton("🔥 Play Trending Songs", callback_data="play_trending")
             ]
         ])
-        await _.send_message(chat_id, "You did not specify a song. Would you like to play your playlist or trending songs instead?", reply_markup=keyboard)
+        await _.send_message(chat_id, "You did not specify a song. Would you like to play your playlist or trending songs instead?\n\n correct way to use cammand /play song name \n eg - /play shape of you ", reply_markup=keyboard)
         return
 
     await process_play_command(message, query)
@@ -926,8 +926,7 @@ async def start_playback_task(chat_id, message):
         chat_containers[chat_id].pop(0)
         await start_playback_task(chat_id, message)
 
-
-from bson import ObjectId  # Ensure this import is present
+ # Ensure this import is present
 
 @bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
@@ -1185,6 +1184,7 @@ async def callback_query_handler(client, callback_query):
         if not song:
             await callback_query.answer("Song not found.", show_alert=True)
             return
+
         song_data = {
             "url": song.get("url"),
             "title": song.get("song_title"),
@@ -1193,11 +1193,21 @@ async def callback_query_handler(client, callback_query):
             "requester": user.first_name,
             "thumbnail": song.get("thumbnail")
         }
-        if chat_id not in chat_containers:
+
+        # Check if there’s an existing queue (and playback) for this chat.
+        existing_queue = chat_containers.get(chat_id)
+        if not existing_queue:
             chat_containers[chat_id] = []
+            queue_already_running = False
+        else:
+            queue_already_running = len(chat_containers[chat_id]) > 0
+
         chat_containers[chat_id].append(song_data)
-        await callback_query.answer("Song added to queue. Playing...", show_alert=False)
-        await start_playback_task(chat_id, callback_query.message)
+        if not queue_already_running:
+            await callback_query.answer("Song added to queue. Starting playback...", show_alert=False)
+            await start_playback_task(chat_id, callback_query.message)
+        else:
+            await callback_query.answer("Song added to queue.", show_alert=False)
 
     elif data.startswith("remove_from_playlist|"):
         _, song_id = data.split("|", 1)
