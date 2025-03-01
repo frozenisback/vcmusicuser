@@ -927,21 +927,23 @@ async def start_playback_task(chat_id, message):
         await start_playback_task(chat_id, message)
 
 
+from bson import ObjectId  # Ensure this import is present
+
 @bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
     chat_id = callback_query.message.chat.id
     user_id = callback_query.from_user.id
-
-    # Skip admin check for suggestion, add_to_playlist, play_playlist, and play_trending actions
-    if not (callback_query.data.startswith("suggestion|") or callback_query.data in ["add_to_playlist", "play_playlist", "play_trending"]):
-        if not await is_user_admin(callback_query):
-            await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
-            return
-
     data = callback_query.data
     mode = playback_mode.get(chat_id, "local")  # Default mode is local
     user = callback_query.from_user  # For later use
 
+    # Skip admin check for playlist and trending actions, as well as suggestions and certain playlist commands.
+    if not (data.startswith("suggestion|") or data.startswith("playlist_") or data in ["add_to_playlist", "play_playlist", "play_trending"]):
+        if not await is_user_admin(callback_query):
+            await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
+            return
+
+    # Playback control branches:
     if data == "pause":
         if mode == "local":
             try:
@@ -974,7 +976,6 @@ async def callback_query_handler(client, callback_query):
             }
             api_playback_records.append(record)
             playback_mode.pop(chat_id, None)
-
             skipped_song = chat_containers[chat_id].pop(0)
             if mode == "local":
                 try:
@@ -997,9 +998,7 @@ async def callback_query_handler(client, callback_query):
                         os.remove(skipped_song.get('file_path', ''))
                 except Exception as e:
                     print(f"Error deleting file: {e}")
-
             await client.send_message(chat_id, f"⏩ {user.first_name} skipped **{skipped_song['title']}**.")
-
             if chat_id in chat_containers and chat_containers[chat_id]:
                 await callback_query.answer("⏩ Skipped! Playing the next song...")
                 await start_playback_task(chat_id, callback_query.message)
@@ -1075,12 +1074,10 @@ async def callback_query_handler(client, callback_query):
         except Exception:
             await callback_query.answer("Invalid selection.", show_alert=True)
             return
-
         suggestions = last_suggestions.get(chat_id, [])
         if index < 0 or index >= len(suggestions):
             await callback_query.answer("Invalid suggestion selection.", show_alert=True)
             return
-
         suggestion = suggestions[index]
         duration_iso = suggestion.get("duration")
         readable_duration = iso8601_to_human_readable(duration_iso) if duration_iso else "Unknown"
@@ -1112,7 +1109,6 @@ async def callback_query_handler(client, callback_query):
             if existing_song:
                 await callback_query.answer("❌ Song already in your playlist.", show_alert=True)
                 return
-
             playlist_entry = {
                 "chat_id": chat_id,
                 "user_id": user_id,
@@ -1127,13 +1123,149 @@ async def callback_query_handler(client, callback_query):
         else:
             await callback_query.answer("❌ No song currently playing.", show_alert=True)
 
+    elif data.startswith("playlist_page|"):
+        try:
+            _, page_str = data.split("|", 1)
+            page = int(page_str)
+        except Exception:
+            page = 1
+        per_page = 10
+        user_playlist = list(playlist_collection.find({"user_id": user_id}))
+        total = len(user_playlist)
+        if total == 0:
+            await callback_query.message.edit("Your playlist is empty.")
+            return
+        start_index = (page - 1) * per_page
+        end_index = start_index + per_page
+        page_items = user_playlist[start_index:end_index]
+        buttons = []
+        for idx, song in enumerate(page_items, start=start_index+1):
+            song_id = str(song.get('_id'))
+            song_title = song.get('song_title', 'Unknown')
+            buttons.append([InlineKeyboardButton(text=f"{idx}. {song_title}", callback_data=f"playlist_detail|{song_id}")])
+        nav_buttons = []
+        if page > 1:
+            nav_buttons.append(InlineKeyboardButton(text="⬅️ Prev", callback_data=f"playlist_page|{page-1}"))
+        if end_index < total:
+            nav_buttons.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"playlist_page|{page+1}"))
+        if nav_buttons:
+            buttons.append(nav_buttons)
+        await callback_query.message.edit("🎶 **Your Playlist:**", reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif data.startswith("playlist_detail|"):
+        _, song_id = data.split("|", 1)
+        try:
+            song = playlist_collection.find_one({"_id": ObjectId(song_id)})
+        except Exception as e:
+            await callback_query.answer("Error fetching song details.", show_alert=True)
+            return
+        if not song:
+            await callback_query.answer("Song not found in your playlist.", show_alert=True)
+            return
+        title = song.get("song_title", "Unknown")
+        duration = song.get("duration", "Unknown")
+        url = song.get("url", "Unknown")
+        details_text = f"**Title:** {title}\n**Duration:** {duration}\n**URL:** {url}"
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(text="▶️ Play This Song", callback_data=f"play_song|{song_id}"),
+                InlineKeyboardButton(text="🗑 Remove from Playlist", callback_data=f"remove_from_playlist|{song_id}")
+            ],
+            [InlineKeyboardButton(text="⬅️ Back to Playlist", callback_data="playlist_back")]
+        ])
+        await callback_query.message.edit(details_text, reply_markup=keyboard)
+
+    elif data.startswith("play_song|"):
+        _, song_id = data.split("|", 1)
+        try:
+            song = playlist_collection.find_one({"_id": ObjectId(song_id)})
+        except Exception as e:
+            await callback_query.answer("Error fetching song.", show_alert=True)
+            return
+        if not song:
+            await callback_query.answer("Song not found.", show_alert=True)
+            return
+        song_data = {
+            "url": song.get("url"),
+            "title": song.get("song_title"),
+            "duration": song.get("duration"),
+            "duration_seconds": 0,  # Convert if needed
+            "requester": user.first_name,
+            "thumbnail": song.get("thumbnail")
+        }
+        if chat_id not in chat_containers:
+            chat_containers[chat_id] = []
+        chat_containers[chat_id].append(song_data)
+        await callback_query.answer("Song added to queue. Playing...", show_alert=False)
+        await start_playback_task(chat_id, callback_query.message)
+
+    elif data.startswith("remove_from_playlist|"):
+        _, song_id = data.split("|", 1)
+        try:
+            result = playlist_collection.delete_one({"_id": ObjectId(song_id)})
+        except Exception as e:
+            await callback_query.answer("Error removing song.", show_alert=True)
+            return
+        if result.deleted_count:
+            await callback_query.answer("Song removed from your playlist.")
+        else:
+            await callback_query.answer("Failed to remove song or song not found.", show_alert=True)
+        # Refresh the playlist display (default to page 1).
+        user_playlist = list(playlist_collection.find({"user_id": user_id}))
+        if not user_playlist:
+            await callback_query.message.edit("Your playlist is now empty.")
+            return
+        page = 1
+        per_page = 10
+        total = len(user_playlist)
+        start_index = (page - 1) * per_page
+        end_index = start_index + per_page
+        page_items = user_playlist[start_index:end_index]
+        buttons = []
+        for idx, song in enumerate(page_items, start=start_index+1):
+            song_id = str(song.get('_id'))
+            song_title = song.get('song_title', 'Unknown')
+            buttons.append([InlineKeyboardButton(text=f"{idx}. {song_title}", callback_data=f"playlist_detail|{song_id}")])
+        nav_buttons = []
+        if page > 1:
+            nav_buttons.append(InlineKeyboardButton(text="⬅️ Prev", callback_data=f"playlist_page|{page-1}"))
+        if end_index < total:
+            nav_buttons.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"playlist_page|{page+1}"))
+        if nav_buttons:
+            buttons.append(nav_buttons)
+        await callback_query.message.edit("🎶 **Your Playlist:**", reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif data == "playlist_back":
+        user_playlist = list(playlist_collection.find({"user_id": user_id}))
+        if not user_playlist:
+            await callback_query.message.edit("Your playlist is empty.")
+            return
+        page = 1
+        per_page = 10
+        total = len(user_playlist)
+        start_index = (page - 1) * per_page
+        end_index = start_index + per_page
+        page_items = user_playlist[start_index:end_index]
+        buttons = []
+        for idx, song in enumerate(page_items, start=start_index+1):
+            song_id = str(song.get('_id'))
+            song_title = song.get('song_title', 'Unknown')
+            buttons.append([InlineKeyboardButton(text=f"{idx}. {song_title}", callback_data=f"playlist_detail|{song_id}")])
+        nav_buttons = []
+        if page > 1:
+            nav_buttons.append(InlineKeyboardButton(text="⬅️ Prev", callback_data=f"playlist_page|{page-1}"))
+        if end_index < total:
+            nav_buttons.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"playlist_page|{page+1}"))
+        if nav_buttons:
+            buttons.append(nav_buttons)
+        await callback_query.message.edit("🎶 **Your Playlist:**", reply_markup=InlineKeyboardMarkup(buttons))
+
     elif data == "play_playlist":
         # Retrieve the entire playlist for this user from MongoDB.
         user_playlist = list(playlist_collection.find({"user_id": user_id}))
         if not user_playlist:
             await callback_query.answer("❌ You don't have any songs in your playlist.", show_alert=True)
             return
-
         if chat_id not in chat_containers:
             chat_containers[chat_id] = []
         count_added = 0
@@ -1148,7 +1280,6 @@ async def callback_query_handler(client, callback_query):
             }
             chat_containers[chat_id].append(song_data)
             count_added += 1
-
         await callback_query.answer(f"✅ Added {count_added} songs from your playlist to the queue!")
         if len(chat_containers[chat_id]) > 0:
             await start_playback_task(chat_id, callback_query.message)
