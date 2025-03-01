@@ -460,6 +460,7 @@ async def go_back_callback(_, callback_query):
 
 
 
+# Modify the /play handler so that an empty query shows a button to play the playlist.
 @bot.on_message(filters.group & filters.regex(r'^/play(?:\s+(?:@\S+))?(?:\s+(?P<query>.+))?$'))
 async def play_handler(_, message):
     chat_id = message.chat.id
@@ -481,7 +482,11 @@ async def play_handler(_, message):
 
     query = message.matches[0]['query']
     if not query:
-        await message.reply("❓ Please provide a song name.\nExample: /play Shape of You")
+        # If no song name is provided, prompt the user with a button to play their playlist.
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🎵 Play Your Playlist", callback_data="play_playlist")]]
+        )
+        await message.reply("You did not specify a song. Would you like to play your playlist instead?", reply_markup=keyboard)
         return
 
     await process_play_command(message, query)
