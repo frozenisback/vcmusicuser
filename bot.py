@@ -903,11 +903,13 @@ async def callback_query_handler(client, callback_query):
     chat_id = callback_query.message.chat.id
     user_id = callback_query.from_user.id
 
-    # Check if the user is an admin; if not, notify and exit.
-    if not await is_user_admin(callback_query):
-        await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
-        return
+    # Skip admin check if the callback is for a suggestion
+    if not callback_query.data.startswith("suggestion|"):
+        if not await is_user_admin(callback_query):
+            await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
+            return
 
+    # Now process the callback based on its data
     data = callback_query.data
     mode = playback_mode.get(chat_id, "local")  # Default to local mode
     user = callback_query.from_user  # Get the user once for later use
