@@ -912,27 +912,6 @@ async def start_playback_task(chat_id, message):
         await start_playback_task(chat_id, message)
 
 
-@bot.on_callback_query(filters.regex("add_to_playlist"))
-async def add_to_playlist_callback(client, callback_query):
-    chat_id = callback_query.message.chat.id
-    user_id = callback_query.from_user.id
-    if chat_id in chat_containers and chat_containers[chat_id]:
-        song_info = chat_containers[chat_id][0]
-        playlist_entry = {
-            "chat_id": chat_id,
-            "user_id": user_id,
-            "song_title": song_info.get("title"),
-            "url": song_info.get("url"),
-            "duration": song_info.get("duration"),
-            "thumbnail": song_info.get("thumbnail"),
-            "timestamp": time.time()
-        }
-        # Insert into MongoDB (ensure you've set up PyMongo and defined playlist_collection)
-        playlist_collection.insert_one(playlist_entry)
-        await callback_query.answer("✅ Added to your playlist!")
-    else:
-        await callback_query.answer("❌ No song currently playing.", show_alert=True)
-
 
 
 @bot.on_callback_query()
@@ -946,7 +925,6 @@ async def callback_query_handler(client, callback_query):
             await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
             return
 
-    # Now process the callback based on its data
     data = callback_query.data
     mode = playback_mode.get(chat_id, "local")  # Default to local mode
     user = callback_query.from_user  # Get the user once for later use
@@ -1111,6 +1089,29 @@ async def callback_query_handler(client, callback_query):
             await start_playback_task(chat_id, callback_query.message)
         else:
             await client.send_message(chat_id, f"Added **{song_data['title']}** to the queue from suggestions.")
+
+    elif data == "add_to_playlist":
+        # Handle the "Add to Playlist" button callback
+        if chat_id in chat_containers and chat_containers[chat_id]:
+            song_info = chat_containers[chat_id][0]
+            playlist_entry = {
+                "chat_id": chat_id,
+                "user_id": user_id,
+                "song_title": song_info.get("title"),
+                "url": song_info.get("url"),
+                "duration": song_info.get("duration"),
+                "thumbnail": song_info.get("thumbnail"),
+                "timestamp": time.time()
+            }
+            # Insert the song entry into MongoDB (ensure playlist_collection is set up)
+            playlist_collection.insert_one(playlist_entry)
+            await callback_query.answer("✅ Added to your playlist!")
+        else:
+            await callback_query.answer("❌ No song currently playing.", show_alert=True)
+
+    else:
+        await callback_query.answer("Unknown action.", show_alert=True)
+
 
 
 @call_py.on_update(fl.stream_end)
