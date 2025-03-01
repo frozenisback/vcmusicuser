@@ -357,7 +357,7 @@ async def start_handler(_, message):
 
     # Send the image with caption and buttons
     await message.reply_photo(
-        photo="https://files.catbox.moe/4o3ied.jpg",
+        photo="https://files.catbox.moe/rmu1zo.jpg",
         caption=caption,
         reply_markup=reply_markup
     )
@@ -444,7 +444,7 @@ async def go_back_callback(_, callback_query):
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
     await callback_query.message.edit_media(
-        media=InputMediaPhoto(media="https://files.catbox.moe/4o3ied.jpg", caption=caption),
+        media=InputMediaPhoto(media="https://files.catbox.moe/rmu1zo.jpg", caption=caption),
         reply_markup=reply_markup
     )
 
