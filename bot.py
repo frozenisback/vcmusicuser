@@ -2053,42 +2053,6 @@ async def simple_restart():
 
 
 
-async def keep_alive_loop():
-    while True:
-        print("[KEEP ALIVE] Bot is running...")
-        await asyncio.sleep(300)
-
-MAIN_LOOP = asyncio.get_event_loop()
-app = Flask(__name__)
-
-@app.route("/", methods=["GET"])
-def index():
-    return "Bot is running!", 200
-
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    try:
-        # Parse the JSON payload from the request
-        update_data = request.get_json(force=True)
-        update = Update.de_json(update_data, bot)
-    except Exception as e:
-        return "Invalid JSON", 400
-
-    # Schedule processing of the update in the main asyncio loop.
-    future = asyncio.run_coroutine_threadsafe(bot.process_new_updates([update]), MAIN_LOOP)
-    def handle_future(fut):
-        try:
-            fut.result()
-        except Exception as e:
-            print(f"Error processing update: {e}")
-    future.add_done_callback(handle_future)
-
-    return "OK", 200
-
-def run_flask():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-
 async def main():
     print("Starting Frozen Music Bot...")
     await call_py.start()
@@ -2096,14 +2060,10 @@ async def main():
     if not assistant.is_connected:
         await assistant.start()
     print("Bot started successfully.")
-    # Block until a keyboard interrupt is received.
+    # This will block until a keyboard interrupt is received.
     await idle()
 
 if __name__ == "__main__":
-    # Run Flask in a separate daemon thread
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
