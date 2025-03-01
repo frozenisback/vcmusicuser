@@ -62,6 +62,7 @@ mongo_uri = os.environ.get("MONGO_URI", "mongodb+srv://frozenbotss:frozenbots@cl
 mongo_client = MongoClient(mongo_uri)
 db = mongo_client["music_bot"]
 playlist_collection = db["playlists"]
+bots_collection = db["bots"]
 
 
 # Containers for song queues per chat/group
@@ -1506,9 +1507,16 @@ async def download_audio(url):
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
 
+mongo_client = MongoClient("mongodb://localhost:27017/")
+db = mongo_client["clone_bot"]
+bots_collection = db["bots"]
+
 @bot.on_message(filters.command("clone"))
 async def clone_handler(client, message):
-    # Usage: /clone <bot_token>
+    """
+    Clones a bot using the provided token.
+    Usage: /clone <bot_token>
+    """
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
         await message.reply("Usage: /clone <bot_token>")
@@ -1516,27 +1524,63 @@ async def clone_handler(client, message):
 
     new_bot_token = args[1].strip()
 
-    # Validate the bot token format (e.g., digits:alphanumeric with '_' or '-')
+    # Validate the bot token format
     token_pattern = r'^\d+:[A-Za-z0-9_-]+$'
     if not re.match(token_pattern, new_bot_token):
         await message.reply("Invalid bot token format. Please provide a valid bot token.")
         return
 
+    # Inform the user and wait 10 seconds
+    await message.reply("⏳ Please wait, cloning your own music bot...")
+    await asyncio.sleep(10)
+
     try:
-        # Create a unique session name for the clone bot (to avoid conflicts)
+        # Create a unique session name for the clone bot to avoid conflicts
         clone_session_name = f"clone_{int(time.time())}"
         
-        # Prepare a new environment with the provided token.
-        # Optionally, if your code supports a SESSION_NAME variable, pass the new session name.
+        # Prepare a new environment for the clone bot
         new_env = os.environ.copy()
         new_env["BOT_TOKEN"] = new_bot_token
-        new_env["SESSION_NAME"] = clone_session_name  # if you use this in your Client initialization
-        
-        # Launch a new process running the same script.
+        new_env["SESSION_NAME"] = clone_session_name  # if used in your Client initialization
+
+        # Launch a new process running the same script (this assumes the script handles the new bot)
         subprocess.Popen([sys.executable, sys.argv[0]], env=new_env)
-        await message.reply("Clone bot deployed successfully!")
+        
+        # Store the bot token and details in MongoDB
+        bot_data = {
+            "user_id": message.from_user.id,
+            "bot_token": new_bot_token,
+            "clone_session_name": clone_session_name,
+            "timestamp": int(time.time())
+        }
+        bots_collection.insert_one(bot_data)
+        
+        await message.reply("✅ Clone bot deployed successfully!")
     except Exception as e:
         await message.reply(f"Error deploying clone bot: {e}")
+
+@bot.on_message(filters.command("bots"))
+async def bots_handler(client, message):
+    """
+    Returns a list of all cloned bots along with who cloned them.
+    Only the authorized user (OWNER_ID) can access this command.
+    """
+    if message.from_user.id != OWNER_ID:
+        await message.reply("Access Denied!")
+        return
+
+    # Retrieve all cloned bots from MongoDB
+    bots = bots_collection.find()
+    response_text = "<b>Cloned Bots List:</b>\n\n"
+    for bot_entry in bots:
+        response_text += f"👤 User ID: {bot_entry['user_id']}\n"
+        response_text += f"🤖 Bot Token: <code>{bot_entry['bot_token']}</code>\n"
+        response_text += f"🔖 Session Name: {bot_entry['clone_session_name']}\n"
+        response_text += "----------------------\n"
+
+    await message.reply(response_text, parse_mode="HTML")
+
+bot.run()
 
     
 
