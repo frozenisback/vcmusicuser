@@ -2059,58 +2059,35 @@ async def keep_alive_loop():
         await asyncio.sleep(300)
 
 MAIN_LOOP = asyncio.get_event_loop()
+app = Flask(__name__)
 
-class WebhookHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/":
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is running!")
-        else:
-            self.send_response(404)
-            self.end_headers()
+@app.route("/", methods=["GET"])
+def index():
+    return "Bot is running!", 200
 
-    def do_POST(self):
-        if self.path == "/webhook":
-            content_length = int(self.headers.get("Content-Length", 0))
-            post_data = self.rfile.read(content_length)
-            try:
-                update_data = json.loads(post_data.decode("utf-8"))
-                # Assuming Update.de_json is the correct way to parse an update for your bot:
-                update = Update.de_json(update_data, bot)
-            except Exception as e:
-                self.send_response(400)
-                self.end_headers()
-                self.wfile.write(b"Invalid JSON")
-                return
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    try:
+        # Parse the JSON payload from the request
+        update_data = request.get_json(force=True)
+        update = Update.de_json(update_data, bot)
+    except Exception as e:
+        return "Invalid JSON", 400
 
-            # Schedule processing of the update in the main event loop.
-            future = asyncio.run_coroutine_threadsafe(bot.process_new_updates([update]), MAIN_LOOP)
-            def handle_future(fut):
-                try:
-                    fut.result()
-                except Exception as e:
-                    print(f"Error processing update: {e}")
-                    # Optionally, schedule a restart:
-                    # asyncio.run_coroutine_threadsafe(restart_bot(), MAIN_LOOP)
-            future.add_done_callback(handle_future)
+    # Schedule processing of the update in the main asyncio loop.
+    future = asyncio.run_coroutine_threadsafe(bot.process_new_updates([update]), MAIN_LOOP)
+    def handle_future(fut):
+        try:
+            fut.result()
+        except Exception as e:
+            print(f"Error processing update: {e}")
+    future.add_done_callback(handle_future)
 
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"OK")
-        else:
-            self.send_response(404)
-            self.end_headers()
+    return "OK", 200
 
-def run_http_server():
+def run_flask():
     port = int(os.environ.get("PORT", 8080))
-    httpd = HTTPServer(("", port), WebhookHandler)
-    print(f"HTTP server running on port {port}")
-    httpd.serve_forever()
-
-# Start the HTTP server in a separate thread.
-server_thread = threading.Thread(target=run_http_server, daemon=True)
-server_thread.start()
+    app.run(host="0.0.0.0", port=port)
 
 async def main():
     print("Starting Frozen Music Bot...")
@@ -2119,10 +2096,14 @@ async def main():
     if not assistant.is_connected:
         await assistant.start()
     print("Bot started successfully.")
-    # This will block until a keyboard interrupt is received.
+    # Block until a keyboard interrupt is received.
     await idle()
 
 if __name__ == "__main__":
+    # Run Flask in a separate daemon thread
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
