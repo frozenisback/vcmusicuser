@@ -464,32 +464,42 @@ async def go_back_callback(_, callback_query):
 @bot.on_message(filters.group & filters.regex(r'^/play(?:\s+(?:@\S+))?(?:\s+(?P<query>.+))?$'))
 async def play_handler(_, message):
     chat_id = message.chat.id
+    # Extract the query before deleting the message.
+    query = message.matches[0]['query']
+
+    # Try to delete the command message. If deletion fails, log the error but continue.
+    try:
+        await message.delete()
+    except Exception as e:
+        print(f"Failed to delete command message: {e}")
+
     now = time.time()
     
     # Check if this chat is within the cooldown period.
     if chat_id in chat_last_command and (now - chat_last_command[chat_id]) < COOLDOWN:
         remaining = int(COOLDOWN - (now - chat_last_command[chat_id]))
         if chat_id in chat_pending_commands:
-            await message.reply(f"⏳ A command is already queued for this chat. Please wait {remaining} more second(s).")
+            await _.send_message(chat_id, f"⏳ A command is already queued for this chat. Please wait {remaining} more second(s).")
             return
         else:
-            cooldown_reply = await message.reply(f"⏳ This chat is on cooldown. Your command will be processed in {remaining} second(s).")
+            cooldown_reply = await _.send_message(chat_id, f"⏳ This chat is on cooldown. Your command will be processed in {remaining} second(s).")
             chat_pending_commands[chat_id] = (message, cooldown_reply)
             asyncio.create_task(process_pending_command(chat_id, remaining))
             return
     else:
         chat_last_command[chat_id] = now
 
-    query = message.matches[0]['query']
     if not query:
         # If no song name is provided, prompt the user with a button to play their playlist.
         keyboard = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🎵 Play Your Playlist", callback_data="play_playlist")]]
         )
-        await message.reply("You did not specify a song. Would you like to play your playlist instead?", reply_markup=keyboard)
+        await _.send_message(chat_id, "You did not specify a song. Would you like to play your playlist instead?", reply_markup=keyboard)
         return
 
     await process_play_command(message, query)
+
+
 
 
 async def process_play_command(message, query):
