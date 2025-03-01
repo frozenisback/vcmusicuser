@@ -2107,40 +2107,41 @@ server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
 if __name__ == "__main__":
-    try:
-        import asyncio
-        import datetime
-        from flask import Flask
-        from threading import Thread
-        import os
+    from threading import Thread
+    import os
+    from flask import Flask
+    import asyncio
 
-        # Set up a Flask app to serve as a simple HTTP server
-        app = Flask(__name__)
+    app = Flask(__name__)
 
-        @app.route("/")
-        def index():
-            return "Bot server is running."
+    @app.route("/")
+    def index():
+        return "Bot server is running."
 
-        # Start the Flask server in a separate thread so it runs concurrently with the bot
-        server_thread = Thread(
-            target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000))),
-            daemon=True
-        )
-        server_thread.start()
+    def run_bot():
+        try:
+            import datetime
 
-        print("Starting Frozen Music Bot...")
-        call_py.start()
-        bot.run()
-        if not assistant.is_connected:
-            assistant.run()
-        print("Bot started successfully.")
+            print("Starting Frozen Music Bot...")
+            call_py.start()
+            bot.run()
+            if not assistant.is_connected:
+                assistant.run()
+            print("Bot started successfully.")
+            idle()
+        except KeyboardInterrupt:
+            print("Bot is still running. Kill the process to stop.")
+        except Exception as e:
+            print(f"Critical Error: {e}")
+            asyncio.run(simple_restart())
 
-        idle()
-    except KeyboardInterrupt:
-        print("Bot is still running. Kill the process to stop.")
-    except Exception as e:
-        print(f"Critical Error: {e}")
-        asyncio.run(simple_restart())
+    # Run the bot in a separate thread
+    bot_thread = Thread(target=run_bot)
+    bot_thread.start()
+
+    # Run the Flask server on the main thread so Render can detect the open port
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
 
 
 
