@@ -2058,6 +2058,8 @@ async def keep_alive_loop():
         print("[KEEP ALIVE] Bot is running...")
         await asyncio.sleep(300)
 
+MAIN_LOOP = asyncio.get_event_loop()
+
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -2074,22 +2076,25 @@ class WebhookHandler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             try:
                 update_data = json.loads(post_data.decode("utf-8"))
+                # Assuming Update.de_json is the correct way to parse an update for your bot:
                 update = Update.de_json(update_data, bot)
-            except Exception:
+            except Exception as e:
                 self.send_response(400)
                 self.end_headers()
                 self.wfile.write(b"Invalid JSON")
                 return
 
+            # Schedule processing of the update in the main event loop.
             future = asyncio.run_coroutine_threadsafe(bot.process_new_updates([update]), MAIN_LOOP)
             def handle_future(fut):
                 try:
                     fut.result()
                 except Exception as e:
                     print(f"Error processing update: {e}")
-                    asyncio.run(restart_bot())
-            
+                    # Optionally, schedule a restart:
+                    # asyncio.run_coroutine_threadsafe(restart_bot(), MAIN_LOOP)
             future.add_done_callback(handle_future)
+
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")
@@ -2103,27 +2108,27 @@ def run_http_server():
     print(f"HTTP server running on port {port}")
     httpd.serve_forever()
 
+# Start the HTTP server in a separate thread.
 server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
+async def main():
+    print("Starting Frozen Music Bot...")
+    await call_py.start()
+    await bot.start()
+    if not assistant.is_connected:
+        await assistant.start()
+    print("Bot started successfully.")
+    # This will block until a keyboard interrupt is received.
+    await idle()
+
 if __name__ == "__main__":
     try:
-        import asyncio
-        import datetime
-
-        print("Starting Frozen Music Bot...")
-        call_py.start()
-        bot.run()
-        if not assistant.is_connected:
-            assistant.run()
-        print("Bot started successfully.")
-
-        idle()
+        asyncio.run(main())
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
         print(f"Critical Error: {e}")
-        asyncio.run(simple_restart())
 
 
 
