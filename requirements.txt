@@ -13,4 +13,5 @@ psutil
 requests
 python-dotenv
 asyncpg
+pymongo
 
