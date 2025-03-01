@@ -467,7 +467,7 @@ async def play_handler(_, message):
     # Extract the query before deleting the message.
     query = message.matches[0]['query']
 
-    # Try to delete the command message. If deletion fails, log the error but continue.
+    # Try to delete the command message; if it fails, log the error and continue.
     try:
         await message.delete()
     except Exception as e:
@@ -490,16 +490,18 @@ async def play_handler(_, message):
         chat_last_command[chat_id] = now
 
     if not query:
-        # If no song name is provided, prompt the user with a button to play their playlist.
-        keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🎵 Play Your Playlist", callback_data="play_playlist")]]
-        )
-        await _.send_message(chat_id, "You did not specify a song. Would you like to play your playlist instead?", reply_markup=keyboard)
+        # If no song name is provided, prompt the user with two buttons:
+        # one to play their playlist and one to play trending songs.
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("🎵 Play Your Playlist", callback_data="play_playlist"),
+                InlineKeyboardButton("🔥 Play Trending Songs", callback_data="play_trending")
+            ]
+        ])
+        await _.send_message(chat_id, "You did not specify a song. Would you like to play your playlist or trending songs instead?", reply_markup=keyboard)
         return
 
     await process_play_command(message, query)
-
-
 
 
 async def process_play_command(message, query):
@@ -693,22 +695,17 @@ async def fallback_local_playback(chat_id, message, song_info):
 
         playback_tasks[chat_id] = asyncio.current_task()
 
-        control_buttons = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(text="▶️", callback_data="pause"),
-                    InlineKeyboardButton(text="⏸", callback_data="resume"),
-                    InlineKeyboardButton(text="⏭", callback_data="skip"),
-                    InlineKeyboardButton(text="⏹", callback_data="stop")
-                ],
-                [
-                    # New Add to Playlist button is here
-                    InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist"),
-                    InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
-                    InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
-                ]
-            ]
-        )
+        # Updated inline keyboard with four rows:
+        control_buttons = InlineKeyboardMarkup([
+            [InlineKeyboardButton(text="▶️", callback_data="pause"),
+             InlineKeyboardButton(text="⏸", callback_data="resume"),
+             InlineKeyboardButton(text="⏭", callback_data="skip"),
+             InlineKeyboardButton(text="⏹", callback_data="stop")],
+            [InlineKeyboardButton(text="Download Songs", callback_data="download_songs")],
+            [InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist")],
+            [InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
+             InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")]
+        ])
 
         await message.reply_photo(
             photo=song_info['thumbnail'],
@@ -804,20 +801,21 @@ async def start_playback_task(chat_id, message):
         api_playback_records.append(record)
         playback_mode[chat_id] = "api"
 
-        control_buttons = InlineKeyboardMarkup(
+        # External API branch inline keyboard with new layout:
+        control_buttons = InlineKeyboardMarkup([
             [
-                [
-                    InlineKeyboardButton(text="▶️", callback_data="pause"),
-                    InlineKeyboardButton(text="⏸", callback_data="resume"),
-                    InlineKeyboardButton(text="⏭", callback_data="skip"),
-                    InlineKeyboardButton(text="⏹", callback_data="stop")
-                ],
-                [
-                    InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
-                    InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
-                ]
+                InlineKeyboardButton(text="▶️", callback_data="pause"),
+                InlineKeyboardButton(text="⏸", callback_data="resume"),
+                InlineKeyboardButton(text="⏭", callback_data="skip"),
+                InlineKeyboardButton(text="⏹", callback_data="stop")
+            ],
+            [InlineKeyboardButton(text="Download Songs", callback_data="download_songs")],
+            [InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist")],
+            [
+                InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
+                InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
             ]
-        )
+        ])
 
         external_notice = (
             "Note: Bot is using Frozen Play API to play (beta). "
@@ -877,22 +875,21 @@ async def start_playback_task(chat_id, message):
 
             playback_tasks[chat_id] = asyncio.current_task()
 
-            control_buttons = InlineKeyboardMarkup(
+            # Local branch inline keyboard with new layout:
+            control_buttons = InlineKeyboardMarkup([
                 [
-                    [
-                        InlineKeyboardButton(text="▶️", callback_data="pause"),
-                        InlineKeyboardButton(text="⏸", callback_data="resume"),
-                        InlineKeyboardButton(text="⏭", callback_data="skip"),
-                        InlineKeyboardButton(text="⏹", callback_data="stop")
-                    ],
-                    [
-                        # Add the "Add to Playlist" button here
-                        InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist"),
-                        InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
-                        InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
-                    ]
+                    InlineKeyboardButton(text="▶️", callback_data="pause"),
+                    InlineKeyboardButton(text="⏸", callback_data="resume"),
+                    InlineKeyboardButton(text="⏭", callback_data="skip"),
+                    InlineKeyboardButton(text="⏹", callback_data="stop")
+                ],
+                [InlineKeyboardButton(text="Download Songs", callback_data="download_songs")],
+                [InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist")],
+                [
+                    InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
+                    InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
                 ]
-            )
+            ])
 
             await message.reply_photo(
                 photo=song_info['thumbnail'],
