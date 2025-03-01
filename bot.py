@@ -924,14 +924,14 @@ async def callback_query_handler(client, callback_query):
     chat_id = callback_query.message.chat.id
     user_id = callback_query.from_user.id
 
-    # Skip admin check if the callback is for a suggestion or add_to_playlist
-    if not (callback_query.data.startswith("suggestion|") or callback_query.data == "add_to_playlist"):
+    # Skip admin check for suggestion, add_to_playlist, or play_playlist actions
+    if not (callback_query.data.startswith("suggestion|") or callback_query.data in ["add_to_playlist", "play_playlist"]):
         if not await is_user_admin(callback_query):
             await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
             return
 
     data = callback_query.data
-    mode = playback_mode.get(chat_id, "local")  # Default to local mode
+    mode = playback_mode.get(chat_id, "local")  # Default mode is local
     user = callback_query.from_user  # Get the user once for later use
 
     if data == "pause":
@@ -958,7 +958,6 @@ async def callback_query_handler(client, callback_query):
 
     elif data == "skip":
         if chat_id in chat_containers and chat_containers[chat_id]:
-            # Update playback records for a skip event
             record = {
                 "chat_id": chat_id,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -981,7 +980,7 @@ async def callback_query_handler(client, callback_query):
                     print(f"Error deleting file: {e}")
             else:
                 try:
-                    await stop_playback(chat_id)  # API mode: stop using external API
+                    await stop_playback(chat_id)
                 except Exception as e:
                     print("API stop error:", e)
                 await asyncio.sleep(3)
@@ -998,7 +997,6 @@ async def callback_query_handler(client, callback_query):
                 await start_playback_task(chat_id, callback_query.message)
             else:
                 await callback_query.answer("⏩ Skipped! No more songs in the queue. Fetching suggestions...")
-                # Use the last played song info to fetch suggestions
                 last_song = last_played_song.get(chat_id)
                 if last_song and last_song.get('url'):
                     try:
@@ -1096,10 +1094,8 @@ async def callback_query_handler(client, callback_query):
             await client.send_message(chat_id, f"Added **{song_data['title']}** to the queue from suggestions.")
 
     elif data == "add_to_playlist":
-        # Handle the "Add to Playlist" button callback without admin check
         if chat_id in chat_containers and chat_containers[chat_id]:
             song_info = chat_containers[chat_id][0]
-            # Check if the song is already in the user's playlist to avoid duplicates
             existing_song = playlist_collection.find_one({
                 "chat_id": chat_id,
                 "user_id": user_id,
@@ -1118,11 +1114,38 @@ async def callback_query_handler(client, callback_query):
                 "thumbnail": song_info.get("thumbnail"),
                 "timestamp": time.time()
             }
-            # Insert the song entry into MongoDB (ensure playlist_collection is set up)
             playlist_collection.insert_one(playlist_entry)
             await callback_query.answer("✅ Added to your playlist!")
         else:
             await callback_query.answer("❌ No song currently playing.", show_alert=True)
+
+    elif data == "play_playlist":
+        # Retrieve the entire playlist for this user from MongoDB.
+        user_playlist = list(playlist_collection.find({"user_id": user_id}))
+        if not user_playlist:
+            await callback_query.answer("❌ You don't have any songs in your playlist.", show_alert=True)
+            return
+
+        if chat_id not in chat_containers:
+            chat_containers[chat_id] = []
+        count_added = 0
+        # Add every song from the user's playlist to the chat's queue (ignoring the queue limit).
+        for song in user_playlist:
+            song_data = {
+                "url": song.get("url"),
+                "title": song.get("song_title"),
+                "duration": song.get("duration"),
+                "duration_seconds": 0,  # Adjust if you have duration data to parse
+                "requester": user.first_name,
+                "thumbnail": song.get("thumbnail")
+            }
+            chat_containers[chat_id].append(song_data)
+            count_added += 1
+
+        await callback_query.answer(f"✅ Added {count_added} songs from your playlist to the queue!")
+        # Start playback if nothing is playing.
+        if len(chat_containers[chat_id]) > 0:
+            await start_playback_task(chat_id, callback_query.message)
 
     else:
         await callback_query.answer("Unknown action.", show_alert=True)
