@@ -1505,42 +1505,7 @@ async def download_audio(url):
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
 
-
-@bot.on_message(filters.command("clone"))
-async def clone_handler(client, message):
-    # Usage: /clone <bot_token>
-    args = message.text.split(maxsplit=1)
-    if len(args) < 2:
-        await message.reply("Usage: /clone <bot_token>")
-        return
-
-    new_bot_token = args[1].strip()
-
-    # Validate the bot token format (e.g., digits:alphanumeric with '_' or '-')
-    token_pattern = r'^\d+:[A-Za-z0-9_-]+$'
-    if not re.match(token_pattern, new_bot_token):
-        await message.reply("Invalid bot token format. Please provide a valid bot token.")
-        return
-
-    try:
-        # Create a unique session name for the clone bot (to avoid conflicts)
-        clone_session_name = f"clone_{int(time.time())}"
-        
-        # Prepare a new environment with the provided token.
-        # Optionally, if your code supports a SESSION_NAME variable, pass the new session name.
-        new_env = os.environ.copy()
-        new_env["BOT_TOKEN"] = new_bot_token
-        new_env["SESSION_NAME"] = clone_session_name  # if you use this in your Client initialization
-        
-        # Launch a new process running the same script.
-        subprocess.Popen([sys.executable, sys.argv[0]], env=new_env)
-        await message.reply("Clone bot deployed successfully!")
-    except Exception as e:
-        await message.reply(f"Error deploying clone bot: {e}")
-
-
     
-
 
 @bot.on_message(filters.group & filters.command(["stop", "end"]))
 async def stop_handler(client, message):
