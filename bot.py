@@ -1508,9 +1508,6 @@ async def download_audio(url):
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
 
-mongo_client = MongoClient("mongodb://localhost:27017/")
-db = mongo_client["clone_bot"]
-bots_collection = db["bots"]
 
 @bot.on_message(filters.command("clone"))
 async def clone_handler(client, message):
