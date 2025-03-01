@@ -919,8 +919,8 @@ async def callback_query_handler(client, callback_query):
     chat_id = callback_query.message.chat.id
     user_id = callback_query.from_user.id
 
-    # Skip admin check if the callback is for a suggestion
-    if not callback_query.data.startswith("suggestion|"):
+    # Skip admin check if the callback is for a suggestion or add_to_playlist
+    if not (callback_query.data.startswith("suggestion|") or callback_query.data == "add_to_playlist"):
         if not await is_user_admin(callback_query):
             await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
             return
@@ -1091,9 +1091,19 @@ async def callback_query_handler(client, callback_query):
             await client.send_message(chat_id, f"Added **{song_data['title']}** to the queue from suggestions.")
 
     elif data == "add_to_playlist":
-        # Handle the "Add to Playlist" button callback
+        # Handle the "Add to Playlist" button callback without admin check
         if chat_id in chat_containers and chat_containers[chat_id]:
             song_info = chat_containers[chat_id][0]
+            # Check if the song is already in the user's playlist to avoid duplicates
+            existing_song = playlist_collection.find_one({
+                "chat_id": chat_id,
+                "user_id": user_id,
+                "song_title": song_info.get("title")
+            })
+            if existing_song:
+                await callback_query.answer("❌ Song already in your playlist.", show_alert=True)
+                return
+
             playlist_entry = {
                 "chat_id": chat_id,
                 "user_id": user_id,
@@ -1111,6 +1121,7 @@ async def callback_query_handler(client, callback_query):
 
     else:
         await callback_query.answer("Unknown action.", show_alert=True)
+
 
 
 
