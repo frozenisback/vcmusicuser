@@ -32,6 +32,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 import subprocess
 from pymongo import MongoClient
+from bson import ObjectId
 
 load_dotenv()
 
@@ -695,16 +696,19 @@ async def fallback_local_playback(chat_id, message, song_info):
 
         playback_tasks[chat_id] = asyncio.current_task()
 
-        # Updated inline keyboard with four rows:
+        # Updated inline keyboard without the "Download Songs" button:
         control_buttons = InlineKeyboardMarkup([
-            [InlineKeyboardButton(text="▶️", callback_data="pause"),
-             InlineKeyboardButton(text="⏸", callback_data="resume"),
-             InlineKeyboardButton(text="⏭", callback_data="skip"),
-             InlineKeyboardButton(text="⏹", callback_data="stop")],
-            [InlineKeyboardButton(text="Download Songs", callback_data="download_songs")],
+            [
+                InlineKeyboardButton(text="▶️", callback_data="pause"),
+                InlineKeyboardButton(text="⏸", callback_data="resume"),
+                InlineKeyboardButton(text="⏭", callback_data="skip"),
+                InlineKeyboardButton(text="⏹", callback_data="stop")
+            ],
             [InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist")],
-            [InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
-             InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")]
+            [
+                InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
+                InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
+            ]
         ])
 
         await message.reply_photo(
@@ -801,7 +805,7 @@ async def start_playback_task(chat_id, message):
         api_playback_records.append(record)
         playback_mode[chat_id] = "api"
 
-        # External API branch inline keyboard with new layout:
+        # External API branch inline keyboard without "Download Songs":
         control_buttons = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(text="▶️", callback_data="pause"),
@@ -809,7 +813,6 @@ async def start_playback_task(chat_id, message):
                 InlineKeyboardButton(text="⏭", callback_data="skip"),
                 InlineKeyboardButton(text="⏹", callback_data="stop")
             ],
-            [InlineKeyboardButton(text="Download Songs", callback_data="download_songs")],
             [InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist")],
             [
                 InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
@@ -838,6 +841,7 @@ async def start_playback_task(chat_id, message):
         return  # Exit the external API branch.
 
     # --- Local Playback Branch (if external API branch is not used) ---
+       # --- Local Playback Branch (if external API branch is not used) ---
     playback_mode[chat_id] = "local"
     try:
         if chat_id in playback_tasks:
@@ -875,7 +879,7 @@ async def start_playback_task(chat_id, message):
 
             playback_tasks[chat_id] = asyncio.current_task()
 
-            # Local branch inline keyboard with new layout:
+            # Local branch inline keyboard without "Download Songs":
             control_buttons = InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton(text="▶️", callback_data="pause"),
@@ -883,7 +887,6 @@ async def start_playback_task(chat_id, message):
                     InlineKeyboardButton(text="⏭", callback_data="skip"),
                     InlineKeyboardButton(text="⏹", callback_data="stop")
                 ],
-                [InlineKeyboardButton(text="Download Songs", callback_data="download_songs")],
                 [InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist")],
                 [
                     InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
@@ -924,22 +927,20 @@ async def start_playback_task(chat_id, message):
         await start_playback_task(chat_id, message)
 
 
-
-
 @bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
     chat_id = callback_query.message.chat.id
     user_id = callback_query.from_user.id
 
-    # Skip admin check for suggestion, add_to_playlist, or play_playlist actions
-    if not (callback_query.data.startswith("suggestion|") or callback_query.data in ["add_to_playlist", "play_playlist"]):
+    # Skip admin check for suggestion, add_to_playlist, play_playlist, and play_trending actions
+    if not (callback_query.data.startswith("suggestion|") or callback_query.data in ["add_to_playlist", "play_playlist", "play_trending"]):
         if not await is_user_admin(callback_query):
             await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
             return
 
     data = callback_query.data
     mode = playback_mode.get(chat_id, "local")  # Default mode is local
-    user = callback_query.from_user  # Get the user once for later use
+    user = callback_query.from_user  # For later use
 
     if data == "pause":
         if mode == "local":
@@ -1136,13 +1137,12 @@ async def callback_query_handler(client, callback_query):
         if chat_id not in chat_containers:
             chat_containers[chat_id] = []
         count_added = 0
-        # Add every song from the user's playlist to the chat's queue (ignoring the queue limit).
         for song in user_playlist:
             song_data = {
                 "url": song.get("url"),
                 "title": song.get("song_title"),
                 "duration": song.get("duration"),
-                "duration_seconds": 0,  # Adjust if you have duration data to parse
+                "duration_seconds": 0,
                 "requester": user.first_name,
                 "thumbnail": song.get("thumbnail")
             }
@@ -1150,13 +1150,62 @@ async def callback_query_handler(client, callback_query):
             count_added += 1
 
         await callback_query.answer(f"✅ Added {count_added} songs from your playlist to the queue!")
-        # Start playback if nothing is playing.
         if len(chat_containers[chat_id]) > 0:
             await start_playback_task(chat_id, callback_query.message)
 
+    elif data == "play_trending":
+        # Call the trending songs API endpoint.
+        trending_query = "/search?title=trending"
+        try:
+            result = await fetch_youtube_link(trending_query)
+            if isinstance(result, dict) and "playlist" in result:
+                playlist_items = result["playlist"]
+                if not playlist_items:
+                    await callback_query.answer("❌ No trending songs found.", show_alert=True)
+                    return
+                if chat_id not in chat_containers:
+                    chat_containers[chat_id] = []
+                count_added = 0
+                for item in playlist_items:
+                    duration_seconds = isodate.parse_duration(item["duration"]).total_seconds()
+                    readable_duration = iso8601_to_human_readable(item["duration"])
+                    chat_containers[chat_id].append({
+                        "url": item["link"],
+                        "title": item["title"],
+                        "duration": readable_duration,
+                        "duration_seconds": duration_seconds,
+                        "requester": user.first_name,
+                        "thumbnail": item["thumbnail"]
+                    })
+                    count_added += 1
+                await callback_query.answer(f"✅ Added {count_added} trending songs to the queue!")
+                if len(chat_containers[chat_id]) > 0:
+                    await start_playback_task(chat_id, callback_query.message)
+            else:
+                video_url, video_title, video_duration, thumbnail_url = result
+                if not video_url:
+                    await callback_query.answer("❌ Could not fetch trending songs.", show_alert=True)
+                    return
+                duration_seconds = isodate.parse_duration(video_duration).total_seconds()
+                readable_duration = iso8601_to_human_readable(video_duration)
+                if chat_id not in chat_containers:
+                    chat_containers[chat_id] = []
+                chat_containers[chat_id].append({
+                    "url": video_url,
+                    "title": video_title,
+                    "duration": readable_duration,
+                    "duration_seconds": duration_seconds,
+                    "requester": user.first_name,
+                    "thumbnail": thumbnail_url
+                })
+                await callback_query.answer("✅ Added trending song to the queue!")
+                if len(chat_containers[chat_id]) == 1:
+                    await start_playback_task(chat_id, callback_query.message)
+        except Exception as e:
+            await callback_query.answer(f"❌ Error fetching trending songs: {str(e)}", show_alert=True)
+
     else:
         await callback_query.answer("Unknown action.", show_alert=True)
-
 
 
 
@@ -1187,20 +1236,21 @@ async def stream_end_handler(_: PyTgCalls, update: Update):
             # If there are more songs, start the next one.
             await start_playback_task(chat_id, None)
         else:
-            # Queue is empty; fetch suggestions if last played song is available.
+            # Queue is empty; try to leave the voice chat first.
+            await leave_voice_chat(chat_id)
+            # Then fetch suggestions if a last played song is available.
             last_song = last_played_song.get(chat_id)
             if last_song and last_song.get('url'):
-                # Send one status message and pass it to show_suggestions.
                 status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
                 await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
             else:
                 await bot.send_message(
                     chat_id,
-                    "❌ No more songs in the queue.\nLeaving the voice chat. 💕\n\nSupport: @frozensupport1"
+                    "❌ No more songs in the queue.\nSupport: @frozensupport1"
                 )
-                await leave_voice_chat(chat_id)
     else:
         # No songs in the queue.
+        await leave_voice_chat(chat_id)
         last_song = last_played_song.get(chat_id)
         if last_song and last_song.get('url'):
             status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
@@ -1208,9 +1258,8 @@ async def stream_end_handler(_: PyTgCalls, update: Update):
         else:
             await bot.send_message(
                 chat_id,
-                "❌ No more songs in the queue.\nLeaving the voice chat. 💕\n\nSupport: @frozensupport1"
+                "❌ No more songs in the queue.\nSupport: @frozensupport1"
             )
-            await leave_voice_chat(chat_id) 
 
 async def leave_voice_chat(chat_id):
     try:
@@ -1230,6 +1279,7 @@ async def leave_voice_chat(chat_id):
         playback_tasks[chat_id].cancel()
         del playback_tasks[chat_id]
 
+
 @bot.on_message(filters.command("playlist"))
 async def my_playlist_handler(_, message):
     user_id = message.from_user.id
@@ -1238,10 +1288,32 @@ async def my_playlist_handler(_, message):
     if not user_playlist:
         await message.reply("You don't have any songs in your playlist yet.")
         return
-    response = "🎶 **Your Playlist:**\n"
-    for idx, song in enumerate(user_playlist, start=1):
-        response += f"{idx}. {song.get('song_title')} - {song.get('duration')}\n"
-    await message.reply(response)
+
+    # Default to page 1
+    page = 1
+    per_page = 10
+    total = len(user_playlist)
+    start_index = (page - 1) * per_page
+    end_index = start_index + per_page
+    page_items = user_playlist[start_index:end_index]
+
+    buttons = []
+    for idx, song in enumerate(page_items, start=start_index+1):
+        song_id = str(song.get('_id'))
+        song_title = song.get('song_title', 'Unknown')
+        # Each button triggers the detail menu for that song.
+        buttons.append([InlineKeyboardButton(text=f"{idx}. {song_title}", callback_data=f"playlist_detail|{song_id}")])
+
+    # Add pagination buttons if needed.
+    nav_buttons = []
+    if page > 1:
+        nav_buttons.append(InlineKeyboardButton(text="⬅️ Prev", callback_data=f"playlist_page|{page-1}"))
+    if end_index < total:
+        nav_buttons.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"playlist_page|{page+1}"))
+    if nav_buttons:
+        buttons.append(nav_buttons)
+
+    await message.reply("🎶 **Your Playlist:**", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 
