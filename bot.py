@@ -330,6 +330,20 @@ async def stop_playback(chat_id):
     except Exception as e:
         await bot.send_message(chat_id, f"❌ API Stop Error: {str(e)}")
 
+async def invite_assistant(chat_id, invite_link, processing_message):
+    """
+    Internally invite the assistant to the chat by using the assistant client to join the chat.
+    If an error occurs, it returns False and displays the exact error.
+    """
+    try:
+        # Use the assistant client to join the chat via the invite link.
+        await assistant.join_chat(invite_link)
+        return True
+    except Exception as e:
+        error_message = f"❌ Error while inviting assistant: {str(e)}"
+        await processing_message.edit(error_message)
+        return False
+
 
 @bot.on_message(filters.command("start"))
 async def start_handler(_, message):
@@ -492,22 +506,24 @@ async def play_handler(_, message):
 
     if not query:
         # If no song name is provided, prompt the user with two buttons:
-        # one to play their playlist and one to play trending songs.
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("🎵 Play Your Playlist", callback_data="play_playlist"),
                 InlineKeyboardButton("🔥 Play Trending Songs", callback_data="play_trending")
             ]
         ])
-        await _.send_message(chat_id, "You did not specify a song. Would you like to play your playlist or trending songs instead?\n\n correct way to use cammand /play song name \n eg - /play shape of you ", reply_markup=keyboard)
+        await _.send_message(
+            chat_id,
+            "You did not specify a song. Would you like to play your playlist or trending songs instead?\n\n"
+            "Correct usage: /play <song name>\nExample: /play shape of you",
+            reply_markup=keyboard
+        )
         return
 
     await process_play_command(message, query)
 
-
 async def process_play_command(message, query):
     chat_id = message.chat.id
-
     processing_message = await message.reply("❄️")
     
     # --- Convert youtu.be links to full YouTube URLs ---
@@ -518,16 +534,19 @@ async def process_play_command(message, query):
             query = f"https://www.youtube.com/watch?v={video_id}"
     # --- End URL conversion ---
 
-    # 🔍 Check if the assistant is already in the chat
+    # 🔍 Check if the assistant is already in the chat.
     is_in_chat = await is_assistant_in_chat(chat_id)
     print(f"Assistant in chat: {is_in_chat}")  # Debugging
 
     if not is_in_chat:
         invite_link = await extract_invite_link(bot, chat_id)
         if invite_link:
-            await bot.send_message(ASSISTANT_CHAT_ID, f"/join {invite_link}")
+            # Internally invite the assistant without sending a public command.
+            joined = await invite_assistant(chat_id, invite_link, processing_message)
+            if not joined:
+                return  # If joining fails, exit.
             await processing_message.edit("⏳ Assistant is joining... Please wait.")
-            for _ in range(10):  # Retry for 10 seconds
+            for _ in range(10):  # Retry for 10 seconds.
                 await asyncio.sleep(3)
                 is_in_chat = await is_assistant_in_chat(chat_id)
                 print(f"Retry checking assistant in chat: {is_in_chat}")  # Debugging
@@ -536,12 +555,11 @@ async def process_play_command(message, query):
                     break
             else:
                 await processing_message.edit(
-                    "❌ Assistant failed to join. Please unban assistant \n"
-                    "assistant username - @Frozensupporter1\n"
-                    "assistant id - 7386215995 \n"
-                    "support - @frozensupport1"
+                    "❌ Assistant failed to join. Please unban the assistant.\n"
+                    "Assistant username: @Frozensupporter1\n"
+                    "Assistant ID: 7386215995\n"
+                    "Support: @frozensupport1"
                 )
-                # Update playback records for assistant join failure
                 record = {
                     "chat_id": chat_id,
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -553,9 +571,8 @@ async def process_play_command(message, query):
                 return
         else:
             await processing_message.edit(
-                "❌ Please give bot invite link permission\n\n support - @frozensupport1"
+                "❌ Please give bot invite link permission.\n\nSupport: @frozensupport1"
             )
-            # Update playback records if invite link is missing
             record = {
                 "chat_id": chat_id,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
