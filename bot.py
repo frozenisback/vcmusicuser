@@ -31,6 +31,7 @@ import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler 
 import threading
 import subprocess
+from pymongo import MongoClient
 
 load_dotenv()
 
@@ -51,6 +52,15 @@ API_ASSISTANT_USERNAME = "@Frozensupporter1"
 # API Endpoints
 API_URL = os.environ.get("API_URL")
 DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
+
+
+
+# Use an environment variable for the MongoDB URI
+mongo_uri = os.environ.get("MONGO_URI", "mongodb+srv://frozenbotss:frozenbots@cluster0.s0tak.mongodb.net/?retryWrites=true&w=majority")
+mongo_client = MongoClient(mongo_uri)
+db = mongo_client["music_bot"]
+playlist_collection = db["playlists"]
+
 
 # Containers for song queues per chat/group
 chat_containers = {}
@@ -677,8 +687,10 @@ async def fallback_local_playback(chat_id, message, song_info):
                     InlineKeyboardButton(text="⏹", callback_data="stop")
                 ],
                 [
+                    # New Add to Playlist button is here
+                    InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist"),
                     InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
-                    InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1"),
+                    InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
                 ]
             ]
         )
@@ -696,7 +708,7 @@ async def fallback_local_playback(chat_id, message, song_info):
         await message.delete()
     except Exception as fallback_error:
         print(f"Error during fallback local playback: {fallback_error}")
-        # Optionally notify the user or log further.
+
 
 async def start_playback_task(chat_id, message):
     print(f"Current local VC count: {len(playback_tasks)}; Current chat: {chat_id}")
@@ -787,7 +799,7 @@ async def start_playback_task(chat_id, message):
                 ],
                 [
                     InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
-                    InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1"),
+                    InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
                 ]
             ]
         )
@@ -859,8 +871,10 @@ async def start_playback_task(chat_id, message):
                         InlineKeyboardButton(text="⏹", callback_data="stop")
                     ],
                     [
+                        # Add the "Add to Playlist" button here
+                        InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist"),
                         InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
-                        InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1"),
+                        InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
                     ]
                 ]
             )
@@ -896,6 +910,29 @@ async def start_playback_task(chat_id, message):
         )
         chat_containers[chat_id].pop(0)
         await start_playback_task(chat_id, message)
+
+
+@bot.on_callback_query(filters.regex("add_to_playlist"))
+async def add_to_playlist_callback(client, callback_query):
+    chat_id = callback_query.message.chat.id
+    user_id = callback_query.from_user.id
+    if chat_id in chat_containers and chat_containers[chat_id]:
+        song_info = chat_containers[chat_id][0]
+        playlist_entry = {
+            "chat_id": chat_id,
+            "user_id": user_id,
+            "song_title": song_info.get("title"),
+            "url": song_info.get("url"),
+            "duration": song_info.get("duration"),
+            "thumbnail": song_info.get("thumbnail"),
+            "timestamp": time.time()
+        }
+        # Insert into MongoDB (ensure you've set up PyMongo and defined playlist_collection)
+        playlist_collection.insert_one(playlist_entry)
+        await callback_query.answer("✅ Added to your playlist!")
+    else:
+        await callback_query.answer("❌ No song currently playing.", show_alert=True)
+
 
 
 @bot.on_callback_query()
@@ -1145,6 +1182,20 @@ async def leave_voice_chat(chat_id):
     if chat_id in playback_tasks:
         playback_tasks[chat_id].cancel()
         del playback_tasks[chat_id]
+
+@bot.on_message(filters.command("playlist"))
+async def my_playlist_handler(_, message):
+    user_id = message.from_user.id
+    # Retrieve the user's playlist from MongoDB
+    user_playlist = list(playlist_collection.find({"user_id": user_id}))
+    if not user_playlist:
+        await message.reply("You don't have any songs in your playlist yet.")
+        return
+    response = "🎶 **Your Playlist:**\n"
+    for idx, song in enumerate(user_playlist, start=1):
+        response += f"{idx}. {song.get('song_title')} - {song.get('duration')}\n"
+    await message.reply(response)
+
 
 
 
