@@ -2069,33 +2069,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        if self.path == "/webhook":
-            content_length = int(self.headers.get("Content-Length", 0))
-            post_data = self.rfile.read(content_length)
-            try:
-                update_data = json.loads(post_data.decode("utf-8"))
-                update = Update.de_json(update_data, bot)
-            except Exception:
-                self.send_response(400)
-                self.end_headers()
-                self.wfile.write(b"Invalid JSON")
-                return
-
-            future = asyncio.run_coroutine_threadsafe(bot.process_new_updates([update]), MAIN_LOOP)
-            def handle_future(fut):
-                try:
-                    fut.result()
-                except Exception as e:
-                    print(f"Error processing update: {e}")
-                    asyncio.run(restart_bot())
-            
-            future.add_done_callback(handle_future)
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"OK")
-        else:
-            self.send_response(404)
-            self.end_headers()
+        # Removed /webhook handling. Now all POST requests return 404.
+        self.send_response(404)
+        self.end_headers()
 
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
@@ -2107,42 +2083,17 @@ server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
 if __name__ == "__main__":
-    from threading import Thread
-    import os
-    from flask import Flask
-    import asyncio
-
-    app = Flask(__name__)
-
-    @app.route("/")
-    def index():
-        return "Bot server is running."
-
-    def run_bot():
-        try:
-            import datetime
-
-            print("Starting Frozen Music Bot...")
-            call_py.start()
-            bot.run()
-            if not assistant.is_connected:
-                assistant.run()
-            print("Bot started successfully.")
-            idle()
-        except KeyboardInterrupt:
-            print("Bot is still running. Kill the process to stop.")
-        except Exception as e:
-            print(f"Critical Error: {e}")
-            asyncio.run(simple_restart())
-
-    # Run the bot in a separate thread
-    bot_thread = Thread(target=run_bot)
-    bot_thread.start()
-
-    # Run the Flask server on the main thread so Render can detect the open port
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
-
-
-
-
+    try:
+        print("Starting Frozen Music Bot...")
+        call_py.start()
+        bot.run()
+        # If the assistant is not connected, connect it
+        if not assistant.is_connected:
+            assistant.run()
+        print("Bot started successfully.")
+        idle()
+    except KeyboardInterrupt:
+        print("Bot is still running. Kill the process to stop.")
+    except Exception as e:
+        print(f"Critical Error: {e}")
+        asyncio.run(simple_restart())
