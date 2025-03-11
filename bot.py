@@ -48,6 +48,7 @@ bot = Client(session_name, bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH
 assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
 call_py = PyTgCalls(assistant)
 
+
 ASSISTANT_USERNAME = "@Frozensupporter1"
 ASSISTANT_CHAT_ID = 7386215995
 API_ASSISTANT_USERNAME = "@Frozensupporter1"
@@ -243,12 +244,16 @@ async def fetch_youtube_link(query):
             async with session.get(f"{API_URL}{query}") as response:
                 if response.status == 200:
                     data = await response.json()
-                    return (
-                        data.get("link"),
-                        data.get("title"),
-                        data.get("duration"),
-                        data.get("thumbnail")  # Add this line to return the thumbnail URL
-                    )
+                    # Check if the API response contains a playlist
+                    if "playlist" in data:
+                        return data
+                    else:
+                        return (
+                            data.get("link"),
+                            data.get("title"),
+                            data.get("duration"),
+                            data.get("thumbnail")
+                        )
                 else:
                     raise Exception(f"API returned status code {response.status}")
     except Exception as e:
@@ -390,62 +395,80 @@ async def start_handler(_, message):
         reply_markup=reply_markup
     )
 
-@bot.on_callback_query(filters.regex("show_help"))
+@bot.on_callback_query(filters.regex("^show_help$"))
 async def show_help_callback(_, callback_query):
-    # Main help menu with category options
-    help_text = "Choose a category to see available commands:"
+    help_text = "📜 Choose a category to explore commands:"  
     buttons = [
-        [InlineKeyboardButton("🎵 Music Commands", callback_data="music_commands")],
-        [InlineKeyboardButton("👥 Group Commands", callback_data="group_commands")],
+        [InlineKeyboardButton("🎵 Play", callback_data="help_play"),
+         InlineKeyboardButton("⏹ Stop", callback_data="help_stop"),
+         InlineKeyboardButton("⏸ Pause", callback_data="help_pause")],
+        [InlineKeyboardButton("▶ Resume", callback_data="help_resume"),
+         InlineKeyboardButton("⏭ Skip", callback_data="help_skip"),
+         InlineKeyboardButton("🔄 Reboot", callback_data="help_reboot")],
+        [InlineKeyboardButton("📶 Ping", callback_data="help_ping"),
+         InlineKeyboardButton("🎶 Playlist", callback_data="help_playlist"),
+         InlineKeyboardButton("🗑 Clear Queue", callback_data="help_clear")],
         [InlineKeyboardButton("🏠 Home", callback_data="go_back")]
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
     await callback_query.message.edit_text(help_text, reply_markup=reply_markup)
 
-@bot.on_callback_query(filters.regex("music_commands"))
-async def music_commands_callback(_, callback_query):
-    # Music-related commands help text
-    music_help_text = (
-        "Here are the music commands:\n\n"
-        "✨ /play <song name> - Play a song\n"
-        "✨ /stop - Stop the music\n"
-        "✨ /pause - Pause the music\n"
-        "✨ /resume - Resume the music\n"
-        "✨ /skip - Skip the current song\n"
-        "✨ /reboot - Reboot the bot\n"
-        "✨ /ping - Show bot status and uptime\n"
-        "✨ /clear - Clear the queue\n"
-    )
-    buttons = [
-        [InlineKeyboardButton("🔙 Back", callback_data="show_help")]
-    ]
-    reply_markup = InlineKeyboardMarkup(buttons)
-    await callback_query.message.edit_text(music_help_text, reply_markup=reply_markup)
+@bot.on_callback_query(filters.regex("^help_play$"))
+async def help_play_callback(_, callback_query):
+    text = "🎵 **Play Command**\n\n➜ Use /play <song name> to play music.\n\n💡 Example: /play shape of you"
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-@bot.on_callback_query(filters.regex("group_commands"))
-async def group_commands_callback(_, callback_query):
-    # Group-related commands help text (plain text, no Markdown)
-    group_help_text = (
-        "Welcome to the bot!\n\n"
-        "Here's what I can do for you in groups:\n"
-        "- /id: Get your Telegram ID (in DM) or the group ID (in a group).\n"
-        "- /kick, /ban, /unban, /mute, /unmute: Manage users in the group.\n"
-        "- /promote, /demote: Promote or demote users.\n"
-        "- /purge: Remove messages in bulk. Reply to a message to start purging from.\n"
-        "- /report: Report a message to group admins.\n"
-        "- /bcast: Broadcast a message to all registered chats.\n\n"
-        "Enjoy using the bot! For more info or support, visit: https://t.me/Frozensupport1"
-    )
-    buttons = [
-        [InlineKeyboardButton("🔙 Back", callback_data="show_help")]
-    ]
-    reply_markup = InlineKeyboardMarkup(buttons)
-    await callback_query.message.edit_text(group_help_text, reply_markup=reply_markup)
+@bot.on_callback_query(filters.regex("^help_stop$"))
+async def help_stop_callback(_, callback_query):
+    text = "⏹ **Stop Command**\n\n➜ Use /stop or /end to stop the music and clear the queue."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
+@bot.on_callback_query(filters.regex("^help_pause$"))
+async def help_pause_callback(_, callback_query):
+    text = "⏸ **Pause Command**\n\n➜ Use /pause to pause the current song."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-@bot.on_callback_query(filters.regex("go_back"))
+@bot.on_callback_query(filters.regex("^help_resume$"))
+async def help_resume_callback(_, callback_query):
+    text = "▶ **Resume Command**\n\n➜ Use /resume to continue playing the paused song."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+@bot.on_callback_query(filters.regex("^help_skip$"))
+async def help_skip_callback(_, callback_query):
+    text = "⏭ **Skip Command**\n\n➜ Use /skip to move to the next song in the queue."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+@bot.on_callback_query(filters.regex("^help_reboot$"))
+async def help_reboot_callback(_, callback_query):
+    text = "🔄 **Reboot Command**\n\n➜ Use /reboot to restart the bot if needed."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+@bot.on_callback_query(filters.regex("^help_ping$"))
+async def help_ping_callback(_, callback_query):
+    text = "📶 **Ping Command**\n\n➜ Use /ping to check bot's response time and uptime."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+@bot.on_callback_query(filters.regex("^help_playlist$"))
+async def help_playlist_callback(_, callback_query):
+    text = "🎶 **Playlist Command**\n\n➜ Use /playlist to view and manage your playlist."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+@bot.on_callback_query(filters.regex("^help_clear$"))
+async def help_clear_callback(_, callback_query):
+    text = "🗑 **Clear Queue Command**\n\n➜ Use /clear to remove all songs from the queue."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+@bot.on_callback_query(filters.regex("^go_back$"))
 async def go_back_callback(_, callback_query):
-    # Re-create the start screen (with image, caption, and buttons)
     current_time = time.time()
     uptime_seconds = int(current_time - bot_start_time)
     uptime_str = str(timedelta(seconds=uptime_seconds))
@@ -475,6 +498,7 @@ async def go_back_callback(_, callback_query):
         media=InputMediaPhoto(media="https://files.catbox.moe/kao3ip.jpeg", caption=caption),
         reply_markup=reply_markup
     )
+
 
 
 
@@ -597,6 +621,7 @@ async def process_play_command(message, query):
                 return
             if chat_id not in chat_containers:
                 chat_containers[chat_id] = []
+            # Add all songs from the playlist to the queue (ignoring the queue limit)
             for item in playlist_items:
                 duration_seconds = isodate.parse_duration(item["duration"]).total_seconds()
                 readable_duration = iso8601_to_human_readable(item["duration"])
@@ -608,23 +633,24 @@ async def process_play_command(message, query):
                     "requester": message.from_user.first_name if message.from_user else "Unknown",
                     "thumbnail": item["thumbnail"]
                 })
-            # If the queue was empty before adding the playlist, start playback immediately.
-            if len(chat_containers[chat_id]) == len(playlist_items):
+            total_songs = len(playlist_items)
+            first_song_title = playlist_items[0]["title"] if total_songs >= 1 else "N/A"
+            second_song_title = playlist_items[1]["title"] if total_songs >= 2 else ""
+            playlist_message = (
+                f"✨ Added playlist\n"
+                f"Total songs added to queue: {total_songs}\n"
+                f"#1 - {first_song_title}\n"
+            )
+            if second_song_title:
+                playlist_message += f"#2 - {second_song_title}"
+            await message.reply(playlist_message)
+            # Start playback immediately if the queue was empty before this addition.
+            if len(chat_containers[chat_id]) == total_songs:
                 await start_playback_task(chat_id, processing_message)
             else:
-                queue_buttons = InlineKeyboardMarkup(
-                    [
-                        [
-                            InlineKeyboardButton(text="⏭ Skip", callback_data="skip"),
-                            InlineKeyboardButton(text="🗑 Clear", callback_data="clear")
-                        ]
-                    ]
-                )
-                await message.reply(
-                    f"✨ Playlist added to queue. Total {len(chat_containers[chat_id])} songs.",
-                    reply_markup=queue_buttons
-                )
                 await processing_message.delete()
+            return
+
         else:
             # Else, assume a single video response.
             video_url, video_title, video_duration, thumbnail_url = result
@@ -672,16 +698,17 @@ async def process_play_command(message, query):
                     ]
                 )
                 await message.reply(
-                    f"✨ Added to queue:\n\n"
-                    f"✨**Title:** {video_title}\n"
-                    f"✨**Duration:** {readable_duration}\n"
-                    f"✨**Requested by:** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
-                    f"✨**Queue number:** {len(chat_containers[chat_id]) - 1}\n",
+                    f" 🇦 🇩 🇩 🇪 🇩  🇹 🇴  🇶 🇺 🇪 🇺 🇪 :\n\n"
+                    f"**❍ ᴛɪᴛʟє ➥** {video_title}\n"
+                    f"**❍ ᴛɪϻє ➥** {readable_duration}\n"
+                    f"**❍ ʙʏ ➥ ** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
+                    f"**Queue number:** {len(chat_containers[chat_id]) - 1}\n",
                     reply_markup=queue_buttons
                 )
                 await processing_message.delete()
     except Exception as e:
         await processing_message.edit(f"❌ Error: {str(e)}")
+
 
 
 async def fallback_local_playback(chat_id, message, song_info):
@@ -734,10 +761,10 @@ async def fallback_local_playback(chat_id, message, song_info):
         await message.reply_photo(
             photo=song_info['thumbnail'],
             caption=(
-                f"✨ **NOW PLAYING (Local Playback)**\n\n"
-                f"✨**Title:** {song_info['title']}\n\n"
-                f"✨**Duration:** {song_info['duration']}\n\n"
-                f"✨**Requested by:** {song_info['requester']}"
+                f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ ση sᴛʀєᴧϻɪηɢ ⏤͟͞● (Local Playback)**\n\n"
+                f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
+                f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
+                f"**❍ ʙʏ ➥ ** {song_info['requester']}"
             ),
             reply_markup=control_buttons
         )
@@ -846,10 +873,10 @@ async def start_playback_task(chat_id, message):
         )
         caption = (
             f"{external_notice}\n\n"
-            f"✨ **NOW PLAYING**\n\n"
-            f"✨**Title:** {song_info['title']}\n\n"
-            f"✨**Duration:** {song_info['duration']}\n\n"
-            f"✨**Requested by:** {song_info['requester']}"
+            f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ ση sᴛʀєᴧϻɪηɢ ⏤͟͞●**\n\n"
+            f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
+            f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
+            f"**❍ ʙʏ ➥ ** {song_info['requester']}"
         )
 
         await bot.send_photo(
@@ -917,10 +944,10 @@ async def start_playback_task(chat_id, message):
             await message.reply_photo(
                 photo=song_info['thumbnail'],
                 caption=(
-                    f"✨ **NOW PLAYING**\n\n"
-                    f"✨**Title:** {song_info['title']}\n\n"
-                    f"✨**Duration:** {song_info['duration']}\n\n"
-                    f"✨**Requested by:** {song_info['requester']}"
+                    f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ ση sᴛʀєᴧϻɪηɢ ⏤͟͞●**\n\n"
+                    f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
+                    f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
+                    f"**❍ ʙʏ ➥ ** {song_info['requester']}"
                 ),
                 reply_markup=control_buttons
             )
@@ -1509,79 +1536,6 @@ async def download_audio(url):
         raise Exception(f"Error downloading audio: {e}")
 
 
-@bot.on_message(filters.command("clone"))
-async def clone_handler(client, message):
-    """
-    Clones a bot using the provided token.
-    Usage: /clone <bot_token>
-    """
-    args = message.text.split(maxsplit=1)
-    if len(args) < 2:
-        await message.reply("Usage: /clone <bot_token>")
-        return
-
-    new_bot_token = args[1].strip()
-
-    # Validate the bot token format
-    token_pattern = r'^\d+:[A-Za-z0-9_-]+$'
-    if not re.match(token_pattern, new_bot_token):
-        await message.reply("Invalid bot token format. Please provide a valid bot token.")
-        return
-
-    # Inform the user and wait 10 seconds
-    await message.reply("⏳ Please wait, cloning your own music bot...")
-    await asyncio.sleep(10)
-
-    try:
-        # Create a unique session name for the clone bot to avoid conflicts
-        clone_session_name = f"clone_{int(time.time())}"
-        
-        # Prepare a new environment for the clone bot
-        new_env = os.environ.copy()
-        new_env["BOT_TOKEN"] = new_bot_token
-        new_env["SESSION_NAME"] = clone_session_name  # if used in your Client initialization
-
-        # Launch a new process running the same script (this assumes the script handles the new bot)
-        subprocess.Popen([sys.executable, sys.argv[0]], env=new_env)
-        
-        # Store the bot token and details in MongoDB
-        bot_data = {
-            "user_id": message.from_user.id,
-            "bot_token": new_bot_token,
-            "clone_session_name": clone_session_name,
-            "timestamp": int(time.time())
-        }
-        bots_collection.insert_one(bot_data)
-        
-        await message.reply("✅ Clone bot deployed successfully!")
-    except Exception as e:
-        await message.reply(f"Error deploying clone bot: {e}")
-
-@bot.on_message(filters.command("bots"))
-async def bots_handler(client, message):
-    """
-    Returns a list of all cloned bots along with who cloned them.
-    Only the authorized user (OWNER_ID) can access this command.
-    """
-    if message.from_user.id != OWNER_ID:
-        await message.reply("Access Denied!")
-        return
-
-    # Retrieve all cloned bots from MongoDB
-    bots = bots_collection.find()
-    response_text = "<b>Cloned Bots List:</b>\n\n"
-    for bot_entry in bots:
-        response_text += f"👤 User ID: {bot_entry['user_id']}\n"
-        response_text += f"🤖 Bot Token: <code>{bot_entry['bot_token']}</code>\n"
-        response_text += f"🔖 Session Name: {bot_entry['clone_session_name']}\n"
-        response_text += "----------------------\n"
-
-    await message.reply(response_text, parse_mode="HTML")
-
-bot.run()
-
-    
-
 @bot.on_message(filters.group & filters.command(["stop", "end"]))
 async def stop_handler(client, message):
     chat_id = message.chat.id
@@ -2057,6 +2011,7 @@ async def keep_alive_loop():
     while True:
         print("[KEEP ALIVE] Bot is running...")
         await asyncio.sleep(300)
+
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
