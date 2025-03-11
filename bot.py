@@ -1714,6 +1714,46 @@ async def skip_handler(client, message):
             print(f"Error editing message: {e}")
         await skip_to_next_song(chat_id, status_message)
 
+@bot.on_message(filters.regex(r"muted Frozen assistant"))
+async def handle_assistant_muted(_, message: Message):
+    chat_id = message.chat.id
+    try:
+        # Wait for 5 seconds before proceeding
+        await asyncio.sleep(5)
+
+        # Cancel any running playback task
+        try:
+            if chat_id in playback_tasks:
+                playback_tasks[chat_id].cancel()
+                del playback_tasks[chat_id]
+        except Exception as task_error:
+            print(f"Error cancelling playback task: {task_error}")
+
+        # Clear the song queue and remove any associated files
+        try:
+            if chat_id in chat_containers:
+                for song in chat_containers[chat_id]:
+                    try:
+                        os.remove(song.get('file_path', ''))
+                    except Exception as file_error:
+                        print(f"Error deleting file: {file_error}")
+                chat_containers.pop(chat_id)
+        except Exception as queue_error:
+            print(f"Error clearing chat containers: {queue_error}")
+
+        # End the voice chat session
+        try:
+            await leave_voice_chat(chat_id)
+        except Exception as leave_error:
+            print(f"Error leaving voice chat: {leave_error}")
+
+        # Send a message to notify the chat
+        await message.reply("The assistant was muted. Ending the song and clearing playback.")
+    except Exception as e:
+        print(f"Error in handle_assistant_muted: {e}")
+        await message.reply("Error handling assistant mute event.")
+
+
 
 
 @bot.on_message(filters.command("reboot"))
