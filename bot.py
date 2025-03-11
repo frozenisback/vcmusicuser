@@ -1714,7 +1714,7 @@ async def skip_handler(client, message):
             print(f"Error editing message: {e}")
         await skip_to_next_song(chat_id, status_message)
 
-@bot.on_message(filters.regex(r"muted Frozen assistant"))
+@bot.on_message(filters.regex(r"muted xeno Support"))
 async def handle_assistant_muted(_, message: Message):
     chat_id = message.chat.id
     try:
