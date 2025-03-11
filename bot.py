@@ -342,16 +342,20 @@ async def stop_playback(chat_id):
 async def invite_assistant(chat_id, invite_link, processing_message):
     """
     Internally invite the assistant to the chat by using the assistant client to join the chat.
-    If an error occurs, it returns False and displays the exact error.
+    If the assistant is already in the chat, this is not considered an error.
     """
     try:
         # Use the assistant client to join the chat via the invite link.
         await assistant.join_chat(invite_link)
         return True
     except Exception as e:
+        # If the error indicates the assistant is already a participant, consider it a success.
+        if "USER_ALREADY_PARTICIPANT" in str(e):
+            return True
         error_message = f"❌ Error while inviting assistant: {str(e)}"
         await processing_message.edit(error_message)
         return False
+
 
 
 @bot.on_message(filters.command("start"))
