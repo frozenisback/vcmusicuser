@@ -1533,7 +1533,7 @@ async def download_audio(url):
                             if not chunk:
                                 break
                             await f.write(chunk)
-                            await asyncio.sleep(0.02)  # Slightly longer sleep
+                            await asyncio.sleep(0.01)  # Slightly longer sleep
                     download_cache[url] = file_name
                     return file_name
                 else:
