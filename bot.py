@@ -1509,12 +1509,16 @@ async def my_playlist_handler(_, message):
 
 download_cache = {}  # Global cache dictionary
 
+
 async def download_audio(url):
     if url in download_cache:
         return download_cache[url]  # Return cached file path if available
 
     try:
-        # Create a temporary file and close it immediately
+        # Lower the priority of the process
+        proc = psutil.Process(os.getpid())
+        proc.nice(psutil.IDLE_PRIORITY_CLASS if os.name == "nt" else 19)  # Windows/Linux
+
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
         file_name = temp_file.name
         temp_file.close()
@@ -1523,17 +1527,14 @@ async def download_audio(url):
         async with aiohttp.ClientSession() as session:
             async with session.get(download_url, timeout=35) as response:
                 if response.status == 200:
-                    # Use aiofiles for non-blocking file writing
                     async with aiofiles.open(file_name, 'wb') as f:
-                        # Read in 64KB chunks
                         while True:
-                            chunk = await response.content.read(65536)
+                            chunk = await response.content.read(32768)  # Reduce chunk size
                             if not chunk:
                                 break
                             await f.write(chunk)
-                            # Insert a tiny delay to yield control back to the event loop
-                            await asyncio.sleep(0.005)
-                    download_cache[url] = file_name  # Cache the file path
+                            await asyncio.sleep(0.01)  # Slightly longer sleep
+                    download_cache[url] = file_name
                     return file_name
                 else:
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
@@ -1541,6 +1542,7 @@ async def download_audio(url):
         raise Exception("❌ Download API took too long to respond. Please try again.")
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
+
 
 
 @bot.on_message(filters.group & filters.command(["stop", "end"]))
