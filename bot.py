@@ -33,6 +33,7 @@ import threading
 import subprocess
 from pymongo import MongoClient
 from bson import ObjectId
+import aiofiles
 
 load_dotenv()
 
@@ -1509,23 +1510,29 @@ async def my_playlist_handler(_, message):
 download_cache = {}  # Global cache dictionary
 
 async def download_audio(url):
-    """Downloads the audio from a given URL and returns the file path.
-    Uses caching to avoid re-downloading the same file.
-    """
     if url in download_cache:
         return download_cache[url]  # Return cached file path if available
 
     try:
+        # Create a temporary file and close it immediately
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
         file_name = temp_file.name
+        temp_file.close()
         download_url = f"{DOWNLOAD_API_URL}{url}"
 
         async with aiohttp.ClientSession() as session:
-            async with session.get(download_url, timeout=35) as response:  # Increased timeout to 35 seconds
+            async with session.get(download_url, timeout=35) as response:
                 if response.status == 200:
-                    with open(file_name, 'wb') as f:
-                        f.write(await response.read())
-
+                    # Use aiofiles for non-blocking file writing
+                    async with aiofiles.open(file_name, 'wb') as f:
+                        # Read in 64KB chunks
+                        while True:
+                            chunk = await response.content.read(65536)
+                            if not chunk:
+                                break
+                            await f.write(chunk)
+                            # Insert a tiny delay to yield control back to the event loop
+                            await asyncio.sleep(0.005)
                     download_cache[url] = file_name  # Cache the file path
                     return file_name
                 else:
