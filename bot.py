@@ -2105,10 +2105,15 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 def run_http_server():
+    # Create a new event loop for this thread and set it as current.
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     port = int(os.environ.get("PORT", 8080))
     httpd = HTTPServer(("", port), WebhookHandler)
     print(f"HTTP server running on port {port}")
     httpd.serve_forever()
+
 
 # Start the HTTP server in a separate daemon thread.
 server_thread = threading.Thread(target=run_http_server, daemon=True)
