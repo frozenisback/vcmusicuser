@@ -2038,6 +2038,16 @@ async def simple_restart():
 
 
 
+import asyncio
+import os
+import sys
+import json
+import threading
+import requests
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# Assume that bot, call_py, assistant, idle, and simple_restart are defined/imported elsewhere.
+
 async def restart_bot_logic():
     try:
         try:
@@ -2105,15 +2115,10 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 def run_http_server():
-    # Create a new event loop for this thread and set it as current.
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
     port = int(os.environ.get("PORT", 8080))
     httpd = HTTPServer(("", port), WebhookHandler)
     print(f"HTTP server running on port {port}")
     httpd.serve_forever()
-
 
 # Start the HTTP server in a separate daemon thread.
 server_thread = threading.Thread(target=run_http_server, daemon=True)
@@ -2137,3 +2142,4 @@ if __name__ == "__main__":
         print(f"Critical Error: {e}")
         # If bot.run() (or its initialization) fails, perform a full restart.
         asyncio.run(simple_restart())
+
