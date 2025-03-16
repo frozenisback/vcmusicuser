@@ -2057,8 +2057,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 self.send_response(400)
                 self.end_headers()
                 return
-            # Process the update with Pyrogram
-            bot.process_update(update)
+            # Use the internal method _process_update to process the update
+            bot._process_update(update)
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")
@@ -2089,16 +2089,15 @@ if __name__ == "__main__":
 
         print("Starting Frozen Music Bot with webhook mode...")
 
-        # Start call_py, bot, and assistant without entering long polling.
+        # Start the necessary clients (without long polling)
         call_py.start()
         bot.start()
         if not assistant.is_connected:
             assistant.start()
         print("Bot started successfully.")
 
-        # Optionally, run a keep-alive loop for logging purposes.
+        # Optionally run a keep-alive loop
         asyncio.get_event_loop().create_task(keep_alive_loop())
-        # Keep the event loop running indefinitely.
         asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
