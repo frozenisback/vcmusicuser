@@ -1398,8 +1398,8 @@ async def callback_query_handler(client, callback_query):
 
 
 
-@call_py.on_update(fl.stream_end)
-async def stream_end_handler(_: PyTgCalls, update: Update):
+@call_py.on_update(fl.stream_end())
+async def stream_end_handler(_: PyTgCalls, update: StreamEnded):
     chat_id = update.chat_id
 
     # Update playback records for a natural end event
@@ -1430,7 +1430,9 @@ async def stream_end_handler(_: PyTgCalls, update: Update):
             # Then fetch suggestions if a last played song is available.
             last_song = last_played_song.get(chat_id)
             if last_song and last_song.get('url'):
-                status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
+                status_msg = await bot.send_message(
+                    chat_id, "😔 No more songs in the queue. Fetching song suggestions..."
+                )
                 await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
             else:
                 await bot.send_message(
@@ -1442,13 +1444,16 @@ async def stream_end_handler(_: PyTgCalls, update: Update):
         await leave_voice_chat(chat_id)
         last_song = last_played_song.get(chat_id)
         if last_song and last_song.get('url'):
-            status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
+            status_msg = await bot.send_message(
+                chat_id, "😔 No more songs in the queue. Fetching song suggestions..."
+            )
             await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
         else:
             await bot.send_message(
                 chat_id,
                 "❌ No more songs in the queue.\nSupport: @frozensupport1"
             )
+
 
 async def leave_voice_chat(chat_id):
     try:
