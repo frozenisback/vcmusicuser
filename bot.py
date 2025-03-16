@@ -1981,6 +1981,63 @@ async def frozen_check_command(_, message):
 
 
 
+@bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
+async def owner_simple_restart_handler(_, message):
+    await message.reply("♻️ [WATCHDOG] restart initiated as per owner command...")
+    await simple_restart()
+
+
+
+MAIN_LOOP = None
+ASSISTANT_CHAT_ID = 7386215995
+BOT_CHAT_ID = 7598576464
+BOT_USERNAME = "@vcmusiclubot"
+
+
+# Check for Render API endpoint (set this in environment variables if needed)
+RENDER_DEPLOY_URL = os.getenv("RENDER_DEPLOY_URL", "https://api.render.com/deploy/srv-cuqb40bv2p9s739h68i0?key=oegMCHfLr9I")
+
+async def simple_restart():
+    support_chat_id = -1001810811394
+    log_message = "[WATCHDOG] Checking if restart is needed..."
+    print(log_message)
+    await bot.send_message(support_chat_id, log_message)
+
+    if RENDER_DEPLOY_URL:
+        # If Render API is available, trigger a restart via API
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(RENDER_DEPLOY_URL) as response:
+                    if response.status == 200:
+                        await bot.send_message(support_chat_id, "✅ Restart triggered via Frozen_Api")
+                        return  # Exit without restarting locally
+                    else:
+                        await bot.send_message(support_chat_id, f"❌ Render restart failed: {response.status} {await response.text()}")
+        except Exception as e:
+            await bot.send_message(support_chat_id, f"⚠ Render API restart failed: {e}. Trying local restart...")
+
+    # If Render API failed or not set, do a local restart
+    try:
+        await bot.stop()
+        await asyncio.sleep(3)
+        python_executable = sys.executable
+        script_path = os.path.abspath(sys.argv[0])
+
+        subprocess.Popen([python_executable, script_path], close_fds=True)
+        os._exit(0)
+    except Exception as e:
+        error_message = f"❌ Local restart failed: {e}"
+        print(error_message)
+        await bot.send_message(support_chat_id, error_message)
+
+
+
+async def keep_alive_loop():
+    while True:
+        print("[KEEP ALIVE] Bot is running...")
+        await asyncio.sleep(300)
+
+
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -2020,5 +2077,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(simple_restart())
-
-
