@@ -19,7 +19,8 @@ from pyrogram.enums import ChatType, ChatMemberStatus
 from typing import Union
 from pytgcalls.types import Update
 from pytgcalls import filters as fl
-from pytgcalls.types import GroupCallParticipant
+from pytgcalls.types import ChatUpdate, Update, UpdatedGroupCallParticipant
+from pytgcalls.types.stream import StreamEnded
 import requests
 import urllib.parse
 from flask import Flask
