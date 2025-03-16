@@ -2049,16 +2049,19 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/webhook":
-            content_length = int(self.headers.get("Content-Length", 0))
-            post_data = self.rfile.read(content_length)
             try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                post_data = self.rfile.read(content_length)
                 update = json.loads(post_data.decode("utf-8"))
+                try:
+                    bot._process_update(update)
+                except Exception as e:
+                    print("Error processing update:", e)
             except Exception as e:
+                print("Error reading update:", e)
                 self.send_response(400)
                 self.end_headers()
                 return
-            # Use the internal method _process_update to process the update
-            bot._process_update(update)
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"OK")
@@ -2089,14 +2092,14 @@ if __name__ == "__main__":
 
         print("Starting Frozen Music Bot with webhook mode...")
 
-        # Start the necessary clients (without long polling)
+        # Start required clients without long polling.
         call_py.start()
         bot.start()
         if not assistant.is_connected:
             assistant.start()
         print("Bot started successfully.")
 
-        # Optionally run a keep-alive loop
+        # Optionally, run a keep-alive loop.
         asyncio.get_event_loop().create_task(keep_alive_loop())
         asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
