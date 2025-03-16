@@ -2036,18 +2036,21 @@ if not hasattr(bot, "process_update"):
     if hasattr(bot, "_handle_update"):
         async def process_update(update):
             await bot._handle_update(update)
-        # Schedule processing as a background asyncio task.
+        bot.process_update = lambda update: asyncio.create_task(process_update(update))
+    elif hasattr(bot, "_dispatch_update"):
+        async def process_update(update):
+            await bot._dispatch_update(update)
         bot.process_update = lambda update: asyncio.create_task(process_update(update))
     else:
         raise Exception("No suitable internal update handler found in bot")
 
-# A simple keep-alive loop (optional)
+# Optional: A simple keep-alive loop
 async def keep_alive_loop():
     while True:
         print("[KEEP ALIVE] Bot is running...")
         await asyncio.sleep(300)
 
-# Webhook HTTP handler
+# Define the HTTP webhook handler.
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -2080,7 +2083,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-# Function to run the HTTP server in a separate thread.
+# Run the HTTP server on the designated port.
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
     httpd = HTTPServer(("", port), WebhookHandler)
@@ -2093,7 +2096,7 @@ server_thread.start()
 
 if __name__ == "__main__":
     try:
-        # Register the webhook with Telegram.
+        # Set up the webhook with Telegram.
         BASE_URL = "https://vcmusicuser-kgp6.onrender.com"
         WEBHOOK_URL = f"{BASE_URL}/webhook"
         set_webhook_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
@@ -2101,9 +2104,9 @@ if __name__ == "__main__":
         res = requests.get(set_webhook_url, params=params)
         print("Set webhook response:", res.json())
 
-        print("Starting Frozen Music Bot with webhook mode...")
+        print("Starting Frozen Music Bot in webhook mode...")
 
-        # Start the necessary clients (no long polling here)
+        # Start necessary clients (without long polling)
         call_py.start()
         bot.start()
         if not assistant.is_connected:
