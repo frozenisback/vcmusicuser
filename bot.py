@@ -342,20 +342,16 @@ async def stop_playback(chat_id):
 async def invite_assistant(chat_id, invite_link, processing_message):
     """
     Internally invite the assistant to the chat by using the assistant client to join the chat.
-    If the assistant is already in the chat, this is not considered an error.
+    If an error occurs, it returns False and displays the exact error.
     """
     try:
         # Use the assistant client to join the chat via the invite link.
         await assistant.join_chat(invite_link)
         return True
     except Exception as e:
-        # If the error indicates the assistant is already a participant, consider it a success.
-        if "USER_ALREADY_PARTICIPANT" in str(e):
-            return True
         error_message = f"❌ Error while inviting assistant: {str(e)}"
         await processing_message.edit(error_message)
         return False
-
 
 
 @bot.on_message(filters.command("start"))
@@ -703,10 +699,10 @@ async def process_play_command(message, query):
                     ]
                 )
                 await message.reply(
-                    f" 🇦 🇩 🇩 🇪 🇩  🇹 🇴  🇶 🇺 🇪 🇺 🇪 :\n\n"
-                    f"**❍ ᴛɪᴛʟє ➥** {video_title}\n"
-                    f"**❍ ᴛɪϻє ➥** {readable_duration}\n"
-                    f"**❍ ʙʏ ➥ ** {message.from_user.first_name if message.from_user else 'Unknown'}\n"
+                    f" ✨ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ :\n\n"
+                    f"**❍ ᴛɪᴛʟє ➥** {video_title}\n\n"
+                    f"**❍ ᴛɪϻє ➥** {readable_duration}\n\n"
+                    f"**❍ ʙʏ ➥ ** {message.from_user.first_name if message.from_user else 'Unknown'}\n\n"
                     f"**Queue number:** {len(chat_containers[chat_id]) - 1}\n",
                     reply_markup=queue_buttons
                 )
@@ -1718,46 +1714,6 @@ async def skip_handler(client, message):
             print(f"Error editing message: {e}")
         await skip_to_next_song(chat_id, status_message)
 
-@bot.on_message(filters.regex(r"muted xeno Support"))
-async def handle_assistant_muted(_, message: Message):
-    chat_id = message.chat.id
-    try:
-        # Wait for 5 seconds before proceeding
-        await asyncio.sleep(5)
-
-        # Cancel any running playback task
-        try:
-            if chat_id in playback_tasks:
-                playback_tasks[chat_id].cancel()
-                del playback_tasks[chat_id]
-        except Exception as task_error:
-            print(f"Error cancelling playback task: {task_error}")
-
-        # Clear the song queue and remove any associated files
-        try:
-            if chat_id in chat_containers:
-                for song in chat_containers[chat_id]:
-                    try:
-                        os.remove(song.get('file_path', ''))
-                    except Exception as file_error:
-                        print(f"Error deleting file: {file_error}")
-                chat_containers.pop(chat_id)
-        except Exception as queue_error:
-            print(f"Error clearing chat containers: {queue_error}")
-
-        # End the voice chat session
-        try:
-            await leave_voice_chat(chat_id)
-        except Exception as leave_error:
-            print(f"Error leaving voice chat: {leave_error}")
-
-        # Send a message to notify the chat
-        await message.reply("The assistant was muted. Ending the song and clearing playback.")
-    except Exception as e:
-        print(f"Error in handle_assistant_muted: {e}")
-        await message.reply("Error handling assistant mute event.")
-
-
 
 
 @bot.on_message(filters.command("reboot"))
@@ -1926,18 +1882,34 @@ async def broadcast_handler(_, message):
 async def clear_queue_on_vc_end(_, message: Message):
     chat_id = message.chat.id
 
-    if chat_id in chat_containers:
-        # Clear queue files
-        for song in chat_containers[chat_id]:
-            try:
-                os.remove(song.get('file_path', ''))
-            except Exception as e:
-                print(f"Error deleting file: {e}")
+    try:
+        if chat_id in chat_containers:
+            # Clear queue files
+            for song in chat_containers[chat_id]:
+                try:
+                    os.remove(song.get('file_path', ''))
+                except Exception as e:
+                    print(f"Error deleting file: {e}")
 
-        chat_containers.pop(chat_id)  # Remove queue data
-        await message.reply("**😕ᴠɪᴅᴇᴏ ᴄʜᴀᴛ ᴇɴᴅᴇᴅ💔**\n ✨Queue has been cleared.")
-    else:
-        await message.reply("**😕ᴠɪᴅᴇᴏ ᴄʜᴀᴛ ᴇɴᴅᴇᴅ💔** \n ❌No active queue to clear.")
+            # Remove queue data
+            chat_containers.pop(chat_id)
+
+            # Clear playback state for local or API playback
+            playback_mode.pop(chat_id, None)
+            last_played_song.pop(chat_id, None)
+
+            # Cancel any running playback task
+            if chat_id in playback_tasks:
+                playback_tasks[chat_id].cancel()
+                del playback_tasks[chat_id]
+
+            await message.reply("**😕ᴠɪᴅᴇᴏ ᴄʜᴀᴛ ᴇɴᴅᴇᴅ💔**\n✨Queue and playback records have been cleared.")
+        else:
+            await message.reply("**😕ᴠɪᴅᴇᴏ ᴄʜᴀᴛ ᴇɴᴅᴇᴅ💔**\n❌No active queue to clear.")
+    except Exception as error:
+        print(f"Error in clear_queue_on_vc_end: {error}")
+        await message.reply("**😕ᴠɪᴅᴇᴏ ᴄʜᴀᴛ ᴇɴᴅᴇᴅ💔**\n❌Failed to clear queue and playback records properly.")
+
 
 @bot.on_message(filters.video_chat_started)
 async def brah(_, msg):
