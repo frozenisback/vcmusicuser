@@ -2038,11 +2038,20 @@ async def simple_restart():
 
 
 
-async def keep_alive_loop():
-    while True:
-        print("[KEEP ALIVE] Bot is running...")
-        await asyncio.sleep(300)
-
+async def restart_bot_logic():
+    try:
+        try:
+            # Attempt to stop the bot gracefully.
+            await bot.stop()
+        except Exception as e:
+            # If stopping fails, log the error but continue.
+            print("Warning: Failed to stop the bot gracefully, proceeding to restart:", e)
+        await asyncio.sleep(2)  # Wait a moment for resources to settle.
+        # Attempt to start the bot.
+        await bot.start()
+    except Exception as e:
+        # Propagate the error so that full restart logic is triggered.
+        raise e
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -2050,14 +2059,50 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"Bot is running!")
+        elif self.path == "/status":
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot status: Running")
+        elif self.path == "/restart":
+            try:
+                loop = asyncio.get_event_loop()
+                future = asyncio.run_coroutine_threadsafe(restart_bot_logic(), loop)
+                future.result(timeout=10)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"Bot restarted successfully!")
+            except Exception as e:
+                error_message = f"Bot restart failed: {str(e)}"
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(error_message.encode())
+                # After sending the error response, perform a full restart.
+                os.execl(sys.executable, sys.executable, *sys.argv)
         else:
             self.send_response(404)
             self.end_headers()
 
     def do_POST(self):
-        # Removed /webhook handling. Now all POST requests return 404.
-        self.send_response(404)
-        self.end_headers()
+        if self.path == "/webhook":
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                post_data = self.rfile.read(content_length)
+                update = json.loads(post_data.decode("utf-8"))
+                try:
+                    bot._process_update(update)
+                except Exception as e:
+                    print("Error processing update:", e)
+            except Exception as e:
+                print("Error reading update:", e)
+                self.send_response(400)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
 
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
@@ -2065,6 +2110,7 @@ def run_http_server():
     print(f"HTTP server running on port {port}")
     httpd.serve_forever()
 
+# Start the HTTP server in a separate daemon thread.
 server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
@@ -2072,14 +2118,17 @@ if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
         call_py.start()
+        # Using bot.run() here so that if it fails, we catch the exception below.
         bot.run()
-        # If the assistant is not connected, connect it
+        # If the assistant is not connected, connect it.
         if not assistant.is_connected:
             assistant.run()
         print("Bot started successfully.")
+        # Block indefinitely (for example, using idle() from your framework)
         idle()
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
         print(f"Critical Error: {e}")
+        # If bot.run() (or its initialization) fails, perform a full restart.
         asyncio.run(simple_restart())
