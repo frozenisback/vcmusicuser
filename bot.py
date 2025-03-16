@@ -2031,19 +2031,6 @@ async def simple_restart():
         await bot.send_message(support_chat_id, error_message)
 
 
-
-if not hasattr(bot, "process_update"):
-    if hasattr(bot, "_handle_update"):
-        async def process_update(update):
-            await bot._handle_update(update)
-        bot.process_update = lambda update: asyncio.create_task(process_update(update))
-    elif hasattr(bot, "_dispatch_update"):
-        async def process_update(update):
-            await bot._dispatch_update(update)
-        bot.process_update = lambda update: asyncio.create_task(process_update(update))
-    else:
-        raise Exception("No suitable internal update handler found in bot")
-
 async def keep_alive_loop():
     while True:
         print("[KEEP ALIVE] Bot is running...")
@@ -2119,4 +2106,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {e}")
         asyncio.run(simple_restart())
+
 
