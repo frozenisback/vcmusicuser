@@ -2037,7 +2037,6 @@ async def keep_alive_loop():
         print("[KEEP ALIVE] Bot is running...")
         await asyncio.sleep(300)
 
-
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -2049,9 +2048,23 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        # Removed /webhook handling. Now all POST requests return 404.
-        self.send_response(404)
-        self.end_headers()
+        if self.path == "/webhook":
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                update = json.loads(post_data.decode("utf-8"))
+            except Exception as e:
+                self.send_response(400)
+                self.end_headers()
+                return
+            # Process the update with Pyrogram
+            bot.process_update(update)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
 
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
@@ -2059,19 +2072,34 @@ def run_http_server():
     print(f"HTTP server running on port {port}")
     httpd.serve_forever()
 
+# Start the HTTP server in a separate daemon thread.
 server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
 if __name__ == "__main__":
     try:
-        print("Starting Frozen Music Bot...")
+        # Set up the webhook with Telegram.
+        BOT_TOKEN = os.environ.get("BOT_TOKEN")
+        BASE_URL = "https://vcmusicuser-kgp6.onrender.com"
+        WEBHOOK_URL = f"{BASE_URL}/webhook"
+        set_webhook_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
+        params = {"url": WEBHOOK_URL}
+        res = requests.get(set_webhook_url, params=params)
+        print("Set webhook response:", res.json())
+
+        print("Starting Frozen Music Bot with webhook mode...")
+
+        # Start call_py, bot, and assistant without entering long polling.
         call_py.start()
-        bot.run()
-        # If the assistant is not connected, connect it
+        bot.start()
         if not assistant.is_connected:
-            assistant.run()
+            assistant.start()
         print("Bot started successfully.")
-        idle()
+
+        # Optionally, run a keep-alive loop for logging purposes.
+        asyncio.get_event_loop().create_task(keep_alive_loop())
+        # Keep the event loop running indefinitely.
+        asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
