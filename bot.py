@@ -1981,123 +1981,20 @@ async def frozen_check_command(_, message):
 
 
 
-@bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
-async def owner_simple_restart_handler(_, message):
-    await message.reply("♻️ [WATCHDOG] restart initiated as per owner command...")
-    await simple_restart()
-
-
-
-MAIN_LOOP = None
-ASSISTANT_CHAT_ID = 7386215995
-BOT_CHAT_ID = 7598576464
-BOT_USERNAME = "@vcmusiclubot"
-
-
-# Check for Render API endpoint (set this in environment variables if needed)
-RENDER_DEPLOY_URL = os.getenv("RENDER_DEPLOY_URL", "https://api.render.com/deploy/srv-cuqb40bv2p9s739h68i0?key=oegMCHfLr9I")
-
-async def simple_restart():
-    support_chat_id = -1001810811394
-    log_message = "[WATCHDOG] Checking if restart is needed..."
-    print(log_message)
-    await bot.send_message(support_chat_id, log_message)
-
-    if RENDER_DEPLOY_URL:
-        # If Render API is available, trigger a restart via API
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(RENDER_DEPLOY_URL) as response:
-                    if response.status == 200:
-                        await bot.send_message(support_chat_id, "✅ Restart triggered via Frozen_Api")
-                        return  # Exit without restarting locally
-                    else:
-                        await bot.send_message(support_chat_id, f"❌ Render restart failed: {response.status} {await response.text()}")
-        except Exception as e:
-            await bot.send_message(support_chat_id, f"⚠ Render API restart failed: {e}. Trying local restart...")
-
-    # If Render API failed or not set, do a local restart
-    try:
-        await bot.stop()
-        await asyncio.sleep(3)
-        python_executable = sys.executable
-        script_path = os.path.abspath(sys.argv[0])
-
-        subprocess.Popen([python_executable, script_path], close_fds=True)
-        os._exit(0)
-    except Exception as e:
-        error_message = f"❌ Local restart failed: {e}"
-        print(error_message)
-        await bot.send_message(support_chat_id, error_message)
-
-
-async def restart_bot_logic():
-    try:
-        # Stop the bot gracefully (check Pyrogram docs; you might use stop() or disconnect() depending on your setup)
-        await bot.stop()
-        # Optional: stop other clients (like assistant) if needed.
-        await asyncio.sleep(2)  # Give it a moment to settle.
-        # Restart the bot
-        await bot.start()
-    except Exception as e:
-        raise e
-
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # Basic status endpoint: returns that the bot is running.
         if self.path == "/":
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"Bot is running!")
-        # New status endpoint for extra confirmation.
-        elif self.path == "/status":
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot status: Running")
-        # New restart endpoint (GET method, not POST) that triggers the restart logic.
-        elif self.path == "/restart":
-            try:
-                # Get the running asyncio event loop.
-                loop = asyncio.get_event_loop()
-                # Schedule the async restart logic on the event loop.
-                future = asyncio.run_coroutine_threadsafe(restart_bot_logic(), loop)
-                # Wait up to 10 seconds for the restart to complete.
-                future.result(timeout=10)
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"Bot restarted successfully!")
-            except Exception as e:
-                self.send_response(500)
-                self.end_headers()
-                self.wfile.write(b"Bot restart failed, performing full restart.")
-                # Fall back to a full process restart.
-                os.execl(sys.executable, sys.executable, *sys.argv)
         else:
             self.send_response(404)
             self.end_headers()
 
     def do_POST(self):
-        # Retain your webhook endpoint functionality.
-        if self.path == "/webhook":
-            try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                post_data = self.rfile.read(content_length)
-                update = json.loads(post_data.decode("utf-8"))
-                try:
-                    bot._process_update(update)
-                except Exception as e:
-                    print("Error processing update:", e)
-            except Exception as e:
-                print("Error reading update:", e)
-                self.send_response(400)
-                self.end_headers()
-                return
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"OK")
-        else:
-            self.send_response(404)
-            self.end_headers()
+        # Removed /webhook handling. Now all POST requests return 404.
+        self.send_response(404)
+        self.end_headers()
 
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
@@ -2105,32 +2002,19 @@ def run_http_server():
     print(f"HTTP server running on port {port}")
     httpd.serve_forever()
 
-# Start the HTTP server in a separate daemon thread.
 server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
 if __name__ == "__main__":
     try:
-        # Set up the webhook with Telegram.
-        BOT_TOKEN = os.environ.get("BOT_TOKEN")
-        BASE_URL = "https://vcmusicuser-kgp6.onrender.com"
-        WEBHOOK_URL = f"{BASE_URL}/webhook"
-        set_webhook_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
-        params = {"url": WEBHOOK_URL}
-        res = requests.get(set_webhook_url, params=params)
-        print("Set webhook response:", res.json())
-
-        print("Starting Frozen Music Bot with webhook mode...")
-
-        # Start required clients without long polling.
+        print("Starting Frozen Music Bot...")
         call_py.start()
-        bot.start()
+        bot.run()
+        # If the assistant is not connected, connect it
         if not assistant.is_connected:
-            assistant.start()
+            assistant.run()
         print("Bot started successfully.")
-
-        # Removed the keep-alive loop.
-        asyncio.get_event_loop().run_forever()
+        idle()
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
