@@ -2031,22 +2031,53 @@ async def simple_restart():
         await bot.send_message(support_chat_id, error_message)
 
 
-async def keep_alive_loop():
-    while True:
-        print("[KEEP ALIVE] Bot is running...")
-        await asyncio.sleep(300)
+async def restart_bot_logic():
+    try:
+        # Stop the bot gracefully (check Pyrogram docs; you might use stop() or disconnect() depending on your setup)
+        await bot.stop()
+        # Optional: stop other clients (like assistant) if needed.
+        await asyncio.sleep(2)  # Give it a moment to settle.
+        # Restart the bot
+        await bot.start()
+    except Exception as e:
+        raise e
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        # Basic status endpoint: returns that the bot is running.
         if self.path == "/":
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"Bot is running!")
+        # New status endpoint for extra confirmation.
+        elif self.path == "/status":
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot status: Running")
+        # New restart endpoint (GET method, not POST) that triggers the restart logic.
+        elif self.path == "/restart":
+            try:
+                # Get the running asyncio event loop.
+                loop = asyncio.get_event_loop()
+                # Schedule the async restart logic on the event loop.
+                future = asyncio.run_coroutine_threadsafe(restart_bot_logic(), loop)
+                # Wait up to 10 seconds for the restart to complete.
+                future.result(timeout=10)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"Bot restarted successfully!")
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(b"Bot restart failed, performing full restart.")
+                # Fall back to a full process restart.
+                os.execl(sys.executable, sys.executable, *sys.argv)
         else:
             self.send_response(404)
             self.end_headers()
 
     def do_POST(self):
+        # Retain your webhook endpoint functionality.
         if self.path == "/webhook":
             try:
                 content_length = int(self.headers.get("Content-Length", 0))
@@ -2098,8 +2129,7 @@ if __name__ == "__main__":
             assistant.start()
         print("Bot started successfully.")
 
-        # Optionally, run a keep-alive loop.
-        asyncio.get_event_loop().create_task(keep_alive_loop())
+        # Removed the keep-alive loop.
         asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
