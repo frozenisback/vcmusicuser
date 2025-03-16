@@ -2032,11 +2032,22 @@ async def simple_restart():
 
 
 
+if not hasattr(bot, "process_update"):
+    if hasattr(bot, "_handle_update"):
+        async def process_update(update):
+            await bot._handle_update(update)
+        # Schedule processing as a background asyncio task.
+        bot.process_update = lambda update: asyncio.create_task(process_update(update))
+    else:
+        raise Exception("No suitable internal update handler found in bot")
+
+# A simple keep-alive loop (optional)
 async def keep_alive_loop():
     while True:
         print("[KEEP ALIVE] Bot is running...")
         await asyncio.sleep(300)
 
+# Webhook HTTP handler
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -2054,7 +2065,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 post_data = self.rfile.read(content_length)
                 update = json.loads(post_data.decode("utf-8"))
                 try:
-                    bot._process_update(update)
+                    bot.process_update(update)
                 except Exception as e:
                     print("Error processing update:", e)
             except Exception as e:
@@ -2069,20 +2080,20 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+# Function to run the HTTP server in a separate thread.
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
     httpd = HTTPServer(("", port), WebhookHandler)
     print(f"HTTP server running on port {port}")
     httpd.serve_forever()
 
-# Start the HTTP server in a separate daemon thread.
+# Start the HTTP server in a daemon thread.
 server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
 if __name__ == "__main__":
     try:
-        # Set up the webhook with Telegram.
-        BOT_TOKEN = os.environ.get("BOT_TOKEN")
+        # Register the webhook with Telegram.
         BASE_URL = "https://vcmusicuser-kgp6.onrender.com"
         WEBHOOK_URL = f"{BASE_URL}/webhook"
         set_webhook_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
@@ -2092,18 +2103,17 @@ if __name__ == "__main__":
 
         print("Starting Frozen Music Bot with webhook mode...")
 
-        # Start required clients without long polling.
+        # Start the necessary clients (no long polling here)
         call_py.start()
         bot.start()
         if not assistant.is_connected:
             assistant.start()
         print("Bot started successfully.")
 
-        # Optionally, run a keep-alive loop.
+        # Optionally start a keep-alive loop.
         asyncio.get_event_loop().create_task(keep_alive_loop())
         asyncio.get_event_loop().run_forever()
     except KeyboardInterrupt:
         print("Bot is still running. Kill the process to stop.")
     except Exception as e:
         print(f"Critical Error: {e}")
-        asyncio.run(simple_restart())
