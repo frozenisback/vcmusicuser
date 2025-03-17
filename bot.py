@@ -875,7 +875,7 @@ async def start_playback_task(chat_id, message):
             f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
             f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
             f"**❍ ʙʏ ➥** {song_info['requester']}\n"
-            f"**❍ 🇸‌🇪‌🇷‌🇻‌🇪‌🇷 ➥** {display_server}"
+            f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
         )
 
         await bot.send_photo(
@@ -972,7 +972,7 @@ async def start_playback_task(chat_id, message):
                 f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
                 f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
                 f"**❍ ʙʏ ➥** {song_info['requester']}\n"
-                f"**❍ 🇸‌🇪‌🇷‌🇻‌🇪‌🇷 ➥** {display_server}"
+                f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
             )
 
             await bot.send_photo(
@@ -1032,7 +1032,7 @@ async def start_playback_task(chat_id, message):
                         f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
                         f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
                         f"**❍ ʙʏ ➥** {song_info['requester']}\n"
-                        f"**❍ 🇸‌🇪‌🇷‌🇻‌🇪‌🇷 ➥** {display_server}"
+                        f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
                     )
 
                     if message is not None:
@@ -1116,7 +1116,7 @@ async def start_playback_task(chat_id, message):
                     f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
                     f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
                     f"**❍ ʙʏ ➥** {song_info['requester']}\n"
-                    f"**❍ 🇸‌🇪‌🇷‌🇻‌🇪‌🇷 ➥** {display_server}"
+                    f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
                 )
 
                 if message is not None:
