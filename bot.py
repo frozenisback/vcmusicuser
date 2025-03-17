@@ -883,10 +883,10 @@ async def start_playback_task(chat_id, message):
 
     caption = (
         f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ ⏤͟͞●** (API Playback)\n\n"
-        f"**❍ Title ➥** {song_info['title']}\n\n"
-        f"**❍ Time ➥** {song_info['duration']}\n\n"
-        f"**❍ Requested by ➥** {song_info['requester']}\n"
-        f"**❍ Server ➥** {display_server}"
+        f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
+        f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
+        f"**❍ ʙʏ ➥** {song_info['requester']}\n"
+        f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
     )
 
     await bot.send_photo(
