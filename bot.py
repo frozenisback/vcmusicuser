@@ -76,7 +76,7 @@ bot_start_time = time.time()
 COOLDOWN = 10
 chat_last_command = {}
 chat_pending_commands = {}
-QUEUE_LIMIT = 5
+QUEUE_LIMIT = 20
 MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
 LOCAL_VC_LIMIT = 10
 api_playback_records = []
@@ -688,7 +688,7 @@ async def process_play_command(message, query):
             watermarked_thumbnail = thumbnail_url
 
             if chat_id in chat_containers and len(chat_containers[chat_id]) >= QUEUE_LIMIT:
-                await processing_message.edit("❌ The queue is full (limit 5). Please wait until some songs finish playing or clear the queue.")
+                await processing_message.edit("❌ The queue is full (limit 20). Please wait until some songs finish playing or clear the queue.")
                 return
 
             if chat_id not in chat_containers:
