@@ -89,10 +89,14 @@ api_server_counter = 0     # Used to select an API server in round-robin fashion
 api_servers = [
     "https://py-tgcalls-api1.onrender.com",
     "https://py-tgcalls-api-we3s.onrender.com",
-    "https://py-tgcalls-api-n8cq.onrender.com"
+    "https://py-tgcalls-api-n8cq.onrender.com",
+    "https://py-tgcalls-api-k7s7.onrender.com",
+    "https://py-tgcalls-api-k7s7.onrender.com",
+    "https://py-tgcalls-api-kjzu.onrender.com"
 ]
 chat_api_server = {}
 global_api_index = 0
+
 
 async def process_pending_command(chat_id, delay):
     await asyncio.sleep(delay)  # Wait for the cooldown period to expire
