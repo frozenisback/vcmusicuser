@@ -889,7 +889,7 @@ async def start_playback_task(chat_id, message):
         f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ ⏤͟͞●** (API Playback)\n\n"
         f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
         f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
-        f"**❍ ʙʏ ➥** {song_info['requester']}\n"
+        f"**❍ ʙʏ ➥** {song_info['requester']}\n\n"
         f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
     )
 
