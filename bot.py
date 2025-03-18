@@ -236,6 +236,14 @@ async def is_api_assistant_in_chat(chat_id):
     except Exception as e:
         print(f"Error checking API assistant in chat: {e}")
         return False
+    
+def iso8601_to_seconds(iso_duration):
+    try:
+        duration = isodate.parse_duration(iso_duration)
+        return int(duration.total_seconds())
+    except Exception as e:
+        print(f"Error parsing duration: {e}")
+        return 0
 
 
 def iso8601_to_human_readable(iso_duration):
@@ -726,42 +734,120 @@ async def process_play_command(message, query):
     except Exception as e:
         await processing_message.edit(f"❌ Error: {str(e)}")
 
+import isodate
+from datetime import timedelta
+
+def parse_duration_str(duration_str):
+    """
+    Convert a duration string to total seconds.
+    First, try ISO 8601 parsing (e.g. "PT3M9S"). If that fails,
+    fall back to colon-separated formats like "3:09" or "1:02:30".
+    """
+    try:
+        # Try ISO 8601
+        duration = isodate.parse_duration(duration_str)
+        return int(duration.total_seconds())
+    except Exception as e:
+        if ':' in duration_str:
+            try:
+                parts = [int(x) for x in duration_str.split(':')]
+                if len(parts) == 2:
+                    minutes, seconds = parts
+                    return minutes * 60 + seconds
+                elif len(parts) == 3:
+                    hours, minutes, seconds = parts
+                    return hours * 3600 + minutes * 60 + seconds
+            except Exception as e2:
+                print(f"Error parsing colon-separated duration '{duration_str}': {e2}")
+                return 0
+        else:
+            print(f"Error parsing duration '{duration_str}': {e}")
+            return 0
+
+def format_time(seconds):
+    seconds = int(seconds)
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    else:
+        return f"{m}:{s:02d}"
+
+def get_progress_bar_styled(elapsed, total, bar_length=6):
+    """
+    Build a progress bar string in the style:
+      elapsed_time  <dashes>◉<dashes>  total_time
+    For example: 0:30 —◉———— 3:09
+    """
+    if total <= 0:
+        return "Progress: N/A"
+    fraction = min(elapsed / total, 1)
+    marker_index = int(fraction * bar_length)
+    if marker_index >= bar_length:
+        marker_index = bar_length - 1
+    left = "—" * marker_index
+    right = "—" * (bar_length - marker_index - 1)
+    bar = left + "◉" + right
+    return f"{format_time(elapsed)} {bar} {format_time(total)}"
+
+async def update_progress_caption(chat_id, progress_message, start_time, total_duration, base_caption, base_keyboard):
+    while True:
+        elapsed = time.time() - start_time
+        if elapsed > total_duration:
+            elapsed = total_duration
+        progress_bar = get_progress_bar_styled(elapsed, total_duration)
+        new_caption = base_caption.format(progress_bar=progress_bar)
+        try:
+            await bot.edit_message_caption(chat_id, progress_message.id, caption=new_caption, reply_markup=base_keyboard)
+        except Exception as e:
+            # If the error is MESSAGE_NOT_MODIFIED, ignore it and continue
+            if "MESSAGE_NOT_MODIFIED" in str(e):
+                pass
+            else:
+                print(f"Error updating progress caption for chat {chat_id}: {e}")
+                break
+        if elapsed >= total_duration:
+            break
+        await asyncio.sleep(10)
 
 
+
+# ---------------------- Modified fallback_local_playback ---------------------- #
 async def fallback_local_playback(chat_id, message, song_info):
-    # Set playback mode to local
     playback_mode[chat_id] = "local"
     try:
         if chat_id in playback_tasks:
             playback_tasks[chat_id].cancel()
-
         video_url = song_info.get('url')
         if not video_url:
             print(f"Invalid video URL for song: {song_info}")
             chat_containers[chat_id].pop(0)
             return
-
-        # Inform the user about fallback to local playback
         try:
             await message.edit(f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ ⚡ {song_info['title']}...")
-        except Exception as edit_error:
+        except Exception:
             message = await bot.send_message(chat_id, f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ⚡ {song_info['title']}...")
-
-        # Proceed with downloading and playing locally
         media_path = await download_audio(video_url)
-
         await call_py.play(
             chat_id,
-            MediaStream(
-                media_path,
-                video_flags=MediaStream.Flags.IGNORE
-            )
+            MediaStream(media_path, video_flags=MediaStream.Flags.IGNORE)
         )
-
         playback_tasks[chat_id] = asyncio.current_task()
-
-        # Updated inline keyboard without the "Download Songs" button:
-        control_buttons = InlineKeyboardMarkup([
+        
+        total_duration = parse_duration_str(song_info.get('duration', '0:00'))
+        if total_duration <= 0:
+            print("Warning: duration is zero or invalid for this song.")
+        
+        base_caption = (
+            f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ (Local Playback)**\n\n"
+            f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
+            f"**❍ ᴛɪϻє ➥** {{progress_bar}}\n\n"
+            f"**❍ ʙʏ ➥** {song_info['requester']}"
+        )
+        initial_progress = get_progress_bar_styled(0, total_duration)
+        caption = base_caption.format(progress_bar=initial_progress)
+        
+        base_keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(text="▶️", callback_data="pause"),
                 InlineKeyboardButton(text="⏸", callback_data="resume"),
@@ -774,26 +860,21 @@ async def fallback_local_playback(chat_id, message, song_info):
                 InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
             ]
         ])
-
-        await message.reply_photo(
+        
+        progress_message = await message.reply_photo(
             photo=song_info['thumbnail'],
-            caption=(
-                f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ ση sᴛʀєᴧϻɪηɢ ⏤͟͞● (Local Playback)**\n\n"
-                f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
-                f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
-                f"**❍ ʙʏ ➥ ** {song_info['requester']}"
-            ),
-            reply_markup=control_buttons
+            caption=caption,
+            reply_markup=base_keyboard
         )
         await message.delete()
-    except Exception as fallback_error:
-        print(f"Error during fallback local playback: {fallback_error}")
+        asyncio.create_task(update_progress_caption(chat_id, progress_message, time.time(), total_duration, base_caption, base_keyboard))
+    except Exception as e:
+        print(f"Error during fallback local playback: {e}")
+
 
 async def start_playback_task(chat_id, message):
     global global_api_index, global_playback_count
     print(f"Current playback tasks: {len(playback_tasks)}; Chat ID: {chat_id}")
-
-    # Send a uniform status message.
     status_text = "**✨ Processing... Please wait, may take up to 20 seconds. 💕**"
     if message:
         try:
@@ -803,13 +884,12 @@ async def start_playback_task(chat_id, message):
     else:
         await bot.send_message(chat_id, status_text)
 
-    # ------------------------------------------
     # Get or assign an API server for this chat.
     if chat_id in chat_api_server:
         selected_api, server_id, display_server = chat_api_server[chat_id]
     else:
         selected_api = api_servers[global_api_index % len(api_servers)]
-        server_id = (global_api_index % len(api_servers)) + 1  # For display purposes
+        server_id = (global_api_index % len(api_servers)) + 1
         display_server = server_id
         chat_api_server[chat_id] = (selected_api, server_id, display_server)
         global_api_index += 1
@@ -836,17 +916,17 @@ async def start_playback_task(chat_id, message):
                 await bot.send_message(chat_id, "❌ API Assistant failed to join. Please check the API endpoint.")
                 return
 
-    # Retrieve song info.
     if chat_id not in chat_containers or not chat_containers[chat_id]:
         await bot.send_message(chat_id, "❌ No songs in the queue.")
         return
+
+    # Get the song info.
     song_info = chat_containers[chat_id][0]
-    last_played_song[chat_id] = song_info  # Save for suggestions later
+    last_played_song[chat_id] = song_info
     video_title = song_info.get('title', 'Unknown')
     encoded_title = urllib.parse.quote(video_title)
     api_url = f"{selected_api}/play?chatid={chat_id}&title={encoded_title}"
 
-    # Attempt API playback.
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(api_url, timeout=30) as resp:
@@ -859,7 +939,6 @@ async def start_playback_task(chat_id, message):
         await fallback_local_playback(chat_id, message, song_info)
         return
 
-    # Record the successful API playback.
     record = {
         "chat_id": chat_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -870,8 +949,22 @@ async def start_playback_task(chat_id, message):
     api_playback_records.append(record)
     playback_mode[chat_id] = "api"
 
-    # Build control buttons.
-    control_buttons = InlineKeyboardMarkup([
+    # Get total duration from the song info; use parse_duration_str to handle ISO 8601 or colon-separated formats.
+    total_duration = parse_duration_str(song_info.get('duration', '0:00'))
+
+    # Build the base caption with a placeholder for the progress bar.
+    base_caption = (
+        f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ ⏤͟͞●** (API Playback)\n\n"
+        f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
+        f"**❍ ᴛɪϻє ➥** {{progress_bar}}\n\n"
+        f"**❍ ʙʏ ➥** {song_info['requester']}\n\n"
+        f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
+    )
+    initial_progress = get_progress_bar_styled(0, total_duration, bar_length=6)
+    caption = base_caption.format(progress_bar=initial_progress)
+
+    # Define the inline keyboard (base_keyboard) to be used.
+    base_keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton(text="▶️", callback_data="pause"),
             InlineKeyboardButton(text="⏸", callback_data="resume"),
@@ -885,22 +978,16 @@ async def start_playback_task(chat_id, message):
         ]
     ])
 
-    caption = (
-        f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ ⏤͟͞●** (API Playback)\n\n"
-        f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
-        f"**❍ ᴛɪϻє ➥** {song_info['duration']}\n\n"
-        f"**❍ ʙʏ ➥** {song_info['requester']}\n\n"
-        f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
-    )
-
-    await bot.send_photo(
+    progress_message = await bot.send_photo(
         chat_id,
         photo=song_info['thumbnail'],
         caption=caption,
-        reply_markup=control_buttons
+        reply_markup=base_keyboard
     )
     global_playback_count += 1
 
+    # Launch the caption update task; it will update every 10 seconds while preserving the inline keyboard.
+    asyncio.create_task(update_progress_caption(chat_id, progress_message, time.time(), total_duration, base_caption, base_keyboard))
 
 
 @bot.on_callback_query()
