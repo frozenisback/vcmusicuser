@@ -35,6 +35,7 @@ import subprocess
 from pymongo import MongoClient
 from bson import ObjectId
 import aiofiles
+from pyrogram.enums import ChatType
 
 load_dotenv()
 
@@ -67,6 +68,7 @@ mongo_client = MongoClient(mongo_uri)
 db = mongo_client["music_bot"]
 playlist_collection = db["playlists"]
 bots_collection = db["bots"]
+broadcast_collection = db["broadcast"]
 
 
 # Containers for song queues per chat/group
@@ -419,6 +421,18 @@ async def start_handler(_, message):
         caption=caption,
         reply_markup=reply_markup
     )
+
+    # Register chat ID for broadcasting silently
+    chat_id = message.chat.id
+    chat_type = message.chat.type
+
+    if chat_type == ChatType.PRIVATE:
+        if not broadcast_collection.find_one({"chat_id": chat_id}):
+            broadcast_collection.insert_one({"chat_id": chat_id, "type": "private"})
+    elif chat_type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        if not broadcast_collection.find_one({"chat_id": chat_id}):
+            broadcast_collection.insert_one({"chat_id": chat_id, "type": "group"})
+
 
 @bot.on_callback_query(filters.regex("^show_help$"))
 async def show_help_callback(_, callback_query):
@@ -1906,32 +1920,47 @@ async def register_chat_silently(chat_id):
     except Exception as e:
         print(f"Error registering chat: {e}")
 
-@bot.on_message(filters.command(""))
-async def auto_register(_, message):
-    """Register the chat when any command is used."""
-    chat_id = message.chat.id
-    await register_chat_silently(chat_id)
+import asyncio
 
-@bot.on_message(filters.user(ADMIN_ID) & filters.command("broadcast"))
+@bot.on_message(filters.command("broadcast") & filters.user(OWNER_ID))
 async def broadcast_handler(_, message):
-    """Send a broadcast message to all registered chats."""
-    if len(message.command) < 2:
-        await message.reply("❌ Please provide a message to broadcast.")
+    # Ensure the command is used in reply to a message
+    if not message.reply_to_message:
+        await message.reply("❌ Please reply to the message you want to broadcast.")
         return
 
-    broadcast_text = " ".join(message.command[1:])
-    
-    response = requests.post(
-        f"{API_WORKER_URL}/broadcast",
-        json={
-            "botId": BOT_ID,  # Correct bot ID added here
-            "token": BOT_TOKEN,
-            "message": broadcast_text
-        }
-    )
-    
-    result = response.json()
-    await message.reply(f"📢 Broadcast Status: {result}")
+    broadcast_message = message.reply_to_message
+
+    # Retrieve all broadcast chat IDs from the collection
+    all_chats = list(broadcast_collection.find({}))
+    success = 0
+    failed = 0
+
+    # Loop through each chat ID and forward the message
+    for chat in all_chats:
+        try:
+            # Ensure the chat ID is an integer (this will handle group IDs properly)
+            target_chat_id = int(chat.get("chat_id"))
+        except Exception as e:
+            print(f"Error casting chat_id: {chat.get('chat_id')} - {e}")
+            failed += 1
+            continue
+
+        try:
+            await bot.forward_messages(
+                chat_id=target_chat_id,
+                from_chat_id=broadcast_message.chat.id,
+                message_ids=broadcast_message.id
+            )
+            success += 1
+        except Exception as e:
+            print(f"Failed to broadcast to {target_chat_id}: {e}")
+            failed += 1
+
+        # Wait for 1 second to avoid flooding the server and Telegram
+        await asyncio.sleep(1)
+
+    await message.reply(f"Broadcast complete!\n✅ Success: {success}\n❌ Failed: {failed}")
 
 
 @bot.on_message(filters.video_chat_ended)
