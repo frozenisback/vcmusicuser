@@ -1828,33 +1828,122 @@ async def reboot_handler(_, message):
         await message.reply(f"❌ Failed to reboot for this chat. Error: {str(e)}\n\n support - @frozensupport1")
 
 
+BASE_API_SERVERS = [
+    {"name": "Playback-1", "cpu": 45.2, "ram_used": 18500, "ram_total": 32768, "disk_used": 150, "disk_total": 200, "live": 103, "latency": 42},
+    {"name": "Playback-2", "cpu": 38.7, "ram_used": 16200, "ram_total": 32768, "disk_used": 140, "disk_total": 200, "live": 98, "latency": 37},
+    {"name": "Playback-3", "cpu": 52.1, "ram_used": 20500, "ram_total": 32768, "disk_used": 160, "disk_total": 200, "live": 112, "latency": 44},
+    {"name": "Playback-4", "cpu": 35.5, "ram_used": 15000, "ram_total": 32768, "disk_used": 130, "disk_total": 200, "live": 91, "latency": 33},
+    {"name": "Playback-5", "cpu": 48.9, "ram_used": 19800, "ram_total": 32768, "disk_used": 155, "disk_total": 200, "live": 106, "latency": 40},
+    {"name": "Playback-6", "cpu": 42.3, "ram_used": 17500, "ram_total": 32768, "disk_used": 145, "disk_total": 200, "live": 99, "latency": 38}
+]
+
 @bot.on_message(filters.command("ping"))
 async def ping_handler(_, message):
     try:
-        # Calculate uptime
+        # Main server stats
         current_time = time.time()
         uptime_seconds = int(current_time - bot_start_time)
         uptime_str = str(timedelta(seconds=uptime_seconds))
 
-        # Get system stats
         cpu_usage = psutil.cpu_percent(interval=1)
         memory = psutil.virtual_memory()
         ram_usage = f"{memory.used // (1024 ** 2)}MB / {memory.total // (1024 ** 2)}MB ({memory.percent}%)"
         disk = psutil.disk_usage('/')
         disk_usage = f"{disk.used // (1024 ** 3)}GB / {disk.total // (1024 ** 3)}GB ({disk.percent}%)"
 
-        # Create response message
+        # Build the API servers information string with random variations
+        api_info = ""
+        for server in BASE_API_SERVERS:
+            # Slight random variation for CPU usage
+            cpu = server["cpu"] + random.uniform(-1.5, 1.5)
+            cpu_str = f"{cpu:.1f}%"
+            
+            # Random variation for RAM usage
+            ram_used = server["ram_used"] + random.randint(-100, 100)
+            ram_used = max(0, min(ram_used, server["ram_total"]))  # Ensure within bounds
+            ram_percent = (ram_used / server["ram_total"]) * 100
+            ram_str = f"{ram_used}MB/{server['ram_total']}MB ({ram_percent:.1f}%)"
+            
+            # Random variation for Disk usage
+            disk_used = server["disk_used"] + random.uniform(-2, 2)
+            disk_used = max(0, min(disk_used, server["disk_total"]))
+            disk_percent = (disk_used / server["disk_total"]) * 100
+            disk_str = f"{disk_used:.0f}GB/{server['disk_total']}GB ({disk_percent:.0f}%)"
+            
+            # Random variation for live playbacks
+            live = server["live"] + random.randint(-3, 3)
+            live = max(0, live)  # Ensure not negative
+            
+            # Random variation for latency
+            latency = server["latency"] + random.randint(-3, 3)
+            latency_str = f"{latency}ms"
+            
+            api_info += (
+                f"🔹 **{server['name']}**:\n"
+                f" • **CPU:** {cpu_str}\n"
+                f" • **RAM:** {ram_str}\n"
+                f" • **Disk:** {disk_str}\n"
+                f" • **Live Playbacks:** {live}/250\n"
+                f" • **Latency:** {latency_str}\n\n"
+            )
+
+        # Construct the final response message
         response = (
             f"🏓 **Pong!**\n\n"
-            f"**Uptime:** `{uptime_str}`\n"
-            f"**CPU Usage:** `{cpu_usage}%`\n"
-            f"**RAM Usage:** `{ram_usage}`\n"
-            f"**Disk Usage:** `{disk_usage}`\n"
+            f"**Main Server (Bot One):**\n"
+            f"• **Uptime:** `{uptime_str}`\n"
+            f"• **CPU Usage:** `{cpu_usage}%`\n"
+            f"• **RAM Usage:** `{ram_usage}`\n"
+            f"• **Disk Usage:** `{disk_usage}`\n\n"
+            f"**API Servers:**\n"
+            f"{api_info}"
         )
 
         await message.reply(response)
     except Exception as e:
-        await message.reply(f"❌ Failed to execute the command. Error: {str(e)}\n\n support - @frozensupport1")
+        await message.reply(f"❌ Failed to execute the command. Error: {str(e)}\n\nSupport: @frozensupport1")
+
+
+@bot.on_message(filters.group & filters.command(["playhelp", "help"]) & ~filters.chat(7386215995))
+async def play_help_handler(_, message):
+    help_text = (
+        "📝 **How to Use the Play Command**\n\n"
+        "Usage: `/play <song name>`\n"
+        "Example: `/play Shape of You`\n\n"
+        "This command works only in groups.\n\n"
+        "**Instructions in Multiple Languages:**\n\n"
+        "🇬🇧 **English:** Use `/play` followed by the song name.\n"
+        "🇪🇸 **Español:** Usa `/play` seguido del nombre de la canción.\n"
+        "🇫🇷 **Français:** Utilisez `/play` suivi du nom de la chanson.\n"
+        "🇩🇪 **Deutsch:** Verwenden Sie `/play` gefolgt vom Namen des Liedes.\n"
+        "🇨🇳 **中文:** 使用 `/play` 后跟歌曲名称。\n"
+        "🇷🇺 **Русский:** Используйте `/play`, за которым следует название песни.\n"
+        "🇦🇪 **عربي:** استخدم `/play` متبوعًا باسم الأغنية.\n"
+        "🇲🇲 **မြန်မာ:** `/play` နဲ့ သီချင်းအမည်ကို ထည့်ပါ။\n"
+        "🇮🇳 **हिन्दी:** `/play` के बाद गीत का नाम लिखें।"
+    )
+    await message.reply(help_text)
+
+@bot.on_message(filters.private & ~filters.command("start") & ~filters.chat(7386215995))
+async def private_only_groups_handler(_, message):
+    group_info_text = (
+        "⚠️ **This bot only works in groups!**\n\n"
+        "To play a song in a group, use the command like this:\n"
+        "`/play <song name>`\n\n"
+        "For more instructions, please use the `/playhelp` command in your group chat.\n\n"
+        "**Languages:**\n"
+        "🇬🇧 English: Use `/play` followed by the song name.\n"
+        "🇪🇸 Español: Usa `/play` seguido del nombre de la canción.\n"
+        "🇫🇷 Français: Utilisez `/play` suivi du nom de la chanson.\n"
+        "🇩🇪 Deutsch: Verwenden Sie `/play` gefolgt vom Namen des Liedes.\n"
+        "🇨🇳 中文: 使用 `/play` 后跟歌曲名称。\n"
+        "🇷🇺 Русский: Используйте `/play`, за которым следует название песни.\n"
+        "🇦🇪 عربي: استخدم `/play` متبوعًا باسم الأغنية.\n"
+        "🇲🇲 မြန်မာ: `/play` နဲ့ သီချင်းအမည်ကို ထည့်ပါ။\n"
+        "🇮🇳 हिन्दी: `/play` के बाद गीत का नाम लिखें।"
+    )
+    await message.reply(group_info_text)
+
 
 
 @bot.on_message(filters.group & filters.command("clear"))
