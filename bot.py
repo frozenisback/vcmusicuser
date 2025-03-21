@@ -808,7 +808,7 @@ async def update_progress_caption(chat_id, progress_message, start_time, total_d
                 break
         if elapsed >= total_duration:
             break
-        await asyncio.sleep(10)
+        await asyncio.sleep(18)
 
 
 
