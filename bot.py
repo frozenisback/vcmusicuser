@@ -869,7 +869,10 @@ async def fallback_local_playback(chat_id, message, song_info):
                 InlineKeyboardButton(text="⏭", callback_data="skip"),
                 InlineKeyboardButton(text="⏹", callback_data="stop")
             ],
-            [InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist")],
+            [
+                InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist"),
+                InlineKeyboardButton(text="download", url="https://t.me/songdownloderfrozenbot?start=true")
+            ],
             [
                 InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
                 InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
@@ -986,7 +989,10 @@ async def start_playback_task(chat_id, message):
             InlineKeyboardButton(text="⏭", callback_data="skip"),
             InlineKeyboardButton(text="⏹", callback_data="stop")
         ],
-        [InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist")],
+        [
+            InlineKeyboardButton(text="➕ Add to Playlist", callback_data="add_to_playlist"),
+            InlineKeyboardButton(text="download", url="https://t.me/songdownloderfrozenbot?start=true")
+        ],
         [
             InlineKeyboardButton(text="✨ Updates ✨", url="https://t.me/vibeshiftbots"),
             InlineKeyboardButton(text="💕 Support 💕", url="https://t.me/Frozensupport1")
