@@ -1667,6 +1667,20 @@ async def stop_handler(client, message):
 
     await message.reply("⏹ Stopped the music and cleared the queue.")
 
+@bot.on_message(filters.command("song"))
+async def song_command_handler(_, message):
+    # Create an inline keyboard with a button that redirects to your downloader bot.
+    keyboard = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("Download Song", url="https://t.me/songdownloderfrozenbot")]]
+    )
+    # Inform the user how to use the downloader bot.
+    text = (
+        "Click the button below to use the Song Downloader Bot.\n\n"
+        "You can send the song name or any query directly to the downloader bot, "
+        "and it will fetch and download the song for you."
+    )
+    await message.reply(text, reply_markup=keyboard)
+
 
 @bot.on_message(filters.group & filters.command("pause"))
 async def pause_handler(client, message):
