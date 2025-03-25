@@ -1671,7 +1671,7 @@ async def stop_handler(client, message):
 async def song_command_handler(_, message):
     # Create an inline keyboard with a button that redirects to your downloader bot.
     keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Download Song", url="https://t.me/songdownloderfrozenbot")]]
+        [[InlineKeyboardButton("Download Song", url="https://t.me/songdownloderfrozenbot?start=true")]]
     )
     # Inform the user how to use the downloader bot.
     text = (
