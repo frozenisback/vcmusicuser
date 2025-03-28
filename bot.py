@@ -995,7 +995,7 @@ async def start_playback_task(chat_id, message):
         ],
         [
             InlineKeyboardButton(text="✨ υρ∂αтєѕ✨", url="https://t.me/vibeshiftbots"),
-            InlineKeyboardButton(text="💕 υρ∂αтєѕ 💕", url="https://t.me/Frozensupport1")
+            InlineKeyboardButton(text="💕 ѕυρρσят 💕", url="https://t.me/Frozensupport1")
         ]
     ])
 
