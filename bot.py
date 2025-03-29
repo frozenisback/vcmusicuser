@@ -947,7 +947,7 @@ async def start_playback_task(chat_id, message):
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=30) as resp:
+            async with session.get(api_url, timeout=50) as resp:
                 if resp.status != 200:
                     raise Exception(f"API responded with status {resp.status}")
                 data = await resp.json()
