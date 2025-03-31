@@ -941,9 +941,9 @@ async def start_playback_task(chat_id, message):
     # Get the song info.
     song_info = chat_containers[chat_id][0]
     last_played_song[chat_id] = song_info
-    video_title = song_info.get('title', 'Unknown')
-    encoded_title = urllib.parse.quote(video_title)
-    api_url = f"{selected_api}/play?chatid={chat_id}&title={encoded_title}"
+    video_url = song_info.get('url')
+    encoded_url = urllib.parse.quote(video_url)
+    api_url = f"{selected_api}/play?chatid={chat_id}&url={encoded_url}"
 
     try:
         async with aiohttp.ClientSession() as session:
