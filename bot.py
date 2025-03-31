@@ -960,7 +960,7 @@ async def start_playback_task(chat_id, message):
     record = {
         "chat_id": chat_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-        "song_title": video_title,
+        "song_title": song_info['title'],
         "api_response": data,
         "server": display_server
     }
