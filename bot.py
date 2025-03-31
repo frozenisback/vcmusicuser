@@ -941,13 +941,13 @@ async def start_playback_task(chat_id, message):
     # Get the song info.
     song_info = chat_containers[chat_id][0]
     last_played_song[chat_id] = song_info
-    video_url = song_info.get('url')
-    encoded_url = urllib.parse.quote(video_url)
-    api_url = f"{selected_api}/play?chatid={chat_id}&url={encoded_url}"
+    video_title = song_info.get('title', 'Unknown')
+    encoded_title = urllib.parse.quote(video_title)
+    api_url = f"{selected_api}/play?chatid={chat_id}&title={encoded_title}"
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=50) as resp:
+            async with session.get(api_url, timeout=30) as resp:
                 if resp.status != 200:
                     raise Exception(f"API responded with status {resp.status}")
                 data = await resp.json()
@@ -960,7 +960,7 @@ async def start_playback_task(chat_id, message):
     record = {
         "chat_id": chat_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-        "song_title": song_info['title'],
+        "song_title": video_title,
         "api_response": data,
         "server": display_server
     }
