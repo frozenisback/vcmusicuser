@@ -1010,6 +1010,34 @@ async def start_playback_task(chat_id, message):
     # Launch the caption update task; it will update every 10 seconds while preserving the inline keyboard.
     asyncio.create_task(update_progress_caption(chat_id, progress_message, time.time(), total_duration, base_caption, base_keyboard))
 
+@bot.on_message(filters.command("vplay") & filters.private)
+async def vplay_handler(client, message):
+    # Get the song title from the command arguments
+    title = " ".join(message.command[1:])
+    if not title:
+        await message.reply("Please provide a song name to play.")
+        return
+
+    # Use the current chat's id for the API call
+    chatid = str(message.chat.id)
+    api_url = f"https://probable-berti-frozenbotspvt-17e82b7b.koyeb.app/vplay?chatid={chatid}&title={title}"
+    response = requests.get(api_url)
+
+    if response.status_code != 200:
+        await message.reply("❌ Failed to fetch data from vplay API.")
+        return
+
+    data = response.json()
+    title_response = data.get("title")
+    link = data.get("link")
+
+    if not link:
+        await message.reply("⚠️ Could not retrieve the audio link.")
+        return
+
+    await message.reply_audio(audio=link, title=title_response, caption=f"🎶 Now Playing: {title_response}")
+
+
 
 @bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
