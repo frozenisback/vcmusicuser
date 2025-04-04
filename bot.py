@@ -1010,7 +1010,7 @@ async def start_playback_task(chat_id, message):
     # Launch the caption update task; it will update every 10 seconds while preserving the inline keyboard.
     asyncio.create_task(update_progress_caption(chat_id, progress_message, time.time(), total_duration, base_caption, base_keyboard))
 
-@bot.on_message(filters.command("vplay") & filters.private)
+@bot.on_message(filters.command("vplay") & filters.group)
 async def vplay_handler(client, message):
     # Get the song title from the command arguments
     title = " ".join(message.command[1:])
