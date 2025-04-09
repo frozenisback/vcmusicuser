@@ -893,16 +893,18 @@ async def fallback_local_playback(chat_id, message, song_info):
 async def start_playback_task(chat_id, message):
     global global_api_index, global_playback_count
     print(f"Current playback tasks: {len(playback_tasks)}; Chat ID: {chat_id}")
+    # Reuse the same message if available, setting an initial processing message.
+    processing_message = message
     status_text = "**✨ Processing... Please wait, may take up to 20 seconds. 💕**"
-    if message:
-        try:
-            await message.edit(status_text)
-        except Exception:
-            message = await bot.send_message(chat_id, status_text)
-    else:
-        await bot.send_message(chat_id, status_text)
+    try:
+        if processing_message:
+            await processing_message.edit(status_text)
+        else:
+            processing_message = await bot.send_message(chat_id, status_text)
+    except Exception:
+        processing_message = await bot.send_message(chat_id, status_text)
 
-    # Get or assign an API server for this chat.
+    # (Existing code) Get or assign an API server for this chat.
     if chat_id in chat_api_server:
         selected_api, server_id, display_server = chat_api_server[chat_id]
     else:
@@ -938,7 +940,7 @@ async def start_playback_task(chat_id, message):
         await bot.send_message(chat_id, "❌ No songs in the queue.")
         return
 
-    # Get the song info.
+    # Get the song info from the queue.
     song_info = chat_containers[chat_id][0]
     last_played_song[chat_id] = song_info
     video_title = song_info.get('title', 'Unknown')
@@ -947,16 +949,27 @@ async def start_playback_task(chat_id, message):
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=30) as resp:
+            # Use a 20-second timeout for the play API call.
+            async with session.get(api_url, timeout=20) as resp:
                 if resp.status != 200:
                     raise Exception(f"API responded with status {resp.status}")
                 data = await resp.json()
     except Exception as e:
-        error_text = f"❌ Frozen Play API Error: {str(e)}\nFalling back to local playback..."
-        await bot.send_message(chat_id, error_text)
-        await fallback_local_playback(chat_id, message, song_info)
+        # Inform the user about the delay.
+        try:
+            await processing_message.edit("⏳ API is taking longer than usual. Waiting an extra 10 seconds before falling back...")
+        except Exception as edit_error:
+            print(f"Error editing processing message: {edit_error}")
+        await asyncio.sleep(10)
+        fallback_error = f"❌ Frozen Play API Error: {str(e)}\nFalling back to local playback..."
+        try:
+            await processing_message.edit(fallback_error)
+        except Exception:
+            await bot.send_message(chat_id, fallback_error)
+        await fallback_local_playback(chat_id, processing_message, song_info)
         return
 
+    # At this point, the API call succeeded.
     record = {
         "chat_id": chat_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -966,11 +979,7 @@ async def start_playback_task(chat_id, message):
     }
     api_playback_records.append(record)
     playback_mode[chat_id] = "api"
-
-    # Get total duration from the song info; use parse_duration_str to handle ISO 8601 or colon-separated formats.
     total_duration = parse_duration_str(song_info.get('duration', '0:00'))
-
-    # Build the base caption with a placeholder for the progress bar.
     base_caption = (
         f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ ⏤͟͞●** (API Playback)\n\n"
         f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
@@ -981,7 +990,6 @@ async def start_playback_task(chat_id, message):
     initial_progress = get_progress_bar_styled(0, total_duration, bar_length=6)
     caption = base_caption.format(progress_bar=initial_progress)
 
-    # Define the inline keyboard (base_keyboard) to be used.
     base_keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton(text="▶️", callback_data="pause"),
@@ -994,21 +1002,38 @@ async def start_playback_task(chat_id, message):
             InlineKeyboardButton(text="⚡ᴅᴏᴡɴʟᴏᴀᴅ⚡", url="https://t.me/songdownloderfrozenbot?start=true")
         ],
         [
-            InlineKeyboardButton(text="✨ υρ∂αтєѕ✨", url="https://t.me/vibeshiftbots"),
+            InlineKeyboardButton(text="✨ υρ∂αтєѕ ✨", url="https://t.me/vibeshiftbots"),
             InlineKeyboardButton(text="💕 ѕυρρσят 💕", url="https://t.me/Frozensupport1")
         ]
     ])
 
-    progress_message = await bot.send_photo(
-        chat_id,
-        photo=song_info['thumbnail'],
-        caption=caption,
-        reply_markup=base_keyboard
-    )
+    # Delete the old processing message when starting playback.
+    try:
+        await processing_message.delete()
+    except Exception as e:
+        print(f"Error deleting processing message: {e}")
+
+    try:
+        # Send a new message with the updated song info and playback controls.
+        new_progress_message = await bot.send_photo(
+            chat_id,
+            photo=song_info['thumbnail'],
+            caption=caption,
+            reply_markup=base_keyboard
+        )
+    except Exception as e:
+        print("Error sending new playback message:", e)
+        new_progress_message = await bot.send_photo(
+            chat_id,
+            photo=song_info['thumbnail'],
+            caption=caption,
+            reply_markup=base_keyboard
+        )
     global_playback_count += 1
 
-    # Launch the caption update task; it will update every 10 seconds while preserving the inline keyboard.
-    asyncio.create_task(update_progress_caption(chat_id, progress_message, time.time(), total_duration, base_caption, base_keyboard))
+    # Start updating the progress caption.
+    asyncio.create_task(update_progress_caption(chat_id, new_progress_message, time.time(), total_duration, base_caption, base_keyboard))
+
 
 @bot.on_message(filters.command("vplay") & filters.group)
 async def vplay_handler(client, message):
