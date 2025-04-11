@@ -957,10 +957,10 @@ async def start_playback_task(chat_id, message):
     except Exception as e:
         # Inform the user about the delay.
         try:
-            await processing_message.edit("⏳ API is taking longer than usual. Waiting an extra 10 seconds before falling back...")
+            await processing_message.edit("⏳ API server is sleeping. Waiting an extra 20 seconds before falling back...")
         except Exception as edit_error:
             print(f"Error editing processing message: {edit_error}")
-        await asyncio.sleep(10)
+        await asyncio.sleep(20)
         fallback_error = f"❌ Frozen Play API Error: {str(e)}\nFalling back to local playback..."
         try:
             await processing_message.edit(fallback_error)
