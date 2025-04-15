@@ -1072,8 +1072,8 @@ async def callback_query_handler(client, callback_query):
     mode = playback_mode.get(chat_id, "local")  # Default mode is local
     user = callback_query.from_user  # For later use
 
-    # Skip admin check for suggestions, playlist commands, and trending actions.
-    if not (data.startswith("suggestion|") or data.startswith("playlist_") or data in ["add_to_playlist", "play_playlist", "play_trending"]):
+    # Skip admin check for suggestions, playlist-related commands (including play_song), and trending actions.
+    if not (data.startswith("suggestion|") or data.startswith("playlist_") or data.startswith("play_song|") or data in ["add_to_playlist", "play_playlist", "play_trending"]):
         if not await is_user_admin(callback_query):
             await callback_query.answer("❌ You need to be an admin to use this button.", show_alert=True)
             return
@@ -1517,6 +1517,7 @@ async def callback_query_handler(client, callback_query):
     # ----------------- DEFAULT -----------------
     else:
         await callback_query.answer("Unknown action.", show_alert=True)
+
 
 
 
