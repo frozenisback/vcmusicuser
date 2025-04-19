@@ -442,9 +442,9 @@ async def start_handler(_, message):
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    # Send the image with caption and buttons
-    await message.reply_photo(
-        photo="https://files.catbox.moe/kao3ip.jpeg",
+    # Send the animation (loops infinitely) instead of a video :contentReference[oaicite:0]{index=0}
+    await message.reply_animation(
+        animation="https://frozen-imageapi.lagendplayersyt.workers.dev/file/2e483e17-05cb-45e2-b166-1ea476ce9521.mp4",
         caption=caption,
         reply_markup=reply_markup
     )
