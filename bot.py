@@ -60,6 +60,7 @@ API_ASSISTANT_USERNAME = "@Frozensupporter1"
 # API Endpoints
 API_URL = os.environ.get("API_URL")
 DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
+BACKUP_SEARCH_API_URL= "https://unique-ali-frozzennbotss-b307205b.koyeb.app"
 
 
 
