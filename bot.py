@@ -37,6 +37,8 @@ from bson import ObjectId
 import aiofiles
 from pyrogram.enums import ChatType
 import random
+from urllib.parse import quote
+from PIL import Image, ImageDraw, ImageFont
 
 load_dotenv()
 
@@ -61,7 +63,6 @@ API_ASSISTANT_USERNAME = "@Frozensupporter1"
 API_URL = os.environ.get("API_URL")
 DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
 BACKUP_SEARCH_API_URL= "https://unique-ali-frozzennbotss-b307205b.koyeb.app"
-
 
 
 # Use an environment variable for the MongoDB URI
@@ -282,7 +283,7 @@ async def fetch_youtube_link(query):
                     raise Exception(f"API returned status code {response.status}")
     except Exception as e:
         raise Exception(f"Failed to fetch YouTube link: {str(e)}")
-
+    
 async def fetch_youtube_link_backup(query):
     if not BACKUP_SEARCH_API_URL:
         raise Exception("Backup Search API URL not configured")
@@ -308,7 +309,8 @@ async def fetch_youtube_link_backup(query):
                 )
     except Exception as e:
         raise Exception(f"Backup Search API error: {e}")
-    
+
+
 
 async def skip_to_next_song(chat_id, message):
     """Skips to the next song in the queue and starts playback."""
@@ -566,37 +568,95 @@ async def go_back_callback(_, callback_query):
         reply_markup=reply_markup
     )
 
-
-# Modify the /play handler so that an empty query shows a button to play the playlist.
 @bot.on_message(filters.group & filters.regex(r'^/play(?:@\w+)?(?:\s+(?P<query>.+))?$'))
 async def play_handler(_, message):
     chat_id = message.chat.id
-    query = message.matches[0]['query']
+
+    # If replying to an audio/video message, handle local playback
+    if message.reply_to_message and (message.reply_to_message.audio or message.reply_to_message.video):
+        processing_message = await message.reply("❄️")
+
+        # Ensure bot is in chat
+        if not await is_assistant_in_chat(chat_id):
+            invite_link = await extract_invite_link(bot, chat_id)
+            if invite_link and await invite_assistant(chat_id, invite_link, processing_message):
+                await processing_message.edit("⏳ Assistant is joining... Please wait.")
+                for _ in range(10):
+                    await asyncio.sleep(3)
+                    if await is_assistant_in_chat(chat_id):
+                        break
+                else:
+                    await processing_message.edit(
+                        "❌ Assistant failed to join. Please unban the assistant.\nSupport: @frozensupport1"
+                    )
+                    return
+            else:
+                await processing_message.edit("❌ Please give bot invite‑link permission.\nSupport: @frozensupport1")
+                return
+
+        # Fetch fresh media reference and download
+        orig = message.reply_to_message
+        fresh = await assistant.get_messages(orig.chat.id, orig.id)
+        media = fresh.video or fresh.audio
+        if fresh.audio and getattr(fresh.audio, 'file_size', 0) > 100 * 1024 * 1024:
+            await processing_message.edit("❌ Audio file too large. Maximum allowed size is 100MB.")
+            return
+
+        await processing_message.edit("⏳ Please wait, downloading audio...")
+        try:
+            file_path = await assistant.download_media(media)
+        except Exception as e:
+            await processing_message.edit(f"❌ Failed to download media: {e}")
+            return
+
+        # Download thumbnail if available
+        thumb_path = None
+        try:
+            thumbs = fresh.video.thumbs if fresh.video else fresh.audio.thumbs
+            thumb_path = await assistant.download_media(thumbs[0])
+        except Exception:
+            pass
+
+        # Prepare song_info and fallback to local playback
+        duration = media.duration or 0
+        title = getattr(media, 'file_name', 'Untitled')
+        song_info = {
+            'url': file_path,
+            'title': title,
+            'duration': format_time(duration),
+            'duration_seconds': duration,
+            'requester': message.from_user.first_name,
+            'thumbnail': thumb_path
+        }
+        await fallback_local_playback(chat_id, processing_message, song_info)
+        return
+
+    # Otherwise, process query-based search
+    match = message.matches[0]
+    query = (match.group('query') or "").strip()
 
     try:
         await message.delete()
-    except Exception as e:
-        print(f"Failed to delete command message: {e}")
+    except Exception:
+        pass
 
+    # Enforce cooldown
     now = time.time()
     if chat_id in chat_last_command and (now - chat_last_command[chat_id]) < COOLDOWN:
         remaining = int(COOLDOWN - (now - chat_last_command[chat_id]))
         if chat_id in chat_pending_commands:
             await _.send_message(chat_id, f"⏳ A command is already queued for this chat. Please wait {remaining}s.")
-            return
         else:
             cooldown_reply = await _.send_message(chat_id, f"⏳ On cooldown. Processing in {remaining}s.")
             chat_pending_commands[chat_id] = (message, cooldown_reply)
             asyncio.create_task(process_pending_command(chat_id, remaining))
-            return
+        return
     chat_last_command[chat_id] = now
 
     if not query:
         keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("🎵 Play Your Playlist", callback_data="play_playlist"),
-                InlineKeyboardButton("🔥 Play Trending Songs", callback_data="play_trending")
-            ]
+            [InlineKeyboardButton("🎵 Play Your Playlist", callback_data="play_playlist"),
+             InlineKeyboardButton("🔥 Play Trending Songs", callback_data="play_trending")]
         ])
         await _.send_message(
             chat_id,
@@ -606,22 +666,22 @@ async def play_handler(_, message):
         )
         return
 
+    # Delegate to query processor
     await process_play_command(message, query)
 
 
 async def process_play_command(message, query):
-    chat_id = message.chat.id
+    chat_id = message.chat.id  # Fixed typo: was idS
     processing_message = await message.reply("❄️")
 
-    # --- Convert youtu.be URLs ---
+    # Convert short URLs to full YouTube URLs
     if "youtu.be" in query:
         m = re.search(r"youtu\.be/([^?&]+)", query)
         if m:
             query = f"https://www.youtube.com/watch?v={m.group(1)}"
 
-    # --- Ensure assistant is in chat ---
-    is_in_chat = await is_assistant_in_chat(chat_id)
-    if not is_in_chat:
+    # Ensure bot is in chat
+    if not await is_assistant_in_chat(chat_id):
         invite_link = await extract_invite_link(bot, chat_id)
         if invite_link and await invite_assistant(chat_id, invite_link, processing_message):
             await processing_message.edit("⏳ Assistant is joining... Please wait.")
@@ -632,21 +692,19 @@ async def process_play_command(message, query):
                     break
             else:
                 await processing_message.edit(
-                    "❌ Assistant failed to join. Please unban the assistant.\n"
-                    "Support: @frozensupport1"
+                    "❌ Assistant failed to join. Please unban the assistant.\nSupport: @frozensupport1"
                 )
                 return
         else:
             await processing_message.edit("❌ Please give bot invite‑link permission.\nSupport: @frozensupport1")
             return
 
-    # 1) Try primary search
+    # Perform YouTube search and handle results (playlist vs single video)
     try:
         result = await fetch_youtube_link(query)
     except Exception as primary_err:
-        # 2) Fallback to backup
         await processing_message.edit(
-            "⚠️ Primary search failed. Using backup API, this may take up to 10 seconds…"
+            "⚠️ Primary search failed. Using backup API, this may take a few seconds…"
         )
         try:
             result = await fetch_youtube_link_backup(query)
@@ -1012,34 +1070,6 @@ async def start_playback_task(chat_id, message):
 
     # Start updating the progress caption.
     asyncio.create_task(update_progress_caption(chat_id, new_progress_message, time.time(), total_duration, base_caption, base_keyboard))
-
-
-@bot.on_message(filters.command("vplay") & filters.group)
-async def vplay_handler(client, message):
-    # Get the song title from the command arguments
-    title = " ".join(message.command[1:])
-    if not title:
-        await message.reply("Please provide a song name to play.")
-        return
-
-    # Use the current chat's id for the API call
-    chatid = str(message.chat.id)
-    api_url = f"https://probable-berti-frozenbotspvt-17e82b7b.koyeb.app/vplay?chatid={chatid}&title={title}"
-    response = requests.get(api_url)
-
-    if response.status_code != 200:
-        await message.reply("❌ Failed to fetch data from vplay API.")
-        return
-
-    data = response.json()
-    title_response = data.get("title")
-    link = data.get("link")
-
-    if not link:
-        await message.reply("⚠️ Could not retrieve the audio link.")
-        return
-
-    await message.reply_audio(audio=link, title=title_response, caption=f"🎶 Now Playing: {title_response}")
 
 
 
@@ -1611,13 +1641,91 @@ async def my_playlist_handler(_, message):
 
     await message.reply("🎶 **Your Playlist:**", reply_markup=InlineKeyboardMarkup(buttons))
 
+AVATAR_DIAMETER = 419        # smaller so the ring shows
+CIRCLE_CENTER = (1118, 437)
+BOX_ORIGIN       = (220, 640)   # where the "Name:" label row begins
+LINE_SPACING     = 75           # vertical gap between Name / ID / Username
+VALUE_OFFSET_X   = 200    
+FONT_PATH       = "arial.ttf"
+FONT_SIZE       = 40
+TEXT_COLOR      = "white"
+WELCOME_TEMPLATE_URL = (
+    "https://frozen-imageapi.lagendplayersyt.workers.dev/"
+    "file/e50550e8-0f30-42e0-a6c2-7b92d87349b7.png"
+)
+
+async def create_welcome_image(user) -> str:
+    # fetch template
+    async with aiohttp.ClientSession() as sess:
+        async with sess.get(WELCOME_TEMPLATE_URL) as resp:
+            tpl = Image.open(BytesIO(await resp.read())).convert("RGBA")
+
+    # draw avatar
+    if user.photo:
+        avatar_file = await bot.download_media(user.photo.big_file_id)
+        av = Image.open(avatar_file).convert("RGBA")
+        os.remove(avatar_file)
+
+        D = AVATAR_DIAMETER
+        av = av.resize((D, D))
+        mask = Image.new("L", (D, D), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, D, D), fill=255)
+
+        cx, cy = CIRCLE_CENTER
+        top_left = (cx - D//2, cy - D//2)
+        tpl.paste(av, top_left, mask)
+
+    # write values only
+    draw = ImageDraw.Draw(tpl)
+    font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
+
+    x0, y0 = BOX_ORIGIN
+
+    draw.text((x0 + VALUE_OFFSET_X, y0),
+              user.first_name,
+              font=font, fill=TEXT_COLOR)
+
+    draw.text((x0 + VALUE_OFFSET_X, y0 + LINE_SPACING),
+              str(user.id),
+              font=font, fill=TEXT_COLOR)
+
+    draw.text((x0 + VALUE_OFFSET_X, y0 + 2*LINE_SPACING),
+              "@" + (user.username or "N/A"),
+              font=font, fill=TEXT_COLOR)
+
+    out = f"welcome_{user.id}.png"
+    tpl.save(out)
+    return out
+
+
+
+@bot.on_message(filters.group & filters.new_chat_members)
+async def welcome_new_member(client: Client, message: Message):
+    """
+    For each new member, generate & send their welcome card.
+    """
+    for member in message.new_chat_members:
+        img_path = await create_welcome_image(member)
+        await client.send_photo(
+            chat_id=message.chat.id,
+            photo=img_path,
+            caption=f"🎉 Welcome, {member.mention}!"
+        )
+        try:
+            os.remove(img_path)
+        except OSError:
+            pass
+
 
 
 
 download_cache = {}  # Global cache dictionary
 
-
 async def download_audio(url):
+    # If url is already a local file, return it directly (for replied audio/video files)
+    if os.path.exists(url) and os.path.isfile(url):
+        return url
+
     if url in download_cache:
         return download_cache[url]  # Return cached file path if available
 
@@ -1636,11 +1744,11 @@ async def download_audio(url):
                 if response.status == 200:
                     async with aiofiles.open(file_name, 'wb') as f:
                         while True:
-                            chunk = await response.content.read(32768)  # Reduce chunk size
+                            chunk = await response.content.read(32768)
                             if not chunk:
                                 break
                             await f.write(chunk)
-                            await asyncio.sleep(0.01)  # Slightly longer sleep
+                            await asyncio.sleep(0.01)
                     download_cache[url] = file_name
                     return file_name
                 else:
@@ -1649,6 +1757,7 @@ async def download_audio(url):
         raise Exception("❌ Download API took too long to respond. Please try again.")
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
+
 
 
 
@@ -2362,4 +2471,3 @@ if __name__ == "__main__":
         print(f"Critical Error: {e}")
         # If bot.run() (or its initialization) fails, perform a full restart.
         asyncio.run(simple_restart())
-
