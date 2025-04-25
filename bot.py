@@ -92,12 +92,12 @@ last_suggestions = {}
 global_playback_count = 0  # Increments on every new playback request
 api_server_counter = 0     # Used to select an API server in round-robin fashion
 api_servers = [
-    "https://py-tgcalls-api1.onrender.com",
     "https://py-tgcalls-api-we3s.onrender.com",
+    "https://py-tgcalls-api-kjzu.onrender.com",
     "https://py-tgcalls-api-n8cq.onrender.com",
     "https://py-tgcalls-api-k7s7.onrender.com",
     "https://py-tgcalls-api-k7s7.onrender.com",
-    "https://py-tgcalls-api-kjzu.onrender.com"
+    "https://py-tgcalls-api1.onrender.com"
 ]
 chat_api_server = {}
 global_api_index = 0
@@ -981,12 +981,13 @@ async def start_playback_task(chat_id, message):
     song_info = chat_containers[chat_id][0]
     last_played_song[chat_id] = song_info
     video_title = song_info.get('title', 'Unknown')
-    encoded_title = urllib.parse.quote(video_title)
-    api_url = f"{selected_api}/play?chatid={chat_id}&title={encoded_title}"
+    video_url = song_info.get('url', '')
+    encoded_url = urllib.parse.quote(video_url, safe='')
+    api_url = f"{selected_api}/play?chatid={chat_id}&url={encoded_url}"
 
     try:
         async with aiohttp.ClientSession() as session:
-            # Use a 20-second timeout for the play API call.
+            # Use a 30-second timeout for the play API call.
             async with session.get(api_url, timeout=30) as resp:
                 if resp.status != 200:
                     raise Exception(f"API responded with status {resp.status}")
@@ -1070,7 +1071,6 @@ async def start_playback_task(chat_id, message):
 
     # Start updating the progress caption.
     asyncio.create_task(update_progress_caption(chat_id, new_progress_message, time.time(), total_duration, base_caption, base_keyboard))
-
 
 
 @bot.on_callback_query()
@@ -1641,24 +1641,24 @@ async def my_playlist_handler(_, message):
 
     await message.reply("🎶 **Your Playlist:**", reply_markup=InlineKeyboardMarkup(buttons))
 
-AVATAR_DIAMETER = 419        # smaller so the ring shows
-CIRCLE_CENTER = (1118, 437)
-BOX_ORIGIN       = (220, 640)   # where the "Name:" label row begins
-LINE_SPACING     = 75           # vertical gap between Name / ID / Username
+
+from pathlib import Path
+
+AVATAR_DIAMETER  = 419        
+CIRCLE_CENTER    = (1118, 437)
+BOX_ORIGIN       = (220, 640)   
+LINE_SPACING     = 75          
 VALUE_OFFSET_X   = 200    
-FONT_PATH       = "arial.ttf"
-FONT_SIZE       = 40
-TEXT_COLOR      = "white"
-WELCOME_TEMPLATE_URL = (
-    "https://frozen-imageapi.lagendplayersyt.workers.dev/"
-    "file/e50550e8-0f30-42e0-a6c2-7b92d87349b7.png"
-)
+FONT_PATH        = "arial.ttf"
+FONT_SIZE        = 40
+TEXT_COLOR       = "white"
+
+# point this at the local file in your repo
+WELCOME_TEMPLATE_PATH = Path(__file__).parent / "welcome.png"
 
 async def create_welcome_image(user) -> str:
-    # fetch template
-    async with aiohttp.ClientSession() as sess:
-        async with sess.get(WELCOME_TEMPLATE_URL) as resp:
-            tpl = Image.open(BytesIO(await resp.read())).convert("RGBA")
+    # load the local template
+    tpl = Image.open(WELCOME_TEMPLATE_PATH).convert("RGBA")
 
     # draw avatar
     if user.photo:
@@ -1675,7 +1675,7 @@ async def create_welcome_image(user) -> str:
         top_left = (cx - D//2, cy - D//2)
         tpl.paste(av, top_left, mask)
 
-    # write values only
+    # write user info
     draw = ImageDraw.Draw(tpl)
     font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
 
@@ -1696,6 +1696,7 @@ async def create_welcome_image(user) -> str:
     out = f"welcome_{user.id}.png"
     tpl.save(out)
     return out
+
 
 
 
