@@ -92,9 +92,9 @@ last_suggestions = {}
 global_playback_count = 0  # Increments on every new playback request
 api_server_counter = 0     # Used to select an API server in round-robin fashion
 api_servers = [
-    "https://py-tgcalls-api-we3s.onrender.com",
-    "https://py-tgcalls-api-kjzu.onrender.com",
-    "https://py-tgcalls-api-n8cq.onrender.com",
+    "https://py-tgcalls-api-1.onrender.com",
+    "https://py-tgcalls-api-4vju.onrender.com",
+    "http://py-tgcalls-api-yto1.onrender.com",
     "https://py-tgcalls-api-k7s7.onrender.com",
     "https://py-tgcalls-api-k7s7.onrender.com",
     "https://py-tgcalls-api1.onrender.com"
@@ -2066,7 +2066,7 @@ async def ping_handler(_, message):
         await message.reply(f"❌ Failed to execute the command. Error: {str(e)}\n\nSupport: @frozensupport1")
 
 
-@bot.on_message(filters.group & filters.command(["playhelp", "help"]) & ~filters.chat(7386215995))
+@bot.on_message(filters.group & filters.command(["playhelp", "help"]) & ~filters.chat(7634862283))
 async def play_help_handler(_, message):
     help_text = (
         "📝 **How to Use the Play Command**\n\n"
@@ -2086,7 +2086,7 @@ async def play_help_handler(_, message):
     )
     await message.reply(help_text)
 
-@bot.on_message(filters.private & ~filters.command("start") & ~filters.chat(7386215995))
+@bot.on_message(filters.private & ~filters.command("start") & ~filters.chat(7634862283))
 async def private_only_groups_handler(_, message):
     group_info_text = (
         "⚠️ **This bot only works in groups!**\n\n"
