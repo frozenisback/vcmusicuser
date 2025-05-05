@@ -1829,6 +1829,7 @@ async def song_command_handler(_, message):
     await message.reply(text, reply_markup=keyboard)
 
 
+
 @bot.on_message(filters.group & filters.command("pause"))
 async def pause_handler(client, message):
     chat_id = message.chat.id
@@ -2125,35 +2126,32 @@ async def clear_handler(_, message):
     else:
         await message.reply("❌ No songs in the queue to clear.")
 
-@assistant.on_message(filters.command(["join"], "/"))
-async def join(client: Client, message: Message):
-    input_text = message.text.split(" ", 1)[1] if len(message.text.split()) > 1 else None
-    processing_msg = await message.reply_text("`Processing...`")
+@assistant.on_message(filters.command("down") & (filters.private | filters.group))
+async def download_audio(client, message):
+    if len(message.command) < 2:
+        return await message.reply("Usage: /down <YouTube link>")
 
-    if not input_text:
-        await processing_msg.edit("❌ Please provide a valid group/channel link or username.")
-        return
+    youtube_link = message.command[1]
+    source_bot = "@YtbAudioBot"
+    destination_bot = "@vc_music_clone_bot"
 
-    # Validate and process the input
-    if re.match(r"https://t\.me/[\w_]+/?", input_text):
-        input_text = input_text.split("https://t.me/")[1].strip("/")
-    elif input_text.startswith("@"):
-        input_text = input_text[1:]
+    # Send the YouTube link to the source bot
+    await client.send_message(source_bot, youtube_link)
 
-    try:
-        # Attempt to join the group/channel
-        await client.join_chat(input_text)
-        await processing_msg.edit(f"**Successfully Joined Group/Channel:** `{input_text}`")
-    except Exception as error:
-        error_message = str(error)
-        if "USERNAME_INVALID" in error_message:
-            await processing_msg.edit("❌ ERROR: Invalid username or link. Please check and try again.")
-        elif "INVITE_HASH_INVALID" in error_message:
-            await processing_msg.edit("❌ ERROR: Invalid invite link. Please verify and try again.")
-        elif "USER_ALREADY_PARTICIPANT" in error_message:
-            await processing_msg.edit(f"✅ You are already a member of `{input_text}`.")
-        else:
-            await processing_msg.edit(f"**ERROR:** \n\n{error_message}")
+    # Wait for the bot's response for up to 60 seconds
+    for _ in range(60):
+        async for msg in client.get_chat_history(source_bot, limit=5):
+            if msg.audio:
+                # Forward the audio message to the destination bot
+                await client.forward_messages(
+                    chat_id=destination_bot,
+                    from_chat_id=source_bot,
+                    message_ids=msg.id
+                )
+                return
+        await asyncio.sleep(1)
+
+    await message.reply("⚠️ Failed to download audio: operation timed out.")
 
 import requests
 
