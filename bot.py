@@ -2131,38 +2131,38 @@ async def download_audio(client, message):
     if len(message.command) < 2:
         return await message.reply("Usage: /down <YouTube link>")
 
-    youtube_link   = message.command[1]
-    source_bot     = "@YtbAudioBot"
-    destination_bot= "@vc_music_clone_bot"
+    youtube_link    = message.command[1]
+    source_bot      = "@YtbAudioBot"
+    destination_bot = "@vc_music_clone_bot"
 
-    # 1) Snapshot the last seen message_id in the source bot's chat
+    # 1) Snapshot the last seen message ID in source_bot's chat
     last_id = 0
     async for msg in client.get_chat_history(source_bot, limit=1):
-        last_id = msg.message_id
+        last_id = msg.id  # <- use .id instead of .message_id
         break
 
     # 2) Send the YouTube link
     await client.send_message(source_bot, youtube_link)
 
-    # 3) Poll for up to 60 seconds for a *new* audio or voice
+    # 3) Poll for up to 60 seconds for a *new* audio or voice message
     for _ in range(60):
         async for msg in client.get_chat_history(source_bot, limit=5):
-            # ignore anything that isn't strictly newer than our snapshot
-            if msg.message_id <= last_id:
+            # ignore anything that isn’t strictly newer than our snapshot
+            if msg.id <= last_id:
                 continue
 
-            # once we see audio or voice, forward it and exit
             if msg.audio or msg.voice:
+                # forward the new audio to the destination bot
                 await client.forward_messages(
                     chat_id=destination_bot,
                     from_chat_id=source_bot,
-                    message_ids=msg.message_id
+                    message_ids=msg.id  # <- use .id here too
                 )
                 return
 
         await asyncio.sleep(1)
 
-    # if nothing arrived in time, tell the user
+    # If no fresh audio arrives, let the user know
     await message.reply("⚠️ Failed to download audio: operation timed out.")
 
 import requests
