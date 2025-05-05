@@ -82,7 +82,7 @@ COOLDOWN = 10
 chat_last_command = {}
 chat_pending_commands = {}
 QUEUE_LIMIT = 20
-MAX_DURATION_SECONDS = 2 * 60 * 60 # 2 hours 10 minutes (in seconds)
+MAX_DURATION_SECONDS = 10 * 60  # 10 minutes (in seconds)
 LOCAL_VC_LIMIT = 10
 api_playback_records = []
 playback_mode = {}
@@ -755,7 +755,7 @@ async def process_play_command(message, query):
             return
         secs = isodate.parse_duration(duration_iso).total_seconds()
         if secs > MAX_DURATION_SECONDS:
-            await processing_message.edit("❌ Streams longer than 2 hours are not allowed.")
+            await processing_message.edit("❌ Streams longer than 10 min are not allowed. we are facing some server issues will be fixed")
             return
 
         readable = iso8601_to_human_readable(duration_iso)
