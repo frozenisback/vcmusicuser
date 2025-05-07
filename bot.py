@@ -73,6 +73,7 @@ db = mongo_client["music_bot"]
 playlist_collection = db["playlists"]
 bots_collection = db["bots"]
 broadcast_collection = db["broadcast"]
+couples_collection = db["couples"]
 
 
 # Containers for song queues per chat/group
@@ -1850,6 +1851,66 @@ async def song_command_handler(_, message):
         "ᴀɴᴅ ɪᴛ ᴡɪʟʟ ғᴇᴛᴄʜ ᴀɴᴅ ᴅᴏᴡɴʟᴏᴀᴅ ᴛʜᴇ sᴏɴɢ ғᴏʀ ʏᴏᴜ. 🚀"
     )
     await message.reply(text, reply_markup=keyboard)
+
+couples_collection = db["couples"]
+# Ensure this index exists (only needs to run once; safe to call every start)
+couples_collection.create_index(
+    [("created_at", 1)],
+    expireAfterSeconds=24 * 3600  # documents expire after 24 hours
+)
+
+# ─────────────────────────────────────────────────────────────
+# 2) /couple COMMAND HANDLER
+# ─────────────────────────────────────────────────────────────
+@bot.on_message(filters.group & filters.command("couple", prefixes="/"))
+async def make_couple(client, message):
+    chat_id = message.chat.id
+
+    # 2a) Check for existing pair in this chat
+    existing = couples.find_one({"chat_id": chat_id})
+    if existing:
+        u1, u2 = existing["user1_id"], existing["user2_id"]
+        await message.reply_text(
+            f"💞 **Today's couple** (expires in 24h):\n"
+            f"- [{u1}](tg://user?id={u1})\n"
+            f"- [{u2}](tg://user?id={u2})",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    # 2b) Fetch all members on demand
+    members = [
+        m.user.id
+        async for m in client.get_chat_members(chat_id)
+        if not m.user.is_bot
+    ]
+    if len(members) < 2:
+        return await message.reply_text(
+            "Not enough members to form a couple!"
+        )
+
+    # 2c) Pick 2 distinct at random
+    u1, u2 = random.sample(members, 2)
+
+    # 2d) Store in MongoDB with timestamp (TTL index will auto-expire)
+    couples.insert_one({
+        "chat_id":     chat_id,
+        "user1_id":    u1,
+        "user2_id":    u2,
+        "created_at":  datetime.utcnow()
+    })
+
+    # 2e) Fetch full User objects to mention them
+    user1 = await client.get_users(u1)
+    user2 = await client.get_users(u2)
+
+    # 2f) Announce the new couple
+    await message.reply_text(
+        f"💞 **Couple of the Day** 💞\n\n"
+        f"{user1.mention} + {user2.mention}\n\n"
+        "They’ll stay together for 24 hours! 🕒",
+        parse_mode=ParseMode.MARKDOWN
+    )
 
 
 
