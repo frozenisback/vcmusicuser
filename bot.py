@@ -1867,38 +1867,54 @@ async def build_couple_image(client: Client, u1_id: int, u2_id: int, group_title
 
 @bot.on_message(filters.group & filters.command("couple", prefixes="/"))
 async def make_couple(client, message):
-    status = await message.reply_text("⏳ Choosing today’s couple…")
+    status = await message.reply_text("⏳ Choosing today’s couple...")
     chat_id = message.chat.id
     group_title = message.chat.title or ""
 
-    # Try cached
+    # 1) Try cached entry
     try:
         existing = couples_collection.find_one({"chat_id": chat_id})
         if existing:
-            u1, u2 = existing["user1_id"], existing["user2_id"]
-            cap = (
+            u1_id = existing["user1_id"]
+            u2_id = existing["user2_id"]
+            file_id = existing["file_id"]
+            caption = (
                 "❤️ Couples already chosen today! ❤️\n"
-                f"<a href=\"tg://user?id={u1}\">{_trim_name((await client.get_users(u1)).first_name)}</a> & "
-                f"<a href=\"tg://user?id={u2}\">{_trim_name((await client.get_users(u2)).first_name)}</a> "
+                f"<a href=\"tg://user?id={u1_id}\">{_trim_name((await client.get_users(u1_id)).first_name)}</a> & "
+                f"<a href=\"tg://user?id={u2_id}\">{_trim_name((await client.get_users(u2_id)).first_name)}</a> "
                 "are today’s couple and will be reselected tomorrow."
             )
-            await client.send_photo(chat_id, existing["file_id"], caption=cap, parse_mode=ParseMode.HTML)
+            await client.send_photo(
+                chat_id=chat_id,
+                photo=file_id,
+                caption=caption,
+                parse_mode=ParseMode.HTML
+            )
             return await status.delete()
     except errors.PeerIdInvalid:
+        # stale user IDs → clear and continue
         couples_collection.delete_many({"chat_id": chat_id})
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[make_couple] cache lookup error: {e}")
+        # fall through to generate new
 
-    # Pick fresh
-    members = [m.user.id async for m in client.get_chat_members(chat_id) if not m.user.is_bot]
+    # 2) Gather members & pick two
+    members = []
+    async for m in client.get_chat_members(chat_id):
+        if not m.user.is_bot:
+            members.append(m.user.id)
+
     if len(members) < 2:
         await status.delete()
-        return await message.reply_text("❌ Not enough non-bot members.")
+        return await message.reply_text("❌ Not enough non-bot members to form a couple.")
+
     u1, u2 = random.sample(members, 2)
 
+    # 3) Build & send new image
     buf = await build_couple_image(client, u1, u2, group_title)
-    res = await client.send_photo(
-        chat_id, buf,
+    res_msg = await client.send_photo(
+        chat_id=chat_id,
+        photo=buf,
         caption=(
             f"❤️ <a href=\"tg://user?id={u1}\">{_trim_name((await client.get_users(u1)).first_name)}</a> & "
             f"<a href=\"tg://user?id={u2}\">{_trim_name((await client.get_users(u2)).first_name)}</a> "
@@ -1907,21 +1923,28 @@ async def make_couple(client, message):
         parse_mode=ParseMode.HTML
     )
 
-    # Cache
+    # 4) Cache the new selection
+    file_id = res_msg.photo.file_id
     couples_collection.insert_one({
-        "chat_id": chat_id,
-        "user1_id": u1,
-        "user2_id": u2,
-        "file_id": res.photo.file_id,
+        "chat_id":    chat_id,
+        "user1_id":   u1,
+        "user2_id":   u2,
+        "file_id":    file_id,
         "created_at": datetime.now(timezone.utc)
     })
+
     await status.delete()
 
+# ─────────────────────────────────────────────────────────────
+# /clearcouples handler
+# ─────────────────────────────────────────────────────────────
 @bot.on_message(filters.group & filters.command("clearcouples", prefixes="/"))
 async def clear_couples(client, message):
     res = couples_collection.delete_many({"chat_id": message.chat.id})
-    await client.send_message(message.chat.id, f"✅ Cleared {res.deleted_count} couples.")
-
+    await client.send_message(
+        message.chat.id,
+        f"✅ Cleared {res.deleted_count} couple entries."
+    )
 
 
 
