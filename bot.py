@@ -39,6 +39,7 @@ from pyrogram.enums import ChatType
 import random
 from urllib.parse import quote
 from PIL import Image, ImageDraw, ImageFont
+from pyrogram.enums import ParseMode
 
 load_dotenv()
 
