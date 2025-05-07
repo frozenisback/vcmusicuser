@@ -83,8 +83,8 @@ couples_collection.create_index(
 )
 
 # template & font (adjust paths as needed)
-TEMPLATE_PATH = r"C:\Users\PC\Downloads\ChatGPT Image May 7, 2025, 10_54_34 PM.png"
-FONT_PATH     = r"C:\Users\PC\Downloads\arial.ttf"
+TEMPLATE_PATH = "copules.png"
+FONT_PATH     = "arial.ttf"
 _template = Image.open(TEMPLATE_PATH).convert("RGBA")
 R = 240
 W, H = _template.size
