@@ -1707,21 +1707,19 @@ async def welcome_new_member(client: Client, message: Message):
     For each new member, generate & send their welcome card with styled caption.
     """
     for member in message.new_chat_members:
-        # Generate the image as before
         img_path = await create_welcome_image(member)
 
-        # Build the caption with markdown links:
+        # Build caption using HTML links
         caption = (
             f"𝗪𝗲𝗹𝗰𝗼𝗺𝗲 𝗧𝗼 {message.chat.title}\n"
             "➖➖➖➖➖➖➖➖➖➖➖\n"
             f"๏ 𝗡𝗔𝗠𝗘 ➠ {member.mention}\n"
             f"๏ 𝗜𝗗 ➠ {member.id}\n"
             f"๏ 𝐔𝐒𝐄𝐑𝐍𝐀𝐌𝐄 ➠ @{member.username or '—'}\n"
-            f"๏ 𝐌𝐀𝐃𝐄 𝐁𝐘 ➠ [Frozen Bots](https://t.me/vibeshiftbots)\n"
+            f"๏ 𝐌𝐀𝐃𝐄 𝐁𝐘 ➠ <a href=\"https://t.me/vibeshiftbots\">Frozen Bots</a>\n"
             "➖➖➖➖➖➖➖➖➖➖➖"
         )
 
-        # “Add me” button pointing to your bot link
         markup = InlineKeyboardMarkup(
             [[
                 InlineKeyboardButton(
@@ -1731,22 +1729,18 @@ async def welcome_new_member(client: Client, message: Message):
             ]]
         )
 
-        # Send the photo with markdown-enabled caption
         await client.send_photo(
             chat_id=message.chat.id,
             photo=img_path,
             caption=caption,
-            parse_mode="markdown",
+            parse_mode=ParseMode.HTML,
             reply_markup=markup
         )
 
-        # Clean up temp file
         try:
             os.remove(img_path)
         except OSError:
             pass
-
-
 
 
 download_cache = {}  # Global cache dictionary
