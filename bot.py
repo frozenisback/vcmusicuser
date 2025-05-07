@@ -70,10 +70,28 @@ BACKUP_SEARCH_API_URL= "https://unique-ali-frozzennbotss-b307205b.koyeb.app"
 mongo_uri = os.environ.get("MONGO_URI", "mongodb+srv://frozenbotss:frozenbots@cluster0.s0tak.mongodb.net/?retryWrites=true&w=majority")
 mongo_client = MongoClient(mongo_uri)
 db = mongo_client["music_bot"]
+
 playlist_collection = db["playlists"]
 bots_collection = db["bots"]
 broadcast_collection = db["broadcast"]
+
+# ─── Couples collection ─────────────────────────────────────────────
 couples_collection = db["couples"]
+couples_collection.create_index(
+    [("created_at", 1)],
+    expireAfterSeconds=24 * 3600  # auto-expire couples after 24 hours
+)
+
+# template & font (adjust paths as needed)
+TEMPLATE_PATH = r"C:\Users\PC\Downloads\ChatGPT Image May 7, 2025, 10_54_34 PM.png"
+FONT_PATH     = r"C:\Users\PC\Downloads\arial.ttf"
+_template = Image.open(TEMPLATE_PATH).convert("RGBA")
+R = 240
+W, H = _template.size
+CENTERS = [(348,380), (1170,380)]
+NAME_Y = CENTERS[0][1] + R + 30
+GROUP_Y = 40
+GROUP_FONT_SIZE = 72
 
 
 # Containers for song queues per chat/group
@@ -1782,6 +1800,128 @@ async def download_audio(url):
         raise Exception("❌ Download API took too long to respond. Please try again.")
     except Exception as e:
         raise Exception(f"Error downloading audio: {e}")
+
+
+def _trim_name(name: str) -> str:
+    first = name.split()[0] if name else ""
+    return (first[:7] + "…") if len(first) > 8 else first
+
+async def get_pfp_image(client: Client, user_id: int) -> Image.Image:
+    try:
+        photos = []
+        async for p in client.get_chat_photos(user_id, limit=1):
+            photos.append(p)
+
+        if not photos:
+            print(f"[get_pfp_image] no profile photos for user {user_id}")
+            return Image.new("RGBA", (2*R, 2*R), (200,200,200,255))
+
+        photo = photos[0]
+        print(f"[get_pfp_image] downloading file_id={photo.file_id}")
+        file_path = await client.download_media(photo.file_id)
+        img = Image.open(file_path).convert("RGBA")
+        os.remove(file_path)
+        return img
+
+    except Exception as e:
+        print(f"[get_pfp_image] ERROR for user {user_id}: {e}")
+        raise
+
+def paste_circle(base: Image.Image, img: Image.Image, center: tuple):
+    img = img.resize((2*R, 2*R))
+    mask = Image.new("L", (2*R, 2*R), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((0,0,2*R,2*R), fill=255)
+    base.paste(img, (center[0]-R, center[1]-R), mask)
+
+def draw_name(base: Image.Image, name: str, center_x: int):
+    draw = ImageDraw.Draw(base)
+    font = ImageFont.truetype(FONT_PATH, 56)
+    text = _trim_name(name)
+    bbox = draw.textbbox((0,0), text, font=font)
+    w = bbox[2] - bbox[0]
+    draw.text((center_x - w/2, NAME_Y), text, font=font, fill=(51,51,51))
+
+def draw_group_name(base: Image.Image, title: str):
+    draw = ImageDraw.Draw(base)
+    font = ImageFont.truetype(FONT_PATH, GROUP_FONT_SIZE)
+    bbox = draw.textbbox((0,0), title, font=font)
+    w = bbox[2] - bbox[0]
+    draw.text(((W - w)/2, GROUP_Y), title, font=font, fill=(51,51,51))
+
+async def build_couple_image(client: Client, u1_id: int, u2_id: int, group_title: str) -> BytesIO:
+    base = _template.copy()
+    draw_group_name(base, group_title)
+    p1 = await get_pfp_image(client, u1_id)
+    p2 = await get_pfp_image(client, u2_id)
+    paste_circle(base, p1, CENTERS[0])
+    paste_circle(base, p2, CENTERS[1])
+    u1 = await client.get_users(u1_id)
+    u2 = await client.get_users(u2_id)
+    draw_name(base, u1.first_name or "", CENTERS[0][0])
+    draw_name(base, u2.first_name or "", CENTERS[1][0])
+    out = BytesIO()
+    base.save(out, format="PNG")
+    out.seek(0)
+    return out
+
+@bot.on_message(filters.group & filters.command("couple", prefixes="/"))
+async def make_couple(client, message):
+    status = await message.reply_text("⏳ Choosing today’s couple…")
+    chat_id = message.chat.id
+    group_title = message.chat.title or ""
+
+    # Try cached
+    try:
+        existing = couples_collection.find_one({"chat_id": chat_id})
+        if existing:
+            u1, u2 = existing["user1_id"], existing["user2_id"]
+            cap = (
+                "❤️ Couples already chosen today! ❤️\n"
+                f"<a href=\"tg://user?id={u1}\">{_trim_name((await client.get_users(u1)).first_name)}</a> & "
+                f"<a href=\"tg://user?id={u2}\">{_trim_name((await client.get_users(u2)).first_name)}</a> "
+                "are today’s couple and will be reselected tomorrow."
+            )
+            await client.send_photo(chat_id, existing["file_id"], caption=cap, parse_mode=ParseMode.HTML)
+            return await status.delete()
+    except errors.PeerIdInvalid:
+        couples_collection.delete_many({"chat_id": chat_id})
+    except Exception:
+        pass
+
+    # Pick fresh
+    members = [m.user.id async for m in client.get_chat_members(chat_id) if not m.user.is_bot]
+    if len(members) < 2:
+        await status.delete()
+        return await message.reply_text("❌ Not enough non-bot members.")
+    u1, u2 = random.sample(members, 2)
+
+    buf = await build_couple_image(client, u1, u2, group_title)
+    res = await client.send_photo(
+        chat_id, buf,
+        caption=(
+            f"❤️ <a href=\"tg://user?id={u1}\">{_trim_name((await client.get_users(u1)).first_name)}</a> & "
+            f"<a href=\"tg://user?id={u2}\">{_trim_name((await client.get_users(u2)).first_name)}</a> "
+            "are today’s couple! ❤️"
+        ),
+        parse_mode=ParseMode.HTML
+    )
+
+    # Cache
+    couples_collection.insert_one({
+        "chat_id": chat_id,
+        "user1_id": u1,
+        "user2_id": u2,
+        "file_id": res.photo.file_id,
+        "created_at": datetime.now(timezone.utc)
+    })
+    await status.delete()
+
+@bot.on_message(filters.group & filters.command("clearcouples", prefixes="/"))
+async def clear_couples(client, message):
+    res = couples_collection.delete_many({"chat_id": message.chat.id})
+    await client.send_message(message.chat.id, f"✅ Cleared {res.deleted_count} couples.")
+
 
 
 
