@@ -40,6 +40,8 @@ import random
 from urllib.parse import quote
 from PIL import Image, ImageDraw, ImageFont
 from pyrogram.enums import ParseMode
+from pyrogram import errors
+
 
 load_dotenv()
 
