@@ -1869,102 +1869,72 @@ async def build_couple_image(client: Client, u1_id: int, u2_id: int, group_title
 
 @bot.on_message(filters.group & filters.command("couple", prefixes="/"))
 async def make_couple(client, message):
-    status = await message.reply_text("⏳ Gathering non-bot members…")
+    status = await message.reply_text("⏳ Choosing today’s couple...")
     chat_id = message.chat.id
     group_title = message.chat.title or ""
 
-    # 1) Check cache
+    # 1) Try cached entry
     try:
         existing = couples_collection.find_one({"chat_id": chat_id})
         if existing:
-            await status.edit_text("⏳ Loading today’s couple from cache…")
-            u1_id, u2_id, file_id = existing["user1_id"], existing["user2_id"], existing["file_id"]
-
-            # prepare caption + inline buttons
-            name1 = _trim_name((await client.get_users(u1_id)).first_name)
-            name2 = _trim_name((await client.get_users(u2_id)).first_name)
+            u1_id = existing["user1_id"]
+            u2_id = existing["user2_id"]
+            file_id = existing["file_id"]
             caption = (
-                "❤️ Couples already chosen today! ❤️\n\n"
-                f"<a href=\"tg://user?id={u1_id}\">{name1}</a> & "
-                f"<a href=\"tg://user?id={u2_id}\">{name2}</a> "
+                "❤️ Couples already chosen today! ❤️\n"
+                f"<a href=\"tg://user?id={u1_id}\">{_trim_name((await client.get_users(u1_id)).first_name)}</a> & "
+                f"<a href=\"tg://user?id={u2_id}\">{_trim_name((await client.get_users(u2_id)).first_name)}</a> "
                 "are today’s couple and will be reselected tomorrow."
             )
-            buttons = InlineKeyboardMarkup([[
-                InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
-                InlineKeyboardButton(text="❤️", callback_data="noop"),
-                InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
-            ]])
-
             await client.send_photo(
                 chat_id=chat_id,
                 photo=file_id,
                 caption=caption,
-                parse_mode=ParseMode.HTML,
-                reply_markup=buttons
+                parse_mode=ParseMode.HTML
             )
             return await status.delete()
     except errors.PeerIdInvalid:
-        # stale entries
+        # stale user IDs → clear and continue
         couples_collection.delete_many({"chat_id": chat_id})
     except Exception as e:
         print(f"[make_couple] cache lookup error: {e}")
-        # fall through
+        # fall through to generate new
 
-    # 2) Gather & filter members with a profile photo
-    await status.edit_text("⏳ Filtering members with profile pictures…")
+    # 2) Gather members & pick two
     members = []
     async for m in client.get_chat_members(chat_id):
-        if m.user.is_bot:
-            continue
-        # quick check for any profile photos
-        photos = []
-        async for _ in client.get_chat_photos(m.user.id, limit=1):
-            photos.append(1)
-            break
-        if photos:
+        if not m.user.is_bot:
             members.append(m.user.id)
 
     if len(members) < 2:
         await status.delete()
-        return await message.reply_text("❌ Not enough members with profile pictures to form a couple.")
+        return await message.reply_text("❌ Not enough non-bot members to form a couple.")
 
-    # 3) Pick two distinct users
-    await status.edit_text("⏳ Choosing today’s couple…")
-    u1_id, u2_id = random.sample(members, 2)
+    u1, u2 = random.sample(members, 2)
 
-    # 4) Build the image
-    await status.edit_text("⏳ Building couple image…")
-    buf = await build_couple_image(client, u1_id, u2_id, group_title)
-
-    # 5) Send with inline keyboard
-    name1 = _trim_name((await client.get_users(u1_id)).first_name)
-    name2 = _trim_name((await client.get_users(u2_id)).first_name)
-    caption = (
-        f"❤️ <a href=\"tg://user?id={u1_id}\">{name1}</a> & "
-        f"<a href=\"tg://user?id={u2_id}\">{name2}</a> "
-        "are today’s couple! ❤️"
-    )
-    buttons = InlineKeyboardMarkup([[
-        InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
-        InlineKeyboardButton(text="❤️", callback_data="noop"),
-        InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
-    ]])
-    res = await client.send_photo(
+    # 3) Build & send new image
+    buf = await build_couple_image(client, u1, u2, group_title)
+    res_msg = await client.send_photo(
         chat_id=chat_id,
         photo=buf,
-        caption=caption,
-        parse_mode=ParseMode.HTML,
-        reply_markup=buttons
+        caption=(
+            f"❤️ <a href=\"tg://user?id={u1}\">{_trim_name((await client.get_users(u1)).first_name)}</a> & "
+            f"<a href=\"tg://user?id={u2}\">{_trim_name((await client.get_users(u2)).first_name)}</a> "
+            "are today’s couple! ❤️"
+        ),
+        parse_mode=ParseMode.HTML
     )
 
-    # 6) Cache it and clean up
+    # 4) Cache the new selection
+    file_id = res_msg.photo.file_id
     couples_collection.insert_one({
         "chat_id":    chat_id,
-        "user1_id":   u1_id,
-        "user2_id":   u2_id,
-        "file_id":    res.photo.file_id,
+        "user1_id":   u1,
+        "user2_id":   u2,
+        "file_id":    file_id,
         "created_at": datetime.now(timezone.utc)
     })
+
     await status.delete()
 
 @bot.on_message(filters.group & filters.command("clearcouples", prefixes="/"))
