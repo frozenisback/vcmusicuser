@@ -42,7 +42,7 @@ from PIL import Image, ImageDraw, ImageFont
 from pyrogram.enums import ParseMode
 from pyrogram import errors
 from datetime import datetime, timezone
-
+from gender_guesser.detector import Detector
 
 load_dotenv()
 
@@ -1868,124 +1868,142 @@ async def build_couple_image(client: Client, u1_id: int, u2_id: int, group_title
     out.seek(0)
     return out
 
-from datetime import datetime, timezone
-import random
-from pyrogram import errors
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+processing_chats = set()
+# initialize gender detector (uses offline name database)
+gender_detector = Detector(case_sensitive=False)
 
 @bot.on_message(filters.group & filters.command("couple", prefixes="/"))
 async def make_couple(client, message):
-    status = await message.reply_text("⏳ Gathering non-bot members…")
     chat_id = message.chat.id
+
+    # prevent command spam in the same chat
+    if chat_id in processing_chats:
+        return await message.reply_text("⚠️ Please wait, I'm already processing your previous request.")
+
+    processing_chats.add(chat_id)
+    status = await message.reply_text("⏳ Gathering non-bot members…")
     group_title = message.chat.title or ""
 
-    # 1) Check cache
     try:
-        existing = couples_collection.find_one({"chat_id": chat_id})
-        if existing:
-            await status.edit_text("⏳ Loading today’s couple from cache…")
-            u1_id, u2_id, file_id = existing["user1_id"], existing["user2_id"], existing["file_id"]
-
-            # prepare caption + inline buttons
-            name1 = _trim_name((await client.get_users(u1_id)).first_name)
-            name2 = _trim_name((await client.get_users(u2_id)).first_name)
-            caption = (
-                "❤️ Couples already chosen today! ❤️\n\n"
-                f"<a href=\"tg://user?id={u1_id}\">{name1}</a> & "
-                f"<a href=\"tg://user?id={u2_id}\">{name2}</a> "
-                "are today’s couple and will be reselected tomorrow."
-            )
-            buttons = InlineKeyboardMarkup([[  
-                InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
-                InlineKeyboardButton(text="❤️", callback_data="noop"),
-                InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
-            ]])
-
-            await client.send_photo(
-                chat_id=chat_id,
-                photo=file_id,
-                caption=caption,
-                parse_mode=ParseMode.HTML,
-                reply_markup=buttons
-            )
-            return await status.delete()
-    except errors.PeerIdInvalid:
-        # stale entries
-        couples_collection.delete_many({"chat_id": chat_id})
-    except Exception as e:
-        print(f"[make_couple] cache lookup error: {e}")
-        # fall through
-
-    # 2) Build fresh list of non-bot members
-    all_members = []
-    async for m in client.get_chat_members(chat_id):
-        if not m.user.is_bot:
-            all_members.append(m.user.id)
-
-    if len(all_members) < 2:
-        await status.delete()
-        return await message.reply_text("❌ Not enough non-bot members to form a couple.")
-
-    # 3) Pick two users with valid profile photos
-    await status.edit_text("⏳ Choosing today’s couple…")
-    selected = []
-    tries = set()
-    while len(selected) < 2 and len(tries) < len(all_members):
-        uid = random.choice(all_members)
-        if uid in tries:
-            continue
-        tries.add(uid)
+        # 1) Check cache
         try:
-            # attempt to download profile pic
-            pfp = await get_pfp_image(client, uid)
-            # if pfp is default blank, skip
-            if pfp.width <= 2*R and pfp.getpixel((0,0)) == (200,200,200,255):
+            existing = couples_collection.find_one({"chat_id": chat_id})
+            if existing:
+                await status.edit_text("⏳ Loading today’s couple from cache…")
+                u1_id, u2_id, file_id = existing["user1_id"], existing["user2_id"], existing["file_id"]
+
+                name1 = _trim_name((await client.get_users(u1_id)).first_name)
+                name2 = _trim_name((await client.get_users(u2_id)).first_name)
+                caption = (
+                    "❤️ Couples already chosen today! ❤️\n\n"
+                    f"<a href=\"tg://user?id={u1_id}\">{name1}</a> & "
+                    f"<a href=\"tg://user?id={u2_id}\">{name2}</a> "
+                    "are today’s couple and will be reselected tomorrow."
+                )
+                buttons = InlineKeyboardMarkup([[  
+                    InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
+                    InlineKeyboardButton(text="❤️", callback_data="noop"),
+                    InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
+                ]])
+
+                await client.send_photo(
+                    chat_id=chat_id,
+                    photo=file_id,
+                    caption=caption,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=buttons
+                )
+                return
+        except errors.PeerIdInvalid:
+            couples_collection.delete_many({"chat_id": chat_id})
+        except Exception as e:
+            print(f"[make_couple] cache lookup error: {e}")
+
+        # 2) Build list of all non-bot members and categorize by gender
+        await status.edit_text("⏳ Gathering and categorizing members…")
+        male_candidates = []
+        female_candidates = []
+        async for m in client.get_chat_members(chat_id):
+            if m.user.is_bot:
                 continue
-            selected.append(uid)
-        except Exception:
-            # no valid pfp or error → skip
-            continue
+            name = (await client.get_users(m.user.id)).first_name or ""
+            simple = name.split()[0]  # use first name only
+            gender = gender_detector.get_gender(simple)
+            # gender_detector returns 'male', 'female', 'andy', 'unknown', etc.
+            if gender in ("male", "mostly_male"):
+                male_candidates.append(m.user.id)
+            elif gender in ("female", "mostly_female"):
+                female_candidates.append(m.user.id)
+        # ensure enough members in each category
+        if not male_candidates or not female_candidates:
+            # fallback to original all-members pool
+            all_members = [m.user.id async for m in client.get_chat_members(chat_id) if not m.user.is_bot]
+            if len(all_members) < 2:
+                await message.reply_text("❌ Not enough non-bot members to form a couple.")
+                return
+            male_candidates = female_candidates = all_members
 
-    if len(selected) < 2:
+        # 3) Select one male and one female with valid photos
+        await status.edit_text("⏳ Choosing today’s couple…")
+        def pick_with_photo(candidates):
+            tried = set()
+            while len(tried) < len(candidates):
+                uid = random.choice(candidates)
+                tried.add(uid)
+                try:
+                    pfp = await get_pfp_image(client, uid)
+                    # skip default blank image
+                    if pfp.width <= 2*R and pfp.getpixel((0,0)) == (200,200,200,255):
+                        continue
+                    return uid
+                except Exception:
+                    continue
+            return None
+
+        u1_id = await pick_with_photo(male_candidates)
+        u2_id = await pick_with_photo(female_candidates)
+        if not u1_id or not u2_id:
+            await message.reply_text("❌ Could not find two members with valid profile pictures.")
+            return
+
+        # 4) Build image
+        await status.edit_text("⏳ Building couple image…")
+        buf = await build_couple_image(client, u1_id, u2_id, group_title)
+
+        # 5) Send result
+        name1 = _trim_name((await client.get_users(u1_id)).first_name)
+        name2 = _trim_name((await client.get_users(u2_id)).first_name)
+        caption = (
+            f"❤️ <a href=\"tg://user?id={u1_id}\">{name1}</a> & "
+            f"<a href=\"tg://user?id={u2_id}\">{name2}</a> "
+            "are today’s couple! ❤️"
+        )
+        buttons = InlineKeyboardMarkup([[
+            InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
+            InlineKeyboardButton(text="❤️", callback_data="noop"),
+            InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
+        ]])
+        res = await client.send_photo(
+            chat_id=chat_id,
+            photo=buf,
+            caption=caption,
+            parse_mode=ParseMode.HTML,
+            reply_markup=buttons
+        )
+
+        # 6) Cache selection
+        couples_collection.insert_one({
+            "chat_id":    chat_id,
+            "user1_id":   u1_id,
+            "user2_id":   u2_id,
+            "file_id":    res.photo.file_id,
+            "created_at": datetime.now(timezone.utc)
+        })
+
+    finally:
+        # always cleanup status and processing flag
         await status.delete()
-        return await message.reply_text("❌ Could not find two members with profile pictures.")
-
-    u1_id, u2_id = selected
-
-    # 4) Build image
-    await status.edit_text("⏳ Building couple image…")
-    buf = await build_couple_image(client, u1_id, u2_id, group_title)
-
-    # 5) Send with inline keyboard
-    name1 = _trim_name((await client.get_users(u1_id)).first_name)
-    name2 = _trim_name((await client.get_users(u2_id)).first_name)
-    caption = (
-        f"❤️ <a href=\"tg://user?id={u1_id}\">{name1}</a> & "
-        f"<a href=\"tg://user?id={u2_id}\">{name2}</a> "
-        "are today’s couple! ❤️"
-    )
-    buttons = InlineKeyboardMarkup([[
-        InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
-        InlineKeyboardButton(text="❤️", callback_data="noop"),
-        InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
-    ]])
-    res = await client.send_photo(
-        chat_id=chat_id,
-        photo=buf,
-        caption=caption,
-        parse_mode=ParseMode.HTML,
-        reply_markup=buttons
-    )
-
-    # 6) Cache and cleanup
-    couples_collection.insert_one({
-        "chat_id":    chat_id,
-        "user1_id":   u1_id,
-        "user2_id":   u2_id,
-        "file_id":    res.photo.file_id,
-        "created_at": datetime.now(timezone.utc)
-    })
-    await status.delete()
+        processing_chats.discard(chat_id)
 
 
 
