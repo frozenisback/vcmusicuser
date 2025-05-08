@@ -2045,7 +2045,7 @@ async def make_couple(client: Client, message):
         await status.delete()
         processing_chats.discard(chat_id)
 
-@bot.on_message(filters.group & filters.command("ban") & ~filters.edited)
+@bot.on_message(filters.group & filters.command("ban"))
 @safe_handler
 async def ban_handler(_, message: Message):
     # Only admins can ban
@@ -2057,7 +2057,7 @@ async def ban_handler(_, message: Message):
     await bot.ban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been banned.")
 
-@bot.on_message(filters.group & filters.command("unban") & ~filters.edited)
+@bot.on_message(filters.group & filters.command("unban"))
 @safe_handler
 async def unban_handler(_, message: Message):
     if not await is_user_admin(message):
@@ -2069,7 +2069,7 @@ async def unban_handler(_, message: Message):
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been unbanned.")
 
 
-@bot.on_message(filters.group & filters.command("mute") & ~filters.edited)
+@bot.on_message(filters.group & filters.command("mute"))
 @safe_handler
 async def mute_handler(_, message: Message):
     if not await is_user_admin(message):
@@ -2086,7 +2086,7 @@ async def mute_handler(_, message: Message):
     await bot.restrict_chat_member(message.chat.id, target_id, permissions=perms)
     await message.reply(f"🔇 User [{target_id}](tg://user?id={target_id}) has been muted.")
 
-@bot.on_message(filters.group & filters.command("unmute") & ~filters.edited)
+@bot.on_message(filters.group & filters.command("unmute"))
 @safe_handler
 async def unmute_handler(_, message: Message):
     if not await is_user_admin(message):
@@ -2104,7 +2104,7 @@ async def unmute_handler(_, message: Message):
     await message.reply(f"🔊 User [{target_id}](tg://user?id={target_id}) has been unmuted.")
 
 
-@bot.on_message(filters.group & filters.command("tmute") & ~filters.edited)
+@bot.on_message(filters.group & filters.command("tmute"))
 @safe_handler
 async def tmute_handler(_, message: Message):
     if not await is_user_admin(message):
