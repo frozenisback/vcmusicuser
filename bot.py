@@ -65,7 +65,7 @@ API_ASSISTANT_USERNAME = "@xyz92929"
 # API Endpoints
 API_URL = os.environ.get("API_URL")
 DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
-BACKUP_SEARCH_API_URL= "https://unique-ali-frozzennbotss-b307205b.koyeb.app"
+BACKUP_SEARCH_API_URL= "https://teenage-liz-frozzennbotss-61567ab4.koyeb.app"
 
 
 # Use an environment variable for the MongoDB URI
