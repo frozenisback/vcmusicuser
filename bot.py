@@ -2133,6 +2133,25 @@ async def tmute_handler(_, message: Message):
     )
     await message.reply(f"⏱️ User [{target_id}](tg://user?id={target_id}) muted for {minutes} minutes.")
 
+@bot.on_message(filters.group & filters.command("kick"))
+@safe_handler
+async def kick_handler(_, message):
+    if not await is_user_admin(message):
+        return await message.reply("❌ You must be an admin to use /kick.")
+    
+    # Determine which user to kick
+    user_id = await extract_target_user(message)
+    if not user_id:
+        return
+
+    # 1) Ban (kick) the user  
+    await bot.ban_chat_member(message.chat.id, user_id)  
+    
+    # 2) Immediately unban so they can rejoin  
+    await bot.unban_chat_member(message.chat.id, user_id)  
+
+    await message.reply(f"👢 User [{user_id}](tg://user?id={user_id}) has been kicked.")
+
 
 
 
