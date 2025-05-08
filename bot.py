@@ -1868,6 +1868,11 @@ async def build_couple_image(client: Client, u1_id: int, u2_id: int, group_title
     out.seek(0)
     return out
 
+from datetime import datetime, timezone
+import random
+from pyrogram import errors
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
 @bot.on_message(filters.group & filters.command("couple", prefixes="/"))
 async def make_couple(client, message):
     status = await message.reply_text("⏳ Gathering non-bot members…")
@@ -1890,7 +1895,7 @@ async def make_couple(client, message):
                 f"<a href=\"tg://user?id={u2_id}\">{name2}</a> "
                 "are today’s couple and will be reselected tomorrow."
             )
-            buttons = InlineKeyboardMarkup([[
+            buttons = InlineKeyboardMarkup([[  
                 InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
                 InlineKeyboardButton(text="❤️", callback_data="noop"),
                 InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
@@ -1911,29 +1916,43 @@ async def make_couple(client, message):
         print(f"[make_couple] cache lookup error: {e}")
         # fall through
 
-    # 2) Gather & filter members with a profile photo
-    await status.edit_text("⏳ Filtering members with profile pictures…")
-    members = []
+    # 2) Build fresh list of non-bot members
+    all_members = []
     async for m in client.get_chat_members(chat_id):
-        if m.user.is_bot:
-            continue
-        # quick check for any profile photos
-        photos = []
-        async for _ in client.get_chat_photos(m.user.id, limit=1):
-            photos.append(1)
-            break
-        if photos:
-            members.append(m.user.id)
+        if not m.user.is_bot:
+            all_members.append(m.user.id)
 
-    if len(members) < 2:
+    if len(all_members) < 2:
         await status.delete()
-        return await message.reply_text("❌ Not enough members with profile pictures to form a couple.")
+        return await message.reply_text("❌ Not enough non-bot members to form a couple.")
 
-    # 3) Pick two distinct users
+    # 3) Pick two users with valid profile photos
     await status.edit_text("⏳ Choosing today’s couple…")
-    u1_id, u2_id = random.sample(members, 2)
+    selected = []
+    tries = set()
+    while len(selected) < 2 and len(tries) < len(all_members):
+        uid = random.choice(all_members)
+        if uid in tries:
+            continue
+        tries.add(uid)
+        try:
+            # attempt to download profile pic
+            pfp = await get_pfp_image(client, uid)
+            # if pfp is default blank, skip
+            if pfp.width <= 2*R and pfp.getpixel((0,0)) == (200,200,200,255):
+                continue
+            selected.append(uid)
+        except Exception:
+            # no valid pfp or error → skip
+            continue
 
-    # 4) Build the image
+    if len(selected) < 2:
+        await status.delete()
+        return await message.reply_text("❌ Could not find two members with profile pictures.")
+
+    u1_id, u2_id = selected
+
+    # 4) Build image
     await status.edit_text("⏳ Building couple image…")
     buf = await build_couple_image(client, u1_id, u2_id, group_title)
 
@@ -1958,7 +1977,7 @@ async def make_couple(client, message):
         reply_markup=buttons
     )
 
-    # 6) Cache it and clean up
+    # 6) Cache and cleanup
     couples_collection.insert_one({
         "chat_id":    chat_id,
         "user1_id":   u1_id,
@@ -1969,6 +1988,7 @@ async def make_couple(client, message):
     await status.delete()
 
 
+
 @bot.on_message(filters.group & filters.command("clearcouples", prefixes="/"))
 async def clear_couples(client, message):
     res = couples_collection.delete_many({"chat_id": message.chat.id})
@@ -1976,7 +1996,6 @@ async def clear_couples(client, message):
         message.chat.id,
         f"✅ Cleared {res.deleted_count} couple entries."
     )
-
 
 
 
