@@ -1890,7 +1890,9 @@ async def make_couple(client, message):
             existing = couples_collection.find_one({"chat_id": chat_id})
             if existing:
                 await status.edit_text("⏳ Loading today’s couple from cache…")
-                u1_id, u2_id, file_id = existing["user1_id"], existing["user2_id"], existing["file_id"]
+                u1_id = existing["user1_id"]
+                u2_id = existing["user2_id"]
+                file_id = existing["file_id"]
 
                 name1 = _trim_name((await client.get_users(u1_id)).first_name)
                 name2 = _trim_name((await client.get_users(u2_id)).first_name)
@@ -1900,7 +1902,7 @@ async def make_couple(client, message):
                     f"<a href=\"tg://user?id={u2_id}\">{name2}</a> "
                     "are today’s couple and will be reselected tomorrow."
                 )
-                buttons = InlineKeyboardMarkup([[  
+                buttons = InlineKeyboardMarkup([[
                     InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
                     InlineKeyboardButton(text="❤️", callback_data="noop"),
                     InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
@@ -1919,7 +1921,7 @@ async def make_couple(client, message):
         except Exception as e:
             print(f"[make_couple] cache lookup error: {e}")
 
-        # 2) Build list of all non-bot members and categorize by gender
+        # 2) Gather & categorize members by gender
         await status.edit_text("⏳ Gathering and categorizing members…")
         male_candidates = []
         female_candidates = []
@@ -1927,33 +1929,33 @@ async def make_couple(client, message):
             if m.user.is_bot:
                 continue
             name = (await client.get_users(m.user.id)).first_name or ""
-            simple = name.split()[0]  # use first name only
+            simple = name.split()[0]
             gender = gender_detector.get_gender(simple)
-            # gender_detector returns 'male', 'female', 'andy', 'unknown', etc.
             if gender in ("male", "mostly_male"):
                 male_candidates.append(m.user.id)
             elif gender in ("female", "mostly_female"):
                 female_candidates.append(m.user.id)
-        # ensure enough members in each category
+
+        # fallback if not enough by gender
         if not male_candidates or not female_candidates:
-            # fallback to original all-members pool
             all_members = [m.user.id async for m in client.get_chat_members(chat_id) if not m.user.is_bot]
             if len(all_members) < 2:
-                await message.reply_text("❌ Not enough non-bot members to form a couple.")
-                return
+                await status.delete()
+                return await message.reply_text("❌ Not enough non-bot members to form a couple.")
             male_candidates = female_candidates = all_members
 
-        # 3) Select one male and one female with valid photos
+        # 3) Pick one from each list with a valid PFP
         await status.edit_text("⏳ Choosing today’s couple…")
-        def pick_with_photo(candidates):
+
+        async def pick_with_photo(candidates):
             tried = set()
             while len(tried) < len(candidates):
                 uid = random.choice(candidates)
                 tried.add(uid)
                 try:
                     pfp = await get_pfp_image(client, uid)
-                    # skip default blank image
-                    if pfp.width <= 2*R and pfp.getpixel((0,0)) == (200,200,200,255):
+                    # skip blank placeholder (200×200 grey)
+                    if pfp.width == 2*R and pfp.getpixel((0, 0)) == (200, 200, 200, 255):
                         continue
                     return uid
                 except Exception:
@@ -1963,10 +1965,10 @@ async def make_couple(client, message):
         u1_id = await pick_with_photo(male_candidates)
         u2_id = await pick_with_photo(female_candidates)
         if not u1_id or not u2_id:
-            await message.reply_text("❌ Could not find two members with valid profile pictures.")
-            return
+            await status.delete()
+            return await message.reply_text("❌ Could not find two members with valid profile pictures.")
 
-        # 4) Build image
+        # 4) Build the image
         await status.edit_text("⏳ Building couple image…")
         buf = await build_couple_image(client, u1_id, u2_id, group_title)
 
@@ -2001,7 +2003,6 @@ async def make_couple(client, message):
         })
 
     finally:
-        # always cleanup status and processing flag
         await status.delete()
         processing_chats.discard(chat_id)
 
