@@ -43,6 +43,7 @@ from pyrogram.enums import ParseMode
 from pyrogram import errors
 from datetime import datetime, timezone
 from gender_guesser.detector import Detector
+from pyrogram.enums import ChatPermissions
 
 load_dotenv()
 
@@ -306,6 +307,29 @@ async def fetch_youtube_link(query):
                     raise Exception(f"API returned status code {response.status}")
     except Exception as e:
         raise Exception(f"Failed to fetch YouTube link: {str(e)}")
+
+async def extract_target_user(message: Message):
+    # If the moderator replied to someone:
+    if message.reply_to_message:
+        return message.reply_to_message.from_user.id
+
+    # Otherwise expect an argument like "/ban @user" or "/ban 123456"
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ You must reply to a user or specify their @username/user_id.")
+        return None
+
+    target = parts[1]
+    # Strip @
+    if target.startswith("@"):
+        target = target[1:]
+    try:
+        user = await message._client.get_users(target)
+        return user.id
+    except:
+        await message.reply("❌ Could not find that user.")
+        return None
+
     
 async def fetch_youtube_link_backup(query):
     if not BACKUP_SEARCH_API_URL:
@@ -2020,13 +2044,93 @@ async def make_couple(client: Client, message):
         processing_chats.discard(chat_id)
 
 
-@bot.on_message(filters.group & filters.command("clearcouples", prefixes="/"))
-async def clear_couples(client, message):
-    res = couples_collection.delete_many({"chat_id": message.chat.id})
-    await client.send_message(
-        message.chat.id,
-        f"✅ Cleared {res.deleted_count} couple entries."
+@bot.on_message(filters.group & filters.command("ban") & ~filters.edited)
+@safe_handler
+async def ban_handler(_, message: Message):
+    # Only admins can ban
+    if not await is_user_admin(message):
+        return await message.reply("❌ You must be an admin to use /ban.")
+    target_id = await extract_target_user(message)
+    if not target_id:
+        return
+    await bot.ban_chat_member(message.chat.id, target_id)
+    await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been banned.")
+
+@bot.on_message(filters.group & filters.command("unban") & ~filters.edited)
+@safe_handler
+async def unban_handler(_, message: Message):
+    if not await is_user_admin(message):
+        return await message.reply("❌ You must be an admin to use /unban.")
+    target_id = await extract_target_user(message)
+    if not target_id:
+        return
+    await bot.unban_chat_member(message.chat.id, target_id)
+    await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been unbanned.")
+
+
+@bot.on_message(filters.group & filters.command("mute") & ~filters.edited)
+@safe_handler
+async def mute_handler(_, message: Message):
+    if not await is_user_admin(message):
+        return await message.reply("❌ You must be an admin to use /mute.")
+    target_id = await extract_target_user(message)
+    if not target_id:
+        return
+    perms = ChatPermissions(
+        can_send_messages=False,
+        can_send_media_messages=False,
+        can_send_other_messages=False,
+        can_add_web_page_previews=False
     )
+    await bot.restrict_chat_member(message.chat.id, target_id, permissions=perms)
+    await message.reply(f"🔇 User [{target_id}](tg://user?id={target_id}) has been muted.")
+
+@bot.on_message(filters.group & filters.command("unmute") & ~filters.edited)
+@safe_handler
+async def unmute_handler(_, message: Message):
+    if not await is_user_admin(message):
+        return await message.reply("❌ You must be an admin to use /unmute.")
+    target_id = await extract_target_user(message)
+    if not target_id:
+        return
+    full_perms = ChatPermissions( # restore defaults
+        can_send_messages=True,
+        can_send_media_messages=True,
+        can_send_other_messages=True,
+        can_add_web_page_previews=True
+    )
+    await bot.restrict_chat_member(message.chat.id, target_id, permissions=full_perms)
+    await message.reply(f"🔊 User [{target_id}](tg://user?id={target_id}) has been unmuted.")
+
+@bot.on_message(filters.group & filters.command("tmute") & ~filters.edited)
+@safe_handler
+async def tmute_handler(_, message: Message):
+    if not await is_user_admin(message):
+        return await message.reply("❌ You must be an admin to use /tmute.")
+    parts = message.text.split()
+    if len(parts) < 3:
+        return await message.reply("Usage: /tmute <user> <minutes>\nExample: /tmute @john 15")
+    # Extract target and duration
+    target_id = await extract_target_user(message)
+    try:
+        minutes = int(parts[-1])
+    except:
+        return await message.reply("❌ Invalid duration. Use an integer number of minutes.")
+    until = datetime.utcnow() + timedelta(minutes=minutes)
+    perms = ChatPermissions(
+        can_send_messages=False,
+        can_send_media_messages=False,
+        can_send_other_messages=False,
+        can_add_web_page_previews=False
+    )
+    await bot.restrict_chat_member(
+        message.chat.id,
+        target_id,
+        permissions=perms,
+        until_date=until
+    )
+    await message.reply(f"⏱️ User [{target_id}](tg://user?id={target_id}) muted for {minutes} minutes.")
+
 
 
 
