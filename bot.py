@@ -1905,7 +1905,7 @@ async def build_couple_image(client: Client, u1_id: int, u2_id: int, group_title
 
 processing_chats = set()
 
-@Client.on_message(filters.group & filters.command("couple", prefixes="/"))
+@bot.on_message(filters.group & filters.command("couple", prefixes="/"))
 async def make_couple(client: Client, message):
     chat_id = message.chat.id
 
