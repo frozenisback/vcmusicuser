@@ -9,7 +9,7 @@ import os
 import re
 import time
 import psutil
-from datetime import timedelta
+from datetime import datetime, timezone, timedelta
 import uuid
 import tempfile
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
@@ -41,7 +41,6 @@ from urllib.parse import quote
 from PIL import Image, ImageDraw, ImageFont
 from pyrogram.enums import ParseMode
 from pyrogram import errors
-from datetime import datetime, timedelta, timezone
 from gender_guesser.detector import Detector
 from pyrogram.types import ChatPermissions
 
@@ -1990,7 +1989,7 @@ async def make_couple(client: Client, message):
             )
 
         # 2) Today's couple cache (only reuse if created ≥ today midnight UTC)
-        midnight_utc = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
+        midnight_utc = now.replace(hour=0, minute=0, second=0, microsecond=0)
         existing = couples_collection.find_one({
             "chat_id": chat_id,
             "created_at": {"$gte": midnight_utc}
