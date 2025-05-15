@@ -85,7 +85,11 @@ broadcast_collection  = db["broadcast"]
 couples_collection    = db["couples"]
 members_cache         = db["chat_members"]
 
-# TTL Indexes
+# Create per-chat unique index on chat_id
+members_cache.create_index([("chat_id", ASCENDING)], unique=True)
+couples_collection.create_index([("chat_id", ASCENDING)], unique=True)
+
+# TTL Indexes to auto-expire
 couples_collection.create_index(
     [("created_at", ASCENDING)],
     expireAfterSeconds=24 * 3600  # auto-expire couples after 24 hours
@@ -1905,25 +1909,71 @@ async def build_couple_image(client: Client, u1_id: int, u2_id: int, group_title
 
 processing_chats = set()
 
-@bot.on_message(filters.group & filters.command("couple", prefixes="/"))
-async def make_couple(client: Client, message):
-    chat_id = message.chat.id
+async def _send_couple(
+    client: Client,
+    chat_id: int,
+    u1_id: int,
+    u2_id: int,
+    photo_buf,
+    from_cache: bool = False
+):
+    """Send the couple image with buttons and a caption."""
+    user1 = await client.get_users(u1_id)
+    user2 = await client.get_users(u2_id)
+    name1 = _trim_name(user1.first_name)
+    name2 = _trim_name(user2.first_name)
 
-    # Prevent concurrent requests per chat
+    prefix = "❤️ Couples already chosen today! ❤️\n\n" if from_cache else "❤️ "
+    suffix = (
+        "are today’s couple and will be reselected tomorrow."
+        if from_cache else
+        "are today’s couple! ❤️"
+    )
+    caption = (
+        prefix +
+        f"<a href=\"tg://user?id={u1_id}\">{name1}</a> & "
+        f"<a href=\"tg://user?id={u2_id}\">{name2}</a> " +
+        suffix
+    )
+
+    buttons = InlineKeyboardMarkup([[  # [Name1] ❤️ [Name2]
+        InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
+        InlineKeyboardButton(text="❤️", callback_data="noop"),
+        InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
+    ]])
+
+    return await client.send_photo(
+        chat_id=chat_id,
+        photo=photo_buf,
+        caption=caption,
+        parse_mode=ParseMode.HTML,
+        reply_markup=buttons
+    )
+
+# -------------------
+# /couple command
+# -------------------
+processing_chats = set()
+
+@Client.on_message(filters.group & filters.command("couple", prefixes="/"))
+async def make_couple(client: Client, message):
+    chat_id     = message.chat.id
+    group_title = message.chat.title or ""
+
+    # 0) Prevent concurrent calls in the same chat
     if chat_id in processing_chats:
         return await message.reply_text("⚠️ Please wait, I'm still processing the previous request.")
     processing_chats.add(chat_id)
     status = await message.reply_text("⏳ Gathering members…")
-    group_title = message.chat.title or ""
 
     try:
-        # 1) Load or build member list from Mongo
         now = datetime.now(timezone.utc)
+
+        # 1) Per-chat member cache (refresh every 24h)
         cache = members_cache.find_one({"chat_id": chat_id})
-        if cache and (now - cache['last_synced']) < timedelta(hours=24):
-            member_ids = cache['members']
+        if cache and (now - cache["last_synced"]) < timedelta(hours=24):
+            member_ids = cache["members"]
         else:
-            # Fetch current non-bot members
             member_ids = []
             async for m in client.get_chat_members(chat_id):
                 if not m.user.is_bot:
@@ -1933,18 +1983,30 @@ async def make_couple(client: Client, message):
                 await status.delete()
                 return await message.reply_text("❌ Not enough non-bot members to form a couple.")
 
-            members_cache.update_one(
+            members_cache.replace_one(
                 {"chat_id": chat_id},
-                {"$set": {"members": member_ids, "last_synced": now}},
+                {"chat_id": chat_id, "members": member_ids, "last_synced": now},
                 upsert=True
             )
 
-        # 2) Check for existing today's couple
-        existing = couples_collection.find_one({"chat_id": chat_id})
+        # 2) Today's couple cache (only reuse if created ≥ today midnight UTC)
+        midnight_utc = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
+        existing = couples_collection.find_one({
+            "chat_id": chat_id,
+            "created_at": {"$gte": midnight_utc}
+        })
         if existing:
-            return await _send_couple(client, chat_id, existing['user1_id'], existing['user2_id'], existing['file_id'], from_cache=True)
+            try:
+                return await _send_couple(
+                    client, chat_id,
+                    existing["user1_id"], existing["user2_id"],
+                    existing["file_id"],
+                    from_cache=True
+                )
+            except Exception:
+                logger.exception("Cached couple send failed—regenerating…")
 
-        # 3) Select two distinct valid-PFP users
+        # 3) Pick two distinct users with non-placeholder avatars
         await status.edit_text("⏳ Choosing today’s couple…")
 
         async def pick_with_photo(candidates):
@@ -1965,48 +2027,27 @@ async def make_couple(client: Client, message):
             await status.delete()
             return await message.reply_text("❌ Could not find two members with valid profile pictures.")
 
-        # 4) Build the couple image
+        # 4) Build & send fresh image
         await status.edit_text("⏳ Building couple image…")
         buf = await build_couple_image(client, u1, u2, group_title)
-
-        # 5) Send and cache the result
         res = await _send_couple(client, chat_id, u1, u2, buf)
-        couples_collection.insert_one({
-            "chat_id": chat_id,
-            "user1_id": u1,
-            "user2_id": u2,
-            "file_id": res.photo.file_id,
-            "created_at": now
-        })
+
+        # 5) Upsert today's couple for this chat
+        couples_collection.replace_one(
+            {"chat_id": chat_id},
+            {
+                "chat_id": chat_id,
+                "user1_id": u1,
+                "user2_id": u2,
+                "file_id": res.photo.file_id,
+                "created_at": now
+            },
+            upsert=True
+        )
 
     finally:
         await status.delete()
         processing_chats.discard(chat_id)
-
-
-async def _send_couple(client, chat_id, u1_id, u2_id, photo, from_cache=False):
-    user1 = await client.get_users(u1_id)
-    user2 = await client.get_users(u2_id)
-    name1 = _trim_name(user1.first_name)
-    name2 = _trim_name(user2.first_name)
-    caption = (
-        ("❤️ Couples already chosen today! ❤️\n\n" if from_cache else "❤️ ") +
-        f"<a href=\"tg://user?id={u1_id}\">{name1}</a> & "
-        f"<a href=\"tg://user?id={u2_id}\">{name2}</a> " +
-        ("are today’s couple and will be reselected tomorrow." if from_cache else "are today’s couple! ❤️")
-    )
-    buttons = InlineKeyboardMarkup([[
-        InlineKeyboardButton(text=name1, url=f"tg://user?id={u1_id}"),
-        InlineKeyboardButton(text="❤️", callback_data="noop"),
-        InlineKeyboardButton(text=name2, url=f"tg://user?id={u2_id}")
-    ]])
-    return await client.send_photo(
-        chat_id=chat_id,
-        photo=photo,
-        caption=caption,
-        parse_mode=ParseMode.HTML,
-        reply_markup=buttons
-    )
 
 
 @bot.on_message(filters.group & filters.command("ban"))
