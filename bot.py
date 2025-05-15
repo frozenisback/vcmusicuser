@@ -1955,7 +1955,7 @@ async def _send_couple(
 # -------------------
 processing_chats = set()
 
-@Client.on_message(filters.group & filters.command("couple", prefixes="/"))
+@bot.on_message(filters.group & filters.command("couple", prefixes="/"))
 async def make_couple(client: Client, message):
     chat_id     = message.chat.id
     group_title = message.chat.title or ""
