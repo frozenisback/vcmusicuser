@@ -1906,7 +1906,6 @@ async def build_couple_image(client: Client, u1_id: int, u2_id: int, group_title
     out.seek(0)
     return out
 
-processing_chats = set()
 
 async def _send_couple(
     client: Client,
@@ -1959,20 +1958,33 @@ async def make_couple(client: Client, message):
     chat_id     = message.chat.id
     group_title = message.chat.title or ""
 
-    # 0) Prevent concurrent calls in the same chat
+    # Prevent concurrent calls in the same chat
     if chat_id in processing_chats:
-        return await message.reply_text("⚠️ Please wait, I'm still processing the previous request.")
+        return await message.reply_text(
+            "⚠️ Please wait, I'm still processing the previous request."
+        )
     processing_chats.add(chat_id)
     status = await message.reply_text("⏳ Gathering members…")
 
     try:
         now = datetime.now(timezone.utc)
 
-        # 1) Per-chat member cache (refresh every 24h)
+        # 1) Per-chat member cache (refresh every 24h), handling naive vs aware
         cache = members_cache.find_one({"chat_id": chat_id})
-        if cache and (now - cache["last_synced"]) < timedelta(hours=24):
-            member_ids = cache["members"]
-        else:
+        member_ids = None
+
+        if cache:
+            last_synced = cache.get("last_synced")
+            if last_synced:
+                # if stored as naive, assume UTC
+                if last_synced.tzinfo is None:
+                    last_synced = last_synced.replace(tzinfo=timezone.utc)
+                # compare safely
+                if (now - last_synced) < timedelta(hours=24):
+                    member_ids = cache["members"]
+
+        if not member_ids:
+            # cache miss or stale → fetch fresh
             member_ids = []
             async for m in client.get_chat_members(chat_id):
                 if not m.user.is_bot:
@@ -1980,11 +1992,17 @@ async def make_couple(client: Client, message):
 
             if len(member_ids) < 2:
                 await status.delete()
-                return await message.reply_text("❌ Not enough non-bot members to form a couple.")
+                return await message.reply_text(
+                    "❌ Not enough non-bot members to form a couple."
+                )
 
             members_cache.replace_one(
                 {"chat_id": chat_id},
-                {"chat_id": chat_id, "members": member_ids, "last_synced": now},
+                {
+                    "chat_id": chat_id,
+                    "members": member_ids,
+                    "last_synced": now
+                },
                 upsert=True
             )
 
@@ -2015,7 +2033,7 @@ async def make_couple(client: Client, message):
                 tried.add(uid)
                 pfp = await get_pfp_image(client, uid)
                 # skip grey placeholder
-                if pfp.width == 2*R and pfp.getpixel((0, 0)) == (200, 200, 200, 255):
+                if pfp.width == 2 * R and pfp.getpixel((0, 0)) == (200, 200, 200, 255):
                     continue
                 return uid
             return None
@@ -2024,7 +2042,9 @@ async def make_couple(client: Client, message):
         u2 = await pick_with_photo([uid for uid in member_ids if uid != u1])
         if not u1 or not u2:
             await status.delete()
-            return await message.reply_text("❌ Could not find two members with valid profile pictures.")
+            return await message.reply_text(
+                "❌ Could not find two members with valid profile pictures."
+            )
 
         # 4) Build & send fresh image
         await status.edit_text("⏳ Building couple image…")
@@ -2047,7 +2067,6 @@ async def make_couple(client: Client, message):
     finally:
         await status.delete()
         processing_chats.discard(chat_id)
-
 
 @bot.on_message(filters.group & filters.command("ban"))
 @safe_handler
