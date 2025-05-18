@@ -794,14 +794,6 @@ async def process_play_command(message, query):
                 "requester": message.from_user.first_name if message.from_user else "Unknown",
                 "thumbnail": item["thumbnail"]
             })
-
-            # --- PRELOAD CACHE ON SELECTED API SERVER ---
-            api_base, _, _ = chat_api_server[chat_id]
-            await aiohttp.ClientSession().get(
-                f"{api_base}/cache?url={urllib.parse.quote(item['link'], safe='')}"
-            )
-            # ------------------------------------------------
-
         total = len(playlist_items)
         reply_text = (
             f"✨ᴀᴅᴅᴇᴅ ᴛᴏ playlist\n"
@@ -837,13 +829,6 @@ async def process_play_command(message, query):
             "requester": message.from_user.first_name if message.from_user else "Unknown",
             "thumbnail": thumb
         })
-
-        # --- PRELOAD CACHE ON SELECTED API SERVER ---
-        api_base, _, _ = chat_api_server[chat_id]
-        await aiohttp.ClientSession().get(
-            f"{api_base}/cache?url={urllib.parse.quote(video_url, safe='')}"
-        )
-        # ------------------------------------------------
 
         if len(chat_containers[chat_id]) == 1:
             await start_playback_task(chat_id, processing_message)
