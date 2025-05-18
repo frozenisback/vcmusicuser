@@ -732,7 +732,7 @@ async def play_handler(_, message):
 
 
 async def process_play_command(message, query):
-    chat_id = message.chat.id  # Fixed typo: was idS
+    chat_id = message.chat.id
     processing_message = await message.reply("❄️")
 
     # Convert short URLs to full YouTube URLs
@@ -760,7 +760,7 @@ async def process_play_command(message, query):
             await processing_message.edit("❌ Please give bot invite‑link permission.\nSupport: @frozensupport1")
             return
 
-    # Perform YouTube search and handle results (playlist vs single video)
+    # Perform YouTube search and handle results
     try:
         result = await fetch_youtube_link(query)
     except Exception as primary_err:
@@ -783,6 +783,7 @@ async def process_play_command(message, query):
         if not playlist_items:
             await processing_message.edit("❌ No videos found in the playlist.")
             return
+
         chat_containers.setdefault(chat_id, [])
         for item in playlist_items:
             secs = isodate.parse_duration(item["duration"]).total_seconds()
@@ -794,6 +795,20 @@ async def process_play_command(message, query):
                 "requester": message.from_user.first_name if message.from_user else "Unknown",
                 "thumbnail": item["thumbnail"]
             })
+
+            # Preload cache in background
+            async def preload_playlist_cache(url):
+                api_base, _, _ = chat_api_server[chat_id]
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        await session.get(
+                            f"{api_base}/cache?url={urllib.parse.quote(url, safe='')}"
+                        )
+                except Exception as e:
+                    print(f"[Playlist Cache Error]: {e}")
+
+            asyncio.create_task(preload_playlist_cache(item["link"]))
+
         total = len(playlist_items)
         reply_text = (
             f"✨ᴀᴅᴅᴇᴅ ᴛᴏ playlist\n"
@@ -803,10 +818,12 @@ async def process_play_command(message, query):
         if total > 1:
             reply_text += f"\n#2 - {playlist_items[1]['title']}"
         await message.reply(reply_text)
+
         if len(chat_containers[chat_id]) == total:
             await start_playback_task(chat_id, processing_message)
         else:
             await processing_message.delete()
+
     else:
         video_url, title, duration_iso, thumb = result
         if not video_url:
@@ -814,9 +831,12 @@ async def process_play_command(message, query):
                 "❌ Could not find the song. Try another query.\nSupport: @frozensupport1"
             )
             return
+
         secs = isodate.parse_duration(duration_iso).total_seconds()
         if secs > MAX_DURATION_SECONDS:
-            await processing_message.edit("❌ Streams longer than 10 min are not allowed. we are facing some server issues will be fixed")
+            await processing_message.edit(
+                "❌ Streams longer than 10 min are not allowed. we are facing some server issues will be fixed"
+            )
             return
 
         readable = iso8601_to_human_readable(duration_iso)
@@ -830,9 +850,23 @@ async def process_play_command(message, query):
             "thumbnail": thumb
         })
 
+        # If it's the first song, start playing immediately without caching
         if len(chat_containers[chat_id]) == 1:
             await start_playback_task(chat_id, processing_message)
         else:
+            # Preload cache in background for queued songs
+            async def preload_cache(url):
+                api_base, _, _ = chat_api_server[chat_id]
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        await session.get(
+                            f"{api_base}/cache?url={urllib.parse.quote(url, safe='')}"
+                        )
+                except Exception as e:
+                    print(f"[Cache Preload Error]: {e}")
+
+            asyncio.create_task(preload_cache(video_url))
+
             queue_buttons = InlineKeyboardMarkup([
                 [InlineKeyboardButton("⏭ Skip", callback_data="skip"),
                  InlineKeyboardButton("🗑 Clear", callback_data="clear")]
