@@ -43,6 +43,7 @@ from pyrogram.enums import ParseMode
 from pyrogram import errors
 from gender_guesser.detector import Detector
 from pyrogram.types import ChatPermissions
+import logging
 
 load_dotenv()
 
