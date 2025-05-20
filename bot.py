@@ -797,18 +797,19 @@ async def process_play_command(message, query):
                 "thumbnail": item["thumbnail"]
             })
 
-            # Preload cache in background
-            async def preload_playlist_cache(url):
+            # Preload cache in background with duration-based API selection
+            async def preload_playlist_cache(item_url, duration_sec):
                 api_base, _, _ = chat_api_server[chat_id]
+                api_param = "&api=secondary" if duration_sec > 720 else ""
                 try:
                     async with aiohttp.ClientSession() as session:
                         await session.get(
-                            f"{api_base}/cache?url={urllib.parse.quote(url, safe='')}"
+                            f"{api_base}/cache?url={urllib.parse.quote(item_url, safe='')}{api_param}"
                         )
                 except Exception as e:
                     print(f"[Playlist Cache Error]: {e}")
 
-            asyncio.create_task(preload_playlist_cache(item["link"]))
+            asyncio.create_task(preload_playlist_cache(item["link"], secs))
 
         total = len(playlist_items)
         reply_text = (
@@ -836,7 +837,7 @@ async def process_play_command(message, query):
         secs = isodate.parse_duration(duration_iso).total_seconds()
         if secs > MAX_DURATION_SECONDS:
             await processing_message.edit(
-                "❌ Streams longer than 2 hours are For only premium plan. contact - @xyz09723"
+                "❌ Streams longer than 10 min are not allowed. we are facing some server issues will be fixed"
             )
             return
 
@@ -855,18 +856,19 @@ async def process_play_command(message, query):
         if len(chat_containers[chat_id]) == 1:
             await start_playback_task(chat_id, processing_message)
         else:
-            # Preload cache in background for queued songs
-            async def preload_cache(url):
+            # Preload cache in background for queued songs with conditional API
+            async def preload_cache(item_url, duration_sec):
                 api_base, _, _ = chat_api_server[chat_id]
+                api_param = "&api=secondary" if duration_sec > 720 else ""
                 try:
                     async with aiohttp.ClientSession() as session:
                         await session.get(
-                            f"{api_base}/cache?url={urllib.parse.quote(url, safe='')}"
+                            f"{api_base}/cache?url={urllib.parse.quote(item_url, safe='')}{api_param}"
                         )
                 except Exception as e:
                     print(f"[Cache Preload Error]: {e}")
 
-            asyncio.create_task(preload_cache(video_url))
+            asyncio.create_task(preload_cache(video_url, secs))
 
             queue_buttons = InlineKeyboardMarkup([
                 [InlineKeyboardButton("⏭ Skip", callback_data="skip"),
@@ -1080,7 +1082,11 @@ async def start_playback_task(chat_id, message):
     video_title = song_info.get('title', 'Unknown')
     video_url = song_info.get('url', '')
     encoded_url = urllib.parse.quote(video_url, safe='')
-    api_url = f"{selected_api}/play?chatid={chat_id}&url={encoded_url}"
+
+    # Determine which API to call based on duration threshold (12 minutes = 720 seconds)
+    duration_seconds = song_info.get('duration_seconds', 0)
+    api_param = "&api=secondary" if duration_seconds > 720 else ""
+    api_url = f"{selected_api}/play?chatid={chat_id}&url={encoded_url}{api_param}"
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -1133,7 +1139,7 @@ async def start_playback_task(chat_id, message):
             InlineKeyboardButton(text="⏹", callback_data="stop")
         ],
         [
-            InlineKeyboardButton(text="➕ᴀᴅᴅ тσ ρℓαуℓιѕт➕", callback_data="add_to_playlist"),
+            InlineKeyboardButton(text="➕ᴀᴅᴅ тσ ρℓαυℓιѕт➕", callback_data="add_to_playlist"),
             InlineKeyboardButton(text="⚡ᴅᴏᴡɴʟᴏᴀᴅ⚡", url="https://t.me/songdownloderfrozenbot?start=true")
         ],
         [
