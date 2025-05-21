@@ -786,6 +786,7 @@ async def process_play_command(message, query):
             return
 
         chat_containers.setdefault(chat_id, [])
+        # Add all items to queue
         for item in playlist_items:
             secs = isodate.parse_duration(item["duration"]).total_seconds()
             chat_containers[chat_id].append({
@@ -797,20 +798,6 @@ async def process_play_command(message, query):
                 "thumbnail": item["thumbnail"]
             })
 
-            # Preload cache in background with duration-based API selection
-            async def preload_playlist_cache(item_url, duration_sec):
-                api_base, _, _ = chat_api_server[chat_id]
-                api_param = "&api=secondary" if duration_sec > 720 else ""
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        await session.get(
-                            f"{api_base}/cache?url={urllib.parse.quote(item_url, safe='')}{api_param}"
-                        )
-                except Exception as e:
-                    print(f"[Playlist Cache Error]: {e}")
-
-            asyncio.create_task(preload_playlist_cache(item["link"], secs))
-
         total = len(playlist_items)
         reply_text = (
             f"✨ᴀᴅᴅᴇᴅ ᴛᴏ playlist\n"
@@ -821,12 +808,33 @@ async def process_play_command(message, query):
             reply_text += f"\n#2 - {playlist_items[1]['title']}"
         await message.reply(reply_text)
 
+        # Preload only the next song for the playlist to avoid flooding API
+        if total > 1:
+            next_item = playlist_items[1]
+            next_secs = isodate.parse_duration(next_item["duration"]).total_seconds()
+            # Schedule caching for second song
+            async def preload_next():
+                api_base, _, _ = chat_api_server[chat_id]
+                api_param = "&api=secondary" if next_secs > 720 else ""
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        await session.get(
+                            f"{api_base}/cache?url={urllib.parse.quote(next_item['link'], safe='')}{api_param}"
+                        )
+                except Exception:
+                    pass
+
+            asyncio.create_task(preload_next())
+
+        # Start the playback task; further caching of subsequent songs
+        # will be triggered inside the playback handler when moving to the next track.
         if len(chat_containers[chat_id]) == total:
             await start_playback_task(chat_id, processing_message)
         else:
             await processing_message.delete()
 
     else:
+        # Single video handling (unchanged)...
         video_url, title, duration_iso, thumb = result
         if not video_url:
             await processing_message.edit(
@@ -848,7 +856,7 @@ async def process_play_command(message, query):
             "title": title,
             "duration": readable,
             "duration_seconds": secs,
-            "requester": message.from_user.first_name if message.from_user else "Unknown",
+            "requester": message.from_user.first_name if message.from_user else 'Unknown',
             "thumbnail": thumb
         })
 
@@ -883,6 +891,7 @@ async def process_play_command(message, query):
                 reply_markup=queue_buttons
             )
             await processing_message.delete()
+
 
 
 import isodate
