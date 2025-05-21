@@ -2594,7 +2594,7 @@ async def clear_handler(_, message):
         await message.reply("❌ No songs in the queue to clear.")
 
 @assistant.on_message(filters.command("down") & (filters.private | filters.group))
-async def download_audio(client, message):
+async def download_auddio(client, message):
     if len(message.command) < 2:
         return await message.reply("Usage: /down <YouTube link>")
 
