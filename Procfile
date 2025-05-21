@@ -1,1 +1,1 @@
-web: python frozen.py & python bot.py
+web: python bot.py
