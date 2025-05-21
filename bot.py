@@ -44,6 +44,7 @@ from pyrogram import errors
 from gender_guesser.detector import Detector
 from pyrogram.types import ChatPermissions
 import logging
+from pyrogram.errors import RPCError
 
 load_dotenv()
 
@@ -53,6 +54,35 @@ API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ASSISTANT_SESSION = os.environ.get("ASSISTANT_SESSION")
 OWNER_ID = 5268762773
+
+# ——— Monkey-patch resolve_peer ——————————————
+logging.getLogger("pyrogram").setLevel(logging.ERROR)
+_original_resolve_peer = Client.resolve_peer
+async def _safe_resolve_peer(self, peer_id):
+    try:
+        return await _original_resolve_peer(self, peer_id)
+    except (KeyError, ValueError) as e:
+        if "ID not found" in str(e) or "Peer id invalid" in str(e):
+            return None
+        raise
+Client.resolve_peer = _safe_resolve_peer
+
+# ——— Suppress un‐retrieved task warnings —————————
+def _custom_exception_handler(loop, context):
+    exc = context.get("exception")
+    if isinstance(exc, (KeyError, ValueError)) and (
+        "ID not found" in str(exc) or "Peer id invalid" in str(exc)
+    ):
+        return  # ignore peer‐id errors
+
+    # ← NEW: ignore the "NoneType has no attribute 'write'" from get_channel_difference
+    if isinstance(exc, AttributeError) and "has no attribute 'write'" in str(exc):
+        return
+
+    # otherwise, let it bubble
+    loop.default_exception_handler(context)
+
+asyncio.get_event_loop().set_exception_handler(_custom_exception_handler)
 
 session_name = os.environ.get("SESSION_NAME", "music_bot1")
 bot = Client(session_name, bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
