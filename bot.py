@@ -845,7 +845,7 @@ async def process_play_command(message, query):
             # Schedule caching for second song
             async def preload_next():
                 api_base, _, _ = chat_api_server[chat_id]
-                api_param = "&api=secondary" if next_secs > 720 else ""
+                api_param = "&api=secondary" if next_secs > 1200 else ""
                 try:
                     async with aiohttp.ClientSession() as session:
                         await session.get(
@@ -875,7 +875,7 @@ async def process_play_command(message, query):
         secs = isodate.parse_duration(duration_iso).total_seconds()
         if secs > MAX_DURATION_SECONDS:
             await processing_message.edit(
-                "❌ Streams longer than 10 min are not allowed. we are facing some server issues will be fixed"
+                "❌ Streams longer than 20 min are not allowed. we are facing some server issues will be fixed"
             )
             return
 
@@ -897,7 +897,7 @@ async def process_play_command(message, query):
             # Preload cache in background for queued songs with conditional API
             async def preload_cache(item_url, duration_sec):
                 api_base, _, _ = chat_api_server[chat_id]
-                api_param = "&api=secondary" if duration_sec > 720 else ""
+                api_param = "&api=secondary" if duration_sec > 1200 else ""
                 try:
                     async with aiohttp.ClientSession() as session:
                         await session.get(
@@ -1124,7 +1124,7 @@ async def start_playback_task(chat_id, message):
 
     # Determine which API to call based on duration threshold (12 minutes = 720 seconds)
     duration_seconds = song_info.get('duration_seconds', 0)
-    api_param = "&api=secondary" if duration_seconds > 720 else ""
+    api_param = "&api=secondary" if duration_seconds > 1200 else ""
     api_url = f"{selected_api}/play?chatid={chat_id}&url={encoded_url}{api_param}"
 
     try:
