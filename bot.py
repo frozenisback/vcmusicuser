@@ -2856,31 +2856,35 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"Bot status: Running")
         elif self.path == "/restart":
             try:
-                # Schedule stop()
-                fut = asyncio.run_coroutine_threadsafe(bot.stop(block=False), MAIN_LOOP)
-                fut.result(timeout=10)
-                # Schedule start()
-                fut = asyncio.run_coroutine_threadsafe(bot.start(), MAIN_LOOP)
-                fut.result(timeout=10)
+                # Stop the bot (non-blocking to avoid deadlocks)
+                stop_future = asyncio.run_coroutine_threadsafe(bot.stop(block=False), MAIN_LOOP)
+                stop_future.result(timeout=10)
+
+                # Start the bot
+                start_future = asyncio.run_coroutine_threadsafe(bot.start(), MAIN_LOOP)
+                start_future.result(timeout=10)
 
                 self.send_response(200)
                 self.end_headers()
-                self.wfile.write(b"Bot reconnected successfully!")
+                self.wfile.write(b"✅ Bot reconnected successfully!")
+            except FloodWait as e:
+                self.send_response(429)
+                self.end_headers()
+                self.wfile.write(f"⚠️ FloodWait: wait {e.value} seconds".encode())
             except Exception as e:
                 self.send_response(500)
                 self.end_headers()
-                self.wfile.write(f"Error reconnecting bot: {e}".encode())
+                self.wfile.write(f"❌ Error reconnecting bot: {e}".encode())
         else:
             self.send_response(404)
             self.end_headers()
 
     def do_POST(self):
         if self.path == "/webhook":
-            length = int(self.headers.get("Content-Length", 0))
-            data = self.rfile.read(length)
             try:
+                length = int(self.headers.get("Content-Length", 0))
+                data = self.rfile.read(length)
                 update = json.loads(data.decode())
-                # Inject incoming update into Pyrogram
                 bot._process_update(update)
                 self.send_response(200)
                 self.end_headers()
@@ -2899,7 +2903,7 @@ def run_http_server():
     print(f"HTTP server running on port {port}")
     server.serve_forever()
 
-# Start HTTP server in background
+# Launch HTTP server in background
 server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
@@ -2907,15 +2911,11 @@ server_thread.start()
 if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
-        # Use .run() on one client only; the other we start manually if needed
-        bot.run()  
-        # If your assistant/userbot isn’t started by bot.run(), you can start it too
+        bot.run()  # Blocks and handles everything for this client
         if not assistant.is_connected:
-            assistant.start()
+            assistant.start()  # Start assistant only if needed
         print("Bot started successfully.")
-        idle()  # Keep the script alive.
     except KeyboardInterrupt:
         print("Bot interrupted. Exiting.")
     except Exception as e:
         print(f"Critical Error: {e}")
-
