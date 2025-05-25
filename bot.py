@@ -2829,19 +2829,28 @@ BOT_USERNAME = "@vcmusiclubot"
 MAIN_LOOP = asyncio.get_event_loop()
 
 
-def owner_simple_restart_handler():
-    @bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
-    async def _(_, message):
-        await message.reply("♻️ [WATCHDOG] reconnect initiated as per owner command...")
-        # Disconnect and reconnect
+# Async reconnect logic
+async def reconnect_bot():
+    # Gracefully stop then start the bot
+    try:
         await bot.stop()
-        await asyncio.sleep(1)
-        await bot.start()
+    except Exception:
+        pass  # ignore if already stopped
+    await asyncio.sleep(1)
+    await bot.start()
+
+# Owner command to trigger reconnect
+@bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
+async def owner_simple_restart_handler(_, message):
+    await message.reply("♻️ [WATCHDOG] reconnect initiated as per owner command...")
+    try:
+        future = asyncio.run_coroutine_threadsafe(reconnect_bot(), bot.loop)
+        future.result(timeout=15)
         await message.reply("✅ Bot reconnected successfully.")
+    except Exception as e:
+        await message.reply(f"❌ Reconnect failed: {e}")
 
-owner_simple_restart_handler()
-
-# HTTP server for health checks and restart endpoint
+# HTTP server for health checks and reconnect endpoint
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -2854,13 +2863,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"Bot status: Running")
         elif self.path == "/restart":
             try:
-                # Schedule disconnect/reconnect on the main loop
-                coro = bot.stop()
-                future = asyncio.run_coroutine_threadsafe(coro, MAIN_LOOP)
-                future.result(timeout=10)
-                coro = bot.run()
-                future = asyncio.run_coroutine_threadsafe(coro, MAIN_LOOP)
-                future.result(timeout=10)
+                future = asyncio.run_coroutine_threadsafe(reconnect_bot(), bot.loop)
+                future.result(timeout=15)
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(b"Bot reconnected successfully!")
@@ -2891,19 +2895,24 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 # Run HTTP server in a daemon thread
+
 def run_http_server():
     port = int(os.getenv("PORT", 8080))
     server = HTTPServer(("", port), WebhookHandler)
     print(f"HTTP server running on port {port}")
     server.serve_forever()
 
-server_thread = threading.Thread(target=run_http_server, daemon=True)
-server_thread.start()
+if __name__ != "__main__":
+    # Start the HTTP server thread when imported
+    server_thread = threading.Thread(target=run_http_server, daemon=True)
+    server_thread.start()
 
 if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
+        # Run the bot; this will block until shutdown
         bot.run()
+        # Optionally run assistant
         if not assistant.is_connected:
             assistant.run()
         print("Bot started successfully.")
@@ -2912,3 +2921,5 @@ if __name__ == "__main__":
         print("Bot interrupted. Exiting.")
     except Exception as e:
         print(f"Critical Error: {e}")
+        # Attempt reconnect
+        asyncio.run(reconnect_bot())
