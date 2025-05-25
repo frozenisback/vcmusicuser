@@ -2830,7 +2830,7 @@ MAIN_LOOP = asyncio.get_event_loop()
 
 
 # Owner command to restart connection
-@app.on_message(filters.command("restart") & filters.user(OWNER_ID))
+@bot.on_message(filters.command("restart") & filters.user(OWNER_ID))
 async def restart_handler(client, message):
     await message.reply("♻️ [WATCHDOG] Reconnect initiated as per owner command...")
     try:
