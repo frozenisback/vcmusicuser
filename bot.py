@@ -2823,83 +2823,25 @@ async def frozen_check_command(_, message):
 
 
 
-
-@bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
-async def owner_simple_restart_handler(_, message):
-    await message.reply("♻️ [WATCHDOG] restart initiated as per owner command...")
-    await simple_restart()
-
-
-
-MAIN_LOOP = None
 ASSISTANT_CHAT_ID = 7386215995
 BOT_CHAT_ID = 7598576464
 BOT_USERNAME = "@vcmusiclubot"
+MAIN_LOOP = asyncio.get_event_loop()
 
 
-# Check for Render API endpoint (set this in environment variables if needed)
-RENDER_DEPLOY_URL = os.getenv("RENDER_DEPLOY_URL", "https://api.render.com/deploy/srv-cuqb40bv2p9s739h68i0?key=oegMCHfLr9I")
-
-async def simple_restart():
-    support_chat_id = -1001810811394
-    log_message = "[WATCHDOG] Checking if restart is needed..."
-    print(log_message)
-    await bot.send_message(support_chat_id, log_message)
-
-    if RENDER_DEPLOY_URL:
-        # If Render API is available, trigger a restart via API
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(RENDER_DEPLOY_URL) as response:
-                    if response.status == 200:
-                        await bot.send_message(support_chat_id, "✅ Restart triggered via Frozen_Api")
-                        return  # Exit without restarting locally
-                    else:
-                        await bot.send_message(support_chat_id, f"❌ Render restart failed: {response.status} {await response.text()}")
-        except Exception as e:
-            await bot.send_message(support_chat_id, f"⚠ Render API restart failed: {e}. Trying local restart...")
-
-    # If Render API failed or not set, do a local restart
-    try:
+def owner_simple_restart_handler():
+    @bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
+    async def _(_, message):
+        await message.reply("♻️ [WATCHDOG] reconnect initiated as per owner command...")
+        # Disconnect and reconnect
         await bot.stop()
-        await asyncio.sleep(3)
-        python_executable = sys.executable
-        script_path = os.path.abspath(sys.argv[0])
-
-        subprocess.Popen([python_executable, script_path], close_fds=True)
-        os._exit(0)
-    except Exception as e:
-        error_message = f"❌ Local restart failed: {e}"
-        print(error_message)
-        await bot.send_message(support_chat_id, error_message)
-
-
-
-import asyncio
-import os
-import sys
-import json
-import threading
-import requests
-from http.server import BaseHTTPRequestHandler, HTTPServer
-
-# Assume that bot, call_py, assistant, idle, and simple_restart are defined/imported elsewhere.
-
-async def restart_bot_logic():
-    try:
-        try:
-            # Attempt to stop the bot gracefully.
-            await bot.stop()
-        except Exception as e:
-            # If stopping fails, log the error but continue.
-            print("Warning: Failed to stop the bot gracefully, proceeding to restart:", e)
-        await asyncio.sleep(2)  # Wait a moment for resources to settle.
-        # Attempt to start the bot.
+        await asyncio.sleep(1)
         await bot.start()
-    except Exception as e:
-        # Propagate the error so that full restart logic is triggered.
-        raise e
+        await message.reply("✅ Bot reconnected successfully.")
 
+owner_simple_restart_handler()
+
+# HTTP server for health checks and restart endpoint
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -2912,19 +2854,20 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"Bot status: Running")
         elif self.path == "/restart":
             try:
-                loop = asyncio.get_event_loop()
-                future = asyncio.run_coroutine_threadsafe(restart_bot_logic(), loop)
+                # Schedule disconnect/reconnect on the main loop
+                coro = bot.stop()
+                future = asyncio.run_coroutine_threadsafe(coro, MAIN_LOOP)
+                future.result(timeout=10)
+                coro = bot.start()
+                future = asyncio.run_coroutine_threadsafe(coro, MAIN_LOOP)
                 future.result(timeout=10)
                 self.send_response(200)
                 self.end_headers()
-                self.wfile.write(b"Bot restarted successfully!")
+                self.wfile.write(b"Bot reconnected successfully!")
             except Exception as e:
-                error_message = f"Bot restart failed: {str(e)}"
                 self.send_response(500)
                 self.end_headers()
-                self.wfile.write(error_message.encode())
-                # After sending the error response, perform a full restart.
-                os.execl(sys.executable, sys.executable, *sys.argv)
+                self.wfile.write(f"Error reconnecting bot: {e}".encode())
         else:
             self.send_response(404)
             self.end_headers()
@@ -2932,50 +2875,40 @@ class WebhookHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/webhook":
             try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                post_data = self.rfile.read(content_length)
-                update = json.loads(post_data.decode("utf-8"))
-                try:
-                    bot._process_update(update)
-                except Exception as e:
-                    print("Error processing update:", e)
+                length = int(self.headers.get("Content-Length", 0))
+                data = self.rfile.read(length)
+                update = json.loads(data.decode())
+                bot._process_update(update)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"OK")
             except Exception as e:
-                print("Error reading update:", e)
+                print("Error processing webhook:", e)
                 self.send_response(400)
                 self.end_headers()
-                return
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"OK")
         else:
             self.send_response(404)
             self.end_headers()
 
+# Run HTTP server in a daemon thread
 def run_http_server():
-    port = int(os.environ.get("PORT", 8080))
-    httpd = HTTPServer(("", port), WebhookHandler)
+    port = int(os.getenv("PORT", 8080))
+    server = HTTPServer(("", port), WebhookHandler)
     print(f"HTTP server running on port {port}")
-    httpd.serve_forever()
+    server.serve_forever()
 
-# Start the HTTP server in a separate daemon thread.
 server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
 if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
-        call_py.start()
-        # Using bot.run() here so that if it fails, we catch the exception below.
         bot.run()
-        # If the assistant is not connected, connect it.
         if not assistant.is_connected:
             assistant.run()
         print("Bot started successfully.")
-        # Block indefinitely (for example, using idle() from your framework)
         idle()
     except KeyboardInterrupt:
-        print("Bot is still running. Kill the process to stop.")
+        print("Bot interrupted. Exiting.")
     except Exception as e:
         print(f"Critical Error: {e}")
-        # If bot.run() (or its initialization) fails, perform a full restart.
-        asyncio.run(simple_restart())
