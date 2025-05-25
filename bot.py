@@ -99,8 +99,13 @@ API_URL = os.environ.get("API_URL")
 DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
 BACKUP_SEARCH_API_URL= "https://teenage-liz-frozzennbotss-61567ab4.koyeb.app"
 
+MAIN_LOOP = None
+ASSISTANT_CHAT_ID = 7386215995
+BOT_CHAT_ID = 7598576464
+BOT_USERNAME = "@vcmusiclubot"
 
-# ─── MongoDB Setup ─────────────────────────────────────────────────
+
+# ─── MongoDB Setup ─────────────────────────────────────────
 mongo_uri = os.environ.get(
     "MONGO_URI",
     "mongodb+srv://frozenbotss:frozenbots@cluster0.s0tak.mongodb.net/?retryWrites=true&w=majority"
@@ -128,6 +133,9 @@ members_cache.create_index(
     [("last_synced", ASCENDING)],
     expireAfterSeconds=24 * 3600  # refresh member cache daily
 )
+
+# Collection for queue persistence
+queue_backup = db["queue_backups"]
 
 # template & font (adjust paths as needed)
 TEMPLATE_PATH = "copules.png"
@@ -2822,27 +2830,21 @@ async def frozen_check_command(_, message):
     await message.reply_text("frozen check successful ✨")
 
 
-MAIN_LOOP = None
-ASSISTANT_CHAT_ID = 7386215995
-BOT_CHAT_ID = 7598576464
-BOT_USERNAME = "@vcmusiclubot"
+# ─── Persistence Helpers (Sync) ────────────────────────────
+def save_queues_to_db():
+    """Persist and clear in-memory queues before hard restart."""
+    data = { str(cid): queue for cid, queue in chat_containers.items() }
+    queue_backup.replace_one({"_id": "singleton"}, {"_id": "singleton", "queues": data}, upsert=True)
+    chat_containers.clear()
 
+def load_queues_from_db():
+    """Load any persisted queues on startup, then remove backup."""
+    doc = queue_backup.find_one_and_delete({"_id": "singleton"})
+    if doc and "queues" in doc:
+        for cid_str, queue in doc["queues"].items():
+            chat_containers[int(cid_str)] = queue
 
-async def restart_bot_logic():
-    try:
-        try:
-            # Attempt to stop the bot gracefully.
-            await bot.stop()
-        except Exception as e:
-            # If stopping fails, log the error but continue.
-            print("Warning: Failed to stop the bot gracefully, proceeding to restart:", e)
-        await asyncio.sleep(2)  # Wait a moment for resources to settle.
-        # Attempt to start the bot.
-        await bot.start()
-    except Exception as e:
-        # Propagate the error so that full restart logic is triggered.
-        raise e
-
+# ─── HTTP & Restart Handler ───────────────────────────────
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -2854,20 +2856,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"Bot status: Running")
         elif self.path == "/restart":
-            try:
-                loop = asyncio.get_event_loop()
-                future = asyncio.run_coroutine_threadsafe(restart_bot_logic(), loop)
-                future.result(timeout=10)
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"Bot restarted successfully!")
-            except Exception as e:
-                error_message = f"Bot restart failed: {str(e)}"
-                self.send_response(500)
-                self.end_headers()
-                self.wfile.write(error_message.encode())
-                # After sending the error response, perform a full restart.
-                os.execl(sys.executable, sys.executable, *sys.argv)
+            # Force hard restart: persist queues, then exec
+            save_queues_to_db()
+            os.execl(sys.executable, sys.executable, *sys.argv)
         else:
             self.send_response(404)
             self.end_headers()
@@ -2875,44 +2866,35 @@ class WebhookHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/webhook":
             try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                post_data = self.rfile.read(content_length)
-                update = json.loads(post_data.decode("utf-8"))
-                try:
-                    bot._process_update(update)
-                except Exception as e:
-                    print("Error processing update:", e)
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length)
+                update = json.loads(body)
+                bot._process_update(update)
             except Exception as e:
-                print("Error reading update:", e)
-                self.send_response(400)
-                self.end_headers()
-                return
+                print("Error processing update:", e)
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"OK")
         else:
             self.send_response(404)
             self.end_headers()
 
+# ─── Server Bootstrap ────────────────────────────────────
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
-    httpd = HTTPServer(("", port), WebhookHandler)
+    server = HTTPServer(("", port), WebhookHandler)
     print(f"HTTP server running on port {port}")
-    httpd.serve_forever()
+    server.serve_forever()
 
-server_thread = threading.Thread(target=run_http_server, daemon=True)
-server_thread.start()
+threading.Thread(target=run_http_server, daemon=True).start()
 
+# ─── Main Entry ──────────────────────────────────────────
 if __name__ == "__main__":
-    try:
-        print("Starting Frozen Music Bot...")
-        call_py.start()
-        bot.run()
-        if not assistant.is_connected:
-            assistant.run()
-        print("Bot started successfully.")
-        idle()
-    except KeyboardInterrupt:
-        print("Bot is still running. Kill the process to stop.")
-    except Exception as e:
-        print(f"Critical Error: {e}")
+    # load any pending queues, then start
+    load_queues_from_db()
+    print("Starting Frozen Music Bot...")
+    call_py.start()
+    bot.run()
+    if not assistant.is_connected:
+        assistant.run()
+    print("Bot started successfully.")
+    idle()
