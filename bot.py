@@ -2830,19 +2830,21 @@ MAIN_LOOP = asyncio.get_event_loop()
 
 
 # Owner command to restart connection
-def owner_simple_restart_handler():
-    @bot.on_message(filters.regex(r"^#restart$") & filters.user(5268762773))
-    async def _(_, message):
-        await message.reply("♻️ [WATCHDOG] reconnect initiated as per owner command...")
-        # Disconnect and reconnect
-        await bot.stop()
-        await asyncio.sleep(1)
-        await bot.run()
-        await message.reply("✅ Bot reconnected successfully.")
+@app.on_message(filters.command("restart") & filters.user(OWNER_ID))
+async def restart_handler(client, message):
+    await message.reply("♻️ [WATCHDOG] Reconnect initiated as per owner command...")
+    try:
+        await bot.stop(block=False)  # Non-blocking stop to prevent deadlock
+    except Exception:
+        pass  # Ignore if already stopped
+    await asyncio.sleep(1)
+    await bot.start()
+    await message.reply("✅ Bot reconnected successfully.")
+
 
 owner_simple_restart_handler()
 
-# HTTP server for health checks and restart endpoint
+# ─── HTTP Server for Health Checks & Restart ─────────────────────────────────
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -2855,13 +2857,13 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"Bot status: Running")
         elif self.path == "/restart":
             try:
-                # Schedule disconnect/reconnect on the main loop
-                coro = bot.stop()
-                future = asyncio.run_coroutine_threadsafe(coro, MAIN_LOOP)
-                future.result(timeout=10)
-                coro = bot.run()
-                future = asyncio.run_coroutine_threadsafe(coro, MAIN_LOOP)
-                future.result(timeout=10)
+                # Schedule stop()
+                fut = asyncio.run_coroutine_threadsafe(bot.stop(block=False), MAIN_LOOP)
+                fut.result(timeout=10)
+                # Schedule start()
+                fut = asyncio.run_coroutine_threadsafe(bot.start(), MAIN_LOOP)
+                fut.result(timeout=10)
+
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(b"Bot reconnected successfully!")
@@ -2875,10 +2877,11 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/webhook":
+            length = int(self.headers.get("Content-Length", 0))
+            data = self.rfile.read(length)
             try:
-                length = int(self.headers.get("Content-Length", 0))
-                data = self.rfile.read(length)
                 update = json.loads(data.decode())
+                # Inject incoming update into Pyrogram
                 bot._process_update(update)
                 self.send_response(200)
                 self.end_headers()
@@ -2891,24 +2894,27 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-# Run HTTP server in a daemon thread
 def run_http_server():
     port = int(os.getenv("PORT", 8080))
     server = HTTPServer(("", port), WebhookHandler)
     print(f"HTTP server running on port {port}")
     server.serve_forever()
 
+# Start HTTP server in background
 server_thread = threading.Thread(target=run_http_server, daemon=True)
 server_thread.start()
 
+# ─── Main Entry Point ────────────────────────────────────────────────────────
 if __name__ == "__main__":
     try:
         print("Starting Frozen Music Bot...")
-        bot.run()
+        # Use .run() on one client only; the other we start manually if needed
+        bot.run()  
+        # If your assistant/userbot isn’t started by bot.run(), you can start it too
         if not assistant.is_connected:
-            assistant.run()
+            assistant.start()
         print("Bot started successfully.")
-        idle()
+        idle()  # Keep the script alive.
     except KeyboardInterrupt:
         print("Bot interrupted. Exiting.")
     except Exception as e:
