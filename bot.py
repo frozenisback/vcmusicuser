@@ -2858,7 +2858,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 coro = bot.stop()
                 future = asyncio.run_coroutine_threadsafe(coro, MAIN_LOOP)
                 future.result(timeout=10)
-                coro = bot.start()
+                coro = bot.run()
                 future = asyncio.run_coroutine_threadsafe(coro, MAIN_LOOP)
                 future.result(timeout=10)
                 self.send_response(200)
