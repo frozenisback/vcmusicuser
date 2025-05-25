@@ -2842,7 +2842,6 @@ async def restart_handler(client, message):
     await message.reply("✅ Bot reconnected successfully.")
 
 
-owner_simple_restart_handler()
 
 # ─── HTTP Server for Health Checks & Restart ─────────────────────────────────
 class WebhookHandler(BaseHTTPRequestHandler):
