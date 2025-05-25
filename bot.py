@@ -2825,9 +2825,12 @@ async def stream_ended_handler(_, message):
             await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
 
-@bot.on_message(filters.command("frozen_check") & filters.chat(ASSISTANT_CHAT_ID))
-async def frozen_check_command(_, message):
-    await message.reply_text("frozen check successful ✨")
+@bot.on_message(filters.group & filters.command("frozen_check"))
+async def frozen_check_handler(client, message):
+    """
+    Responds to /frozen_check in any group chat the bot is in.
+    """
+    await message.reply_text("✅ Frozen check successful ✨")
 
 
 # ─── Persistence Helpers (Sync) ────────────────────────────
