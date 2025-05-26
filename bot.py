@@ -99,11 +99,6 @@ API_URL = os.environ.get("API_URL")
 DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
 BACKUP_SEARCH_API_URL= "https://teenage-liz-frozzennbotss-61567ab4.koyeb.app"
 
-MAIN_LOOP = None
-ASSISTANT_CHAT_ID = 7386215995
-BOT_CHAT_ID = 7598576464
-BOT_USERNAME = "@vcmusiclubot"
-
 
 # ─── MongoDB Setup ─────────────────────────────────────────
 mongo_uri = os.environ.get(
@@ -2825,12 +2820,9 @@ async def stream_ended_handler(_, message):
             await bot.send_message(chat_id, "🚪 No songs left in the queue.")
 
 
-@bot.on_message(filters.group & filters.command("frozen_check"))
-async def frozen_check_handler(client, message):
-    """
-    Responds to /frozen_check in any group chat the bot is in.
-    """
-    await message.reply_text("✅ Frozen check successful ✨")
+@bot.on_message(filters.command("frozen_check") & filters.chat(ASSISTANT_CHAT_ID))
+async def frozen_check_command(_, message):
+    await message.reply_text("frozen check successful ✨")
 
 
 # ─── Persistence Helpers (Sync) ────────────────────────────
