@@ -8,7 +8,7 @@ api = Api(app)
 
 class Greeting(Resource):
     def get(self):
-        return "Frozen is Up & Running!"
+        return "Frozenn is Up & Running!"
 
 class Ping(Resource):
     def get(self):
