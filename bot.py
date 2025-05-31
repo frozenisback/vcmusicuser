@@ -926,9 +926,23 @@ async def process_play_command(message, query):
             await processing_message.delete()
 
 
+# ─── somewhere near the top of the file ────────────────────────────────────────
+MAX_TITLE_LEN = 20
 
-import isodate
-from datetime import timedelta
+def _one_line_title(full_title: str) -> str:
+    """
+    Truncate `full_title` to at most MAX_TITLE_LEN chars.
+    If truncated, append “…” so it still reads cleanly in one line.
+    """
+    if len(full_title) <= MAX_TITLE_LEN:
+        return full_title
+    else:
+        return full_title[: (MAX_TITLE_LEN - 1) ] + "…"  # one char saved for the ellipsis
+
+
+
+
+# (Assume other necessary imports like bot, call_py, MediaStream, playback_tasks, chat_containers, etc. are present above)
 
 def parse_duration_str(duration_str):
     """
@@ -966,7 +980,7 @@ def format_time(seconds):
     else:
         return f"{m}:{s:02d}"
 
-def get_progress_bar_styled(elapsed, total, bar_length=6):
+def get_progress_bar_styled(elapsed, total, bar_length=14):
     """
     Build a progress bar string in the style:
       elapsed_time  <dashes>◉<dashes>  total_time
@@ -978,92 +992,140 @@ def get_progress_bar_styled(elapsed, total, bar_length=6):
     marker_index = int(fraction * bar_length)
     if marker_index >= bar_length:
         marker_index = bar_length - 1
-    left = "—" * marker_index
-    right = "—" * (bar_length - marker_index - 1)
-    bar = left + "◉" + right
+    left = "━" * marker_index
+    right = "─" * (bar_length - marker_index - 1)
+    bar = left + "❄️" + right
     return f"{format_time(elapsed)} {bar} {format_time(total)}"
 
-async def update_progress_caption(chat_id, progress_message, start_time, total_duration, base_caption, base_keyboard):
+# ─── Updated functions ───────────────────────────────────────────────────────────────────
+
+async def update_progress_caption(chat_id, progress_message, start_time, total_duration, base_caption):
+    """
+    Periodically update the inline keyboard so that the second row's button text
+    shows the current progress bar. The caption remains `base_caption`.
+    """
     while True:
         elapsed = time.time() - start_time
         if elapsed > total_duration:
             elapsed = total_duration
         progress_bar = get_progress_bar_styled(elapsed, total_duration)
-        new_caption = base_caption.format(progress_bar=progress_bar)
+
+        # Rebuild the keyboard with updated progress bar in the second row
+        control_row = [
+            InlineKeyboardButton(text="▶️", callback_data="pause"),
+            InlineKeyboardButton(text="⏸", callback_data="resume"),
+            InlineKeyboardButton(text="⏭", callback_data="skip"),
+            InlineKeyboardButton(text="⏹", callback_data="stop")
+        ]
+        progress_button = InlineKeyboardButton(text=progress_bar, callback_data="progress")
+        playlist_button = InlineKeyboardButton(text="➕ᴀᴅᴅ тσ ρℓαυℓιѕт➕", callback_data="add_to_playlist")
+
+        new_keyboard = InlineKeyboardMarkup([
+            control_row,
+            [progress_button],
+            [playlist_button]
+        ])
+
         try:
-            await bot.edit_message_caption(chat_id, progress_message.id, caption=new_caption, reply_markup=base_keyboard)
+            # Use progress_message.id instead of progress_message.message_id
+            await bot.edit_message_caption(
+                chat_id,
+                progress_message.id,
+                caption=base_caption,
+                reply_markup=new_keyboard
+            )
         except Exception as e:
-            # If the error is MESSAGE_NOT_MODIFIED, ignore it and continue
+            # If the error is MESSAGE_NOT_MODIFIED, ignore it; otherwise, break
             if "MESSAGE_NOT_MODIFIED" in str(e):
                 pass
             else:
                 print(f"Error updating progress caption for chat {chat_id}: {e}")
                 break
+
         if elapsed >= total_duration:
             break
+
         await asyncio.sleep(18)
 
 
-
-# ---------------------- Modified fallback_local_playback ---------------------- #
 async def fallback_local_playback(chat_id, message, song_info):
     playback_mode[chat_id] = "local"
     try:
         if chat_id in playback_tasks:
             playback_tasks[chat_id].cancel()
+
         video_url = song_info.get('url')
         if not video_url:
             print(f"Invalid video URL for song: {song_info}")
             chat_containers[chat_id].pop(0)
             return
+
         try:
             await message.edit(f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ ⚡ {song_info['title']}...")
         except Exception:
             message = await bot.send_message(chat_id, f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ⚡ {song_info['title']}...")
+
         media_path = await download_audio(video_url)
         await call_py.play(
             chat_id,
             MediaStream(media_path, video_flags=MediaStream.Flags.IGNORE)
         )
         playback_tasks[chat_id] = asyncio.current_task()
-        
+
         total_duration = parse_duration_str(song_info.get('duration', '0:00'))
         if total_duration <= 0:
             print("Warning: duration is zero or invalid for this song.")
-        
+            one_line = _one_line_title(song_info['title'])
+        else:
+            one_line = _one_line_title(song_info['title'])
+
+        # Build a caption without the progress, since we'll put progress in a button
         base_caption = (
             f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ (Local Playback)**\n\n"
-            f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
-            f"**❍ ᴛɪϻє ➥** {{progress_bar}}\n\n"
+            f"**❍ ᴛɪᴛʟє ➥** {one_line}\n"
             f"**❍ ʙʏ ➥** {song_info['requester']}"
         )
+
         initial_progress = get_progress_bar_styled(0, total_duration)
-        caption = base_caption.format(progress_bar=initial_progress)
-        
+
+        # Build the initial inline keyboard:
+        # Line 1: playback controls
+        control_row = [
+            InlineKeyboardButton(text="▷", callback_data="pause"),
+            InlineKeyboardButton(text="II", callback_data="resume"),
+            InlineKeyboardButton(text="‣‣I", callback_data="skip"),
+            InlineKeyboardButton(text="▢", callback_data="stop")
+        ]
+        # Line 2: progress bar button
+        progress_button = InlineKeyboardButton(text=initial_progress, callback_data="progress")
+        # Line 3: add to playlist button
+        playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
+
         base_keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(text="▶️", callback_data="pause"),
-                InlineKeyboardButton(text="⏸", callback_data="resume"),
-                InlineKeyboardButton(text="⏭", callback_data="skip"),
-                InlineKeyboardButton(text="⏹", callback_data="stop")
-            ],
-            [
-                InlineKeyboardButton(text="➕ᴀᴅᴅ тσ ρℓαуℓιѕт➕", callback_data="add_to_playlist"),
-                InlineKeyboardButton(text="⚡ᴅᴏᴡɴʟᴏᴀᴅ⚡", url="https://t.me/songdownloderfrozenbot?start=true")
-            ],
-            [
-                InlineKeyboardButton(text="✨ υρ∂αтєѕ ✨", url="https://t.me/vibeshiftbots"),
-                InlineKeyboardButton(text="💕 ѕυρρσят 💕", url="https://t.me/Frozensupport1")
-            ]
+            control_row,
+            [progress_button],
+            [playlist_button]
         ])
-        
+
+        # Send the photo with caption and keyboard
         progress_message = await message.reply_photo(
             photo=song_info['thumbnail'],
-            caption=caption,
+            caption=base_caption,
             reply_markup=base_keyboard
         )
         await message.delete()
-        asyncio.create_task(update_progress_caption(chat_id, progress_message, time.time(), total_duration, base_caption, base_keyboard))
+
+        # Schedule periodic updates to the keyboard so the progress button changes
+        asyncio.create_task(
+            update_progress_caption(
+                chat_id,
+                progress_message,
+                time.time(),
+                total_duration,
+                base_caption
+            )
+        )
+
     except Exception as e:
         print(f"Error during fallback local playback: {e}")
 
@@ -1162,32 +1224,37 @@ async def start_playback_task(chat_id, message):
     }
     api_playback_records.append(record)
     playback_mode[chat_id] = "api"
+
     total_duration = parse_duration_str(song_info.get('duration', '0:00'))
+    one_line = _one_line_title(song_info['title'])
+
+    # Build a caption without the progress, since we'll move progress into a button
     base_caption = (
         f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ ⏤͟͞●** (API Playback)\n\n"
-        f"**❍ ᴛɪᴛʟє ➥** {song_info['title']}\n\n"
-        f"**❍ ᴛɪϻє ➥** {{progress_bar}}\n\n"
-        f"**❍ ʙʏ ➥** {song_info['requester']}\n\n"
+        f"**❍ ᴛɪᴛʟє ➥** {one_line}\n"
+        f"**❍ ʙʏ ➥** {song_info['requester']}\n"
         f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
     )
-    initial_progress = get_progress_bar_styled(0, total_duration, bar_length=6)
-    caption = base_caption.format(progress_bar=initial_progress)
+
+    initial_progress = get_progress_bar_styled(0, total_duration)
+
+    # Build the initial inline keyboard:
+    # Line 1: playback controls
+    control_row = [
+        InlineKeyboardButton(text="▷", callback_data="pause"),
+        InlineKeyboardButton(text="II", callback_data="resume"),
+        InlineKeyboardButton(text="‣‣I", callback_data="skip"),
+        InlineKeyboardButton(text="▢", callback_data="stop")
+    ]
+    # Line 2: progress bar button
+    progress_button = InlineKeyboardButton(text=initial_progress, callback_data="progress")
+    # Line 3: add to playlist button
+    playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
 
     base_keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(text="▶️", callback_data="pause"),
-            InlineKeyboardButton(text="⏸", callback_data="resume"),
-            InlineKeyboardButton(text="⏭", callback_data="skip"),
-            InlineKeyboardButton(text="⏹", callback_data="stop")
-        ],
-        [
-            InlineKeyboardButton(text="➕ᴀᴅᴅ тσ ρℓαυℓιѕт➕", callback_data="add_to_playlist"),
-            InlineKeyboardButton(text="⚡ᴅᴏᴡɴʟᴏᴀᴅ⚡", url="https://t.me/songdownloderfrozenbot?start=true")
-        ],
-        [
-            InlineKeyboardButton(text="✨ υρ∂αтєѕ ✨", url="https://t.me/vibeshiftbots"),
-            InlineKeyboardButton(text="💕 ѕυρρσят 💕", url="https://t.me/Frozensupport1")
-        ]
+        control_row,
+        [progress_button],
+        [playlist_button]
     ])
 
     # Delete the old processing message when starting playback.
@@ -1201,7 +1268,7 @@ async def start_playback_task(chat_id, message):
         new_progress_message = await bot.send_photo(
             chat_id,
             photo=song_info['thumbnail'],
-            caption=caption,
+            caption=base_caption,
             reply_markup=base_keyboard
         )
     except Exception as e:
@@ -1209,13 +1276,22 @@ async def start_playback_task(chat_id, message):
         new_progress_message = await bot.send_photo(
             chat_id,
             photo=song_info['thumbnail'],
-            caption=caption,
+            caption=base_caption,
             reply_markup=base_keyboard
         )
+
     global_playback_count += 1
 
-    # Start updating the progress caption.
-    asyncio.create_task(update_progress_caption(chat_id, new_progress_message, time.time(), total_duration, base_caption, base_keyboard))
+    # Start updating the progress caption (actually updating the keyboard)
+    asyncio.create_task(
+        update_progress_caption(
+            chat_id,
+            new_progress_message,
+            time.time(),
+            total_duration,
+            base_caption
+        )
+    )
 
 
 @bot.on_callback_query()
