@@ -1195,17 +1195,17 @@ async def start_playback_task(chat_id, message):
     try:
         async with aiohttp.ClientSession() as session:
             # Use a 30-second timeout for the play API call.
-            async with session.get(api_url, timeout=60) as resp:
+            async with session.get(api_url, timeout=180) as resp:
                 if resp.status != 200:
                     raise Exception(f"API responded with status {resp.status}")
                 data = await resp.json()
     except Exception as e:
         # Inform the user about the delay.
         try:
-            await processing_message.edit("⏳ API server is sleeping. Waiting an extra 20 seconds before falling back...")
+            await processing_message.edit("⏳ API server is sleeping. Falling back in 1 sec")
         except Exception as edit_error:
             print(f"Error editing processing message: {edit_error}")
-        await asyncio.sleep(20)
+        await asyncio.sleep(1)
         fallback_error = f"❌ Frozen Play API Error: {str(e)}\nFalling back to local playback..."
         try:
             await processing_message.edit(fallback_error)
