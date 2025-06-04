@@ -1,50 +1,55 @@
-from pyrogram import Client, filters
-from pytgcalls import idle, PyTgCalls
-from pytgcalls.types import MediaStream
-import aiohttp
-import asyncio
-from pyrogram.types import Message, CallbackQuery
-import isodate
 import os
 import re
+import sys
 import time
-import psutil
-from datetime import datetime, timezone, timedelta
 import uuid
+import json
+import random
+import logging
 import tempfile
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
-from PIL import Image, ImageDraw, ImageFont
-from io import BytesIO
-from pyrogram.enums import ChatType, ChatMemberStatus
-from typing import Union
-from pytgcalls.types import Update
-from pytgcalls import filters as fl
-from pytgcalls.types import ChatUpdate, Update, UpdatedGroupCallParticipant
-from pytgcalls.types.stream import StreamEnded
-import requests
-import urllib.parse
-from flask import Flask
-from flask import request
-from threading import Thread
-from dotenv import load_dotenv
-import json    # Required for persisting the download cache
-import sys 
-from http.server import HTTPServer, BaseHTTPRequestHandler 
 import threading
 import subprocess
+import psutil
+from io import BytesIO
+from datetime import datetime, timezone, timedelta
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import quote, urljoin
+import aiohttp
+import aiofiles
+import asyncio
+import requests
+import isodate
+import psutil
+import pymongo
 from pymongo import MongoClient, ASCENDING
 from bson import ObjectId
-import aiofiles
-from pyrogram.enums import ChatType
-import random
-from urllib.parse import quote
-from PIL import Image, ImageDraw, ImageFont
-from pyrogram.enums import ParseMode
-from pyrogram import errors
-from gender_guesser.detector import Detector
-from pyrogram.types import ChatPermissions
-import logging
+from bson.binary import Binary
+from dotenv import load_dotenv
+from flask import Flask, request
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from pyrogram import Client, filters, errors
+from pyrogram.enums import ChatType, ChatMemberStatus, ParseMode
+from pyrogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InputMediaPhoto,
+    ChatPermissions,
+)
 from pyrogram.errors import RPCError
+from pytgcalls import PyTgCalls, idle
+from pytgcalls.types import MediaStream
+from pytgcalls import filters as fl
+from pytgcalls.types import (
+    ChatUpdate,
+    UpdatedGroupCallParticipant,
+    Update as TgUpdate,
+)
+from pytgcalls.types.stream import StreamEnded
+from typing import Union
+import urllib
 
 load_dotenv()
 
@@ -663,8 +668,195 @@ async def go_back_callback(_, callback_query):
         reply_markup=reply_markup
     )
 
+MAX_TITLE_LEN = 20
+
+async def download_bytes_from_url(url: str) -> bytes:
+    """
+    Given a URL, perform an HTTP GET and return the raw bytes.
+    Uses aiohttp so that it’s async.
+    """
+    async with aiohttp.ClientSession() as sess:
+        async with sess.get(url) as resp:
+            resp.raise_for_status()
+            return await resp.read()
+
+def create_frosted_card(
+    image_bytes: bytes,
+    sender_username: str = "@username",
+    title_text: str = "Title",
+    artist_text: str = "Artist Name"
+) -> BytesIO:
+    """
+    1. Blurs the background.
+    2. Creates a centered glass card with rounded edges.
+    3. Pastes a 300×300 thumbnail in the top-left of the card.
+    4. Draws title, artist name, and a progress bar to the right of the thumbnail.
+    5. Adds playback icons, “Requested by” on the right, and “Powered by VibeshiftBots” on the left.
+    """
+
+    # 0) Enforce title character limit (truncate if necessary)
+    if len(title_text) > MAX_TITLE_LEN:
+        title_text = title_text[: (MAX_TITLE_LEN - 1) ] + "…"
+
+    # 1) Load & resize original to 1280×720
+    orig = Image.open(BytesIO(image_bytes)).convert("RGB")
+    orig = orig.resize((1280, 720), Image.Resampling.LANCZOS)
+
+    # 2) Blur background
+    blurred_bg = orig.filter(ImageFilter.GaussianBlur(radius=25))
+
+    # 3) Convert to RGBA canvas
+    canvas = blurred_bg.convert("RGBA")
+
+    # 4) Define card dimensions & position (centered)
+    card_w, card_h = 1000, 400
+    card_x = (1280 - card_w) // 2
+    card_y = (720 - card_h) // 2
+    radius = 40
+
+    # 5) Create a “frosted glass” region by taking a cropped blur of the background
+    card_region = blurred_bg.crop((card_x, card_y, card_x + card_w, card_y + card_h))
+    card_region = card_region.filter(ImageFilter.GaussianBlur(radius=10)).convert("RGBA")
+
+    # 6) Rounded‐rectangle mask
+    mask = Image.new("L", (card_w, card_h), 0)
+    mask_draw = ImageDraw.Draw(mask)
+    mask_draw.rounded_rectangle([0, 0, card_w, card_h], radius=radius, fill=255)
+
+    # 7) Apply a semi‐transparent dark overlay (“glass”)
+    glass = Image.new("RGBA", (card_w, card_h), (20, 20, 20, 150))
+    card_frosted = Image.alpha_composite(card_region, glass)
+
+    # 8) Paste the frosted card onto the canvas with its rounded mask
+    canvas.paste(card_frosted, (card_x, card_y), mask)
+
+    draw = ImageDraw.Draw(canvas)
+
+    # 9) Subtle border around the card
+    draw.rounded_rectangle(
+        [card_x, card_y, card_x + card_w, card_y + card_h],
+        radius=radius,
+        outline=(30, 30, 30, 200),
+        width=2
+    )
+
+    # 10) Prepare thumbnail: center‐crop then resize to 300×300
+    W, H = orig.size
+    crop_size = min(W, H)
+    left = (W - crop_size) // 2
+    upper = (H - crop_size) // 2
+    right = left + crop_size
+    lower = upper + crop_size
+    cropped_square = orig.crop((left, upper, right, lower))
+    album_thumb = cropped_square.resize((300, 300), Image.Resampling.LANCZOS)
+
+    thumb_x = card_x + 30
+    thumb_y = card_y + 30
+    canvas.paste(album_thumb.convert("RGBA"), (thumb_x, thumb_y))
+
+    # 11) White border around thumbnail
+    draw.rectangle(
+        [thumb_x, thumb_y, thumb_x + 300, thumb_y + 300],
+        outline=(255, 255, 255, 200),
+        width=2
+    )
+
+    # 12) Load fonts (fallback to default if Arial is missing)
+    font_title = ImageFont.load_default()
+    font_artist = ImageFont.load_default()
+    font_time = ImageFont.load_default()
+    font_footer = ImageFont.load_default()
+    font_watermark = ImageFont.load_default()
+    font_icons = ImageFont.load_default()
+
+    try:
+        font_title = ImageFont.truetype("arial.ttf", size=48)
+        font_artist = ImageFont.truetype("arial.ttf", size=36)
+        font_time = ImageFont.truetype("arial.ttf", size=28)
+        font_footer = ImageFont.truetype("arial.ttf", size=24)
+        font_watermark = ImageFont.truetype("arial.ttf", size=18)
+        font_icons = ImageFont.truetype("arial.ttf", size=48)
+    except:
+        pass  # If Arial isn’t found, PIL will fall back to default fonts
+
+    # 13) Draw title & artist (title already truncated if needed)
+    text_x = card_x + 350
+    text_y = card_y + 60
+    draw.text((text_x, text_y), title_text, font=font_title, fill=(255, 255, 255, 255))
+    draw.text((text_x, text_y + 50), artist_text, font=font_artist, fill=(200, 200, 200, 220))
+
+    # 14) Draw progress bar
+    bar_x0 = card_x + 370
+    bar_y0 = card_y + 240
+    bar_length = 400
+    bar_height = 6
+    bar_x1 = bar_x0 + bar_length
+    bar_y1 = bar_y0 + bar_height
+
+    # Track (grey)
+    draw.rounded_rectangle(
+        [bar_x0, bar_y0, bar_x1, bar_y1],
+        radius=3,
+        fill=(180, 180, 180, 120)
+    )
+    # Filled portion at 35% (static demo)
+    fill_pct = 0.35
+    filled_length = int(bar_length * fill_pct)
+    draw.rounded_rectangle(
+        [bar_x0, bar_y0, bar_x0 + filled_length, bar_y1],
+        radius=3,
+        fill=(255, 255, 255, 200)
+    )
+    # Thumb circle
+    thumb_radius = 10
+    cx = bar_x0 + filled_length
+    cy = bar_y0 + bar_height // 2
+    draw.ellipse(
+        [cx - thumb_radius, cy - thumb_radius, cx + thumb_radius, cy + thumb_radius],
+        fill=(255, 255, 255, 255)
+    )
+    # Time stamps (static end time)
+    draw.text((bar_x1 + 10, bar_y0 - 8), "4:20", font=font_time, fill=(220, 220, 220, 200))
+
+    # 15) Playback icons under the bar
+    icon_y = card_y + 280
+    center_x = card_x + (card_w // 2) + 20
+    prev_x = card_x + (card_w // 2) - 70
+    play_x = card_x + (card_w // 2) + 10
+    next_x = card_x + (card_w // 2) + 50
+    draw.text((prev_x, icon_y), "<<", font=font_icons, fill=(240, 240, 240, 220))
+    draw.text((play_x, icon_y), "II", font=font_icons, fill=(240, 240, 240, 220))
+    draw.text((next_x, icon_y), ">>", font=font_icons, fill=(240, 240, 240, 220))
+
+    # 16) “Requested by @username”
+    footer_text = f"Requested by {sender_username}"
+    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
+    footer_w = footer_bbox[2] - footer_bbox[0]
+    footer_x = card_x + card_w - 20 - footer_w
+    footer_y = card_y + card_h - 40
+    draw.text((footer_x, footer_y), footer_text, font=font_footer, fill=(200, 200, 200, 180))
+
+    # 17) “Powered by VibeshiftBots”
+    watermark_text = "Powered by VibeshiftBots"
+    wm_x = card_x + 30
+    wm_y = card_y + card_h - 30
+    draw.text((wm_x, wm_y), watermark_text, font=font_watermark, fill=(200, 200, 200, 120))
+
+    # 18) Return as BytesIO (PNG)
+    output = BytesIO()
+    canvas.convert("RGB").save(output, format="PNG")
+    output.seek(0)
+    return output
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────────────
+
+
+# ─── Command handlers ────────────────────────────────────────────────────────────────
+
 @bot.on_message(filters.group & filters.regex(r'^/play(?:@\w+)?(?:\s+(?P<query>.+))?$'))
-async def play_handler(_, message):
+async def play_handler(_, message: Message):
     chat_id = message.chat.id
 
     # If replying to an audio/video message, handle local playback
@@ -686,12 +878,12 @@ async def play_handler(_, message):
                     )
                     return
             else:
-                await processing_message.edit("❌ Please give bot invite‑link permission.\nSupport: @frozensupport1")
+                await processing_message.edit("❌ Please give bot invite-link permission.\nSupport: @frozensupport1")
                 return
 
         # Fetch fresh media reference and download
         orig = message.reply_to_message
-        fresh = await assistant.get_messages(orig.chat.id, orig.id)
+        fresh = await bot.get_messages(orig.chat.id, orig.id)
         media = fresh.video or fresh.audio
         if fresh.audio and getattr(fresh.audio, 'file_size', 0) > 100 * 1024 * 1024:
             await processing_message.edit("❌ Audio file too large. Maximum allowed size is 100MB.")
@@ -699,7 +891,7 @@ async def play_handler(_, message):
 
         await processing_message.edit("⏳ Please wait, downloading audio...")
         try:
-            file_path = await assistant.download_media(media)
+            file_path = await bot.download_media(media)
         except Exception as e:
             await processing_message.edit(f"❌ Failed to download media: {e}")
             return
@@ -708,7 +900,7 @@ async def play_handler(_, message):
         thumb_path = None
         try:
             thumbs = fresh.video.thumbs if fresh.video else fresh.audio.thumbs
-            thumb_path = await assistant.download_media(thumbs[0])
+            thumb_path = await bot.download_media(thumbs[0])
         except Exception:
             pass
 
@@ -736,24 +928,24 @@ async def play_handler(_, message):
         pass
 
     # Enforce cooldown
-    now = time.time()
-    if chat_id in chat_last_command and (now - chat_last_command[chat_id]) < COOLDOWN:
-        remaining = int(COOLDOWN - (now - chat_last_command[chat_id]))
+    now_ts = time.time()
+    if chat_id in chat_last_command and (now_ts - chat_last_command[chat_id]) < COOLDOWN:
+        remaining = int(COOLDOWN - (now_ts - chat_last_command[chat_id]))
         if chat_id in chat_pending_commands:
-            await _.send_message(chat_id, f"⏳ A command is already queued for this chat. Please wait {remaining}s.")
+            await bot.send_message(chat_id, f"⏳ A command is already queued for this chat. Please wait {remaining}s.")
         else:
-            cooldown_reply = await _.send_message(chat_id, f"⏳ On cooldown. Processing in {remaining}s.")
+            cooldown_reply = await bot.send_message(chat_id, f"⏳ On cooldown. Processing in {remaining}s.")
             chat_pending_commands[chat_id] = (message, cooldown_reply)
             asyncio.create_task(process_pending_command(chat_id, remaining))
         return
-    chat_last_command[chat_id] = now
+    chat_last_command[chat_id] = now_ts
 
     if not query:
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎵 Play Your Playlist", callback_data="play_playlist"),
              InlineKeyboardButton("🔥 Play Trending Songs", callback_data="play_trending")]
         ])
-        await _.send_message(
+        await bot.send_message(
             chat_id,
             "You did not specify a song. Would you like to play your playlist or trending songs instead?\n\n"
             "Correct usage: /play <song name>\nExample: /play shape of you",
@@ -765,7 +957,7 @@ async def play_handler(_, message):
     await process_play_command(message, query)
 
 
-async def process_play_command(message, query):
+async def process_play_command(message: Message, query: str):
     chat_id = message.chat.id
     processing_message = await message.reply("❄️")
 
@@ -791,7 +983,7 @@ async def process_play_command(message, query):
                 )
                 return
         else:
-            await processing_message.edit("❌ Please give bot invite‑link permission.\nSupport: @frozensupport1")
+            await processing_message.edit("❌ Please give bot invite-link permission.\nSupport: @frozensupport1")
             return
 
     # Perform YouTube search and handle results
@@ -819,7 +1011,6 @@ async def process_play_command(message, query):
             return
 
         chat_containers.setdefault(chat_id, [])
-        # Add all items to queue
         for item in playlist_items:
             secs = isodate.parse_duration(item["duration"]).total_seconds()
             chat_containers[chat_id].append({
@@ -831,6 +1022,20 @@ async def process_play_command(message, query):
                 "thumbnail": item["thumbnail"]
             })
 
+            # Preload cache in background with duration-based API selection
+            async def preload_playlist_cache(item_url, duration_sec):
+                api_base, _, _ = chat_api_server[chat_id]
+                api_param = "&api=secondary" if duration_sec > 720 else ""
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        await session.get(
+                            f"{api_base}/cache?url={quote(item_url, safe='')}{api_param}"
+                        )
+                except Exception as e:
+                    print(f"[Playlist Cache Error]: {e}")
+
+            asyncio.create_task(preload_playlist_cache(item["link"], secs))
+
         total = len(playlist_items)
         reply_text = (
             f"✨ᴀᴅᴅᴇᴅ ᴛᴏ playlist\n"
@@ -841,33 +1046,12 @@ async def process_play_command(message, query):
             reply_text += f"\n#2 - {playlist_items[1]['title']}"
         await message.reply(reply_text)
 
-        # Preload only the next song for the playlist to avoid flooding API
-        if total > 1:
-            next_item = playlist_items[1]
-            next_secs = isodate.parse_duration(next_item["duration"]).total_seconds()
-            # Schedule caching for second song
-            async def preload_next():
-                api_base, _, _ = chat_api_server[chat_id]
-                api_param = "&api=secondary" if next_secs > 1200 else ""
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        await session.get(
-                            f"{api_base}/cache?url={urllib.parse.quote(next_item['link'], safe='')}{api_param}"
-                        )
-                except Exception:
-                    pass
-
-            asyncio.create_task(preload_next())
-
-        # Start the playback task; further caching of subsequent songs
-        # will be triggered inside the playback handler when moving to the next track.
         if len(chat_containers[chat_id]) == total:
             await start_playback_task(chat_id, processing_message)
         else:
             await processing_message.delete()
 
     else:
-        # Single video handling (unchanged)...
         video_url, title, duration_iso, thumb = result
         if not video_url:
             await processing_message.edit(
@@ -878,7 +1062,7 @@ async def process_play_command(message, query):
         secs = isodate.parse_duration(duration_iso).total_seconds()
         if secs > MAX_DURATION_SECONDS:
             await processing_message.edit(
-                "❌ Streams longer than 20 min are not allowed. we are facing some server issues will be fixed"
+                "❌ Streams longer than 10 min are not allowed. We are facing some server issues—please try later."
             )
             return
 
@@ -889,7 +1073,7 @@ async def process_play_command(message, query):
             "title": title,
             "duration": readable,
             "duration_seconds": secs,
-            "requester": message.from_user.first_name if message.from_user else 'Unknown',
+            "requester": message.from_user.first_name if message.from_user else "Unknown",
             "thumbnail": thumb
         })
 
@@ -900,11 +1084,11 @@ async def process_play_command(message, query):
             # Preload cache in background for queued songs with conditional API
             async def preload_cache(item_url, duration_sec):
                 api_base, _, _ = chat_api_server[chat_id]
-                api_param = "&api=secondary" if duration_sec > 1200 else ""
+                api_param = "&api=secondary" if duration_sec > 720 else ""
                 try:
                     async with aiohttp.ClientSession() as session:
                         await session.get(
-                            f"{api_base}/cache?url={urllib.parse.quote(item_url, safe='')}{api_param}"
+                            f"{api_base}/cache?url={quote(item_url, safe='')}{api_param}"
                         )
                 except Exception as e:
                     print(f"[Cache Preload Error]: {e}")
@@ -926,7 +1110,8 @@ async def process_play_command(message, query):
             await processing_message.delete()
 
 
-# ─── somewhere near the top of the file ────────────────────────────────────────
+# ─── Utility functions ──────────────────────────────────────────────────────────────
+
 MAX_TITLE_LEN = 20
 
 def _one_line_title(full_title: str) -> str:
@@ -939,19 +1124,13 @@ def _one_line_title(full_title: str) -> str:
     else:
         return full_title[: (MAX_TITLE_LEN - 1) ] + "…"  # one char saved for the ellipsis
 
-
-
-
-# (Assume other necessary imports like bot, call_py, MediaStream, playback_tasks, chat_containers, etc. are present above)
-
-def parse_duration_str(duration_str):
+def parse_duration_str(duration_str: str) -> int:
     """
     Convert a duration string to total seconds.
     First, try ISO 8601 parsing (e.g. "PT3M9S"). If that fails,
     fall back to colon-separated formats like "3:09" or "1:02:30".
     """
     try:
-        # Try ISO 8601
         duration = isodate.parse_duration(duration_str)
         return int(duration.total_seconds())
     except Exception as e:
@@ -971,20 +1150,23 @@ def parse_duration_str(duration_str):
             print(f"Error parsing duration '{duration_str}': {e}")
             return 0
 
-def format_time(seconds):
-    seconds = int(seconds)
-    m, s = divmod(seconds, 60)
+def format_time(seconds: float) -> str:
+    """
+    Given total seconds, return "H:MM:SS" or "M:SS" if hours=0.
+    """
+    secs = int(seconds)
+    m, s = divmod(secs, 60)
     h, m = divmod(m, 60)
     if h > 0:
         return f"{h}:{m:02d}:{s:02d}"
     else:
         return f"{m}:{s:02d}"
 
-def get_progress_bar_styled(elapsed, total, bar_length=14):
+def get_progress_bar_styled(elapsed: float, total: float, bar_length: int = 14) -> str:
     """
     Build a progress bar string in the style:
-      elapsed_time  <dashes>◉<dashes>  total_time
-    For example: 0:30 —◉———— 3:09
+      elapsed_time  <dashes>❄️<dashes>  total_time
+    For example: 0:30 —❄️———— 3:09
     """
     if total <= 0:
         return "Progress: N/A"
@@ -997,9 +1179,14 @@ def get_progress_bar_styled(elapsed, total, bar_length=14):
     bar = left + "❄️" + right
     return f"{format_time(elapsed)} {bar} {format_time(total)}"
 
-# ─── Updated functions ───────────────────────────────────────────────────────────────────
 
-async def update_progress_caption(chat_id, progress_message, start_time, total_duration, base_caption):
+async def update_progress_caption(
+    chat_id: int,
+    progress_message: Message,
+    start_time: float,
+    total_duration: float,
+    base_caption: str
+):
     """
     Periodically update the inline keyboard so that the second row's button text
     shows the current progress bar. The caption remains `base_caption`.
@@ -1027,7 +1214,6 @@ async def update_progress_caption(chat_id, progress_message, start_time, total_d
         ])
 
         try:
-            # Use progress_message.id instead of progress_message.message_id
             await bot.edit_message_caption(
                 chat_id,
                 progress_message.id,
@@ -1035,7 +1221,7 @@ async def update_progress_caption(chat_id, progress_message, start_time, total_d
                 reply_markup=new_keyboard
             )
         except Exception as e:
-            # If the error is MESSAGE_NOT_MODIFIED, ignore it; otherwise, break
+            # Ignore MESSAGE_NOT_MODIFIED, otherwise break
             if "MESSAGE_NOT_MODIFIED" in str(e):
                 pass
             else:
@@ -1048,7 +1234,7 @@ async def update_progress_caption(chat_id, progress_message, start_time, total_d
         await asyncio.sleep(18)
 
 
-async def fallback_local_playback(chat_id, message, song_info):
+async def fallback_local_playback(chat_id: int, message: Message, song_info: dict):
     playback_mode[chat_id] = "local"
     try:
         if chat_id in playback_tasks:
@@ -1063,7 +1249,10 @@ async def fallback_local_playback(chat_id, message, song_info):
         try:
             await message.edit(f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ ⚡ {song_info['title']}...")
         except Exception:
-            message = await bot.send_message(chat_id, f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ⚡ {song_info['title']}...")
+            message = await bot.send_message(
+                chat_id,
+                f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ⚡ {song_info['title']}..."
+            )
 
         media_path = await download_audio(video_url)
         await call_py.play(
@@ -1089,16 +1278,13 @@ async def fallback_local_playback(chat_id, message, song_info):
         initial_progress = get_progress_bar_styled(0, total_duration)
 
         # Build the initial inline keyboard:
-        # Line 1: playback controls
         control_row = [
             InlineKeyboardButton(text="▷", callback_data="pause"),
             InlineKeyboardButton(text="II", callback_data="resume"),
             InlineKeyboardButton(text="‣‣I", callback_data="skip"),
             InlineKeyboardButton(text="▢", callback_data="stop")
         ]
-        # Line 2: progress bar button
         progress_button = InlineKeyboardButton(text=initial_progress, callback_data="progress")
-        # Line 3: add to playlist button
         playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
 
         base_keyboard = InlineKeyboardMarkup([
@@ -1107,12 +1293,39 @@ async def fallback_local_playback(chat_id, message, song_info):
             [playlist_button]
         ])
 
-        # Send the photo with caption and keyboard
-        progress_message = await message.reply_photo(
-            photo=song_info['thumbnail'],
-            caption=base_caption,
-            reply_markup=base_keyboard
-        )
+        # ─── Generate frosted card instead of sending raw thumbnail ─────────
+        frosted_buffer = None
+        if song_info.get('thumbnail'):
+            try:
+                raw_thumb = None
+                if os.path.isfile(song_info['thumbnail']):
+                    with open(song_info['thumbnail'], "rb") as img_f:
+                        raw_thumb = img_f.read()
+                else:
+                    raw_thumb = await download_bytes_from_url(song_info['thumbnail'])
+                frosted_buffer = create_frosted_card(
+                    raw_thumb,
+                    sender_username=f"{song_info['requester']}",
+                    title_text=song_info['title'],
+                    artist_text=song_info['requester']
+                )
+            except Exception as e:
+                print(f"Error generating frosted card: {e}")
+                frosted_buffer = None
+
+        if frosted_buffer:
+            progress_message = await message.reply_photo(
+                photo=frosted_buffer,
+                caption=base_caption,
+                reply_markup=base_keyboard
+            )
+        else:
+            # Fallback to raw thumbnail if frosted card fails
+            progress_message = await message.reply_photo(
+                photo=song_info['thumbnail'],
+                caption=base_caption,
+                reply_markup=base_keyboard
+            )
         await message.delete()
 
         # Schedule periodic updates to the keyboard so the progress button changes
@@ -1130,7 +1343,7 @@ async def fallback_local_playback(chat_id, message, song_info):
         print(f"Error during fallback local playback: {e}")
 
 
-async def start_playback_task(chat_id, message):
+async def start_playback_task(chat_id: int, message: Message):
     global global_api_index, global_playback_count
     print(f"Current playback tasks: {len(playback_tasks)}; Chat ID: {chat_id}")
     # Reuse the same message if available, setting an initial processing message.
@@ -1155,10 +1368,10 @@ async def start_playback_task(chat_id, message):
         global_api_index += 1
 
     # Ensure the API assistant is in the chat.
-    if not await is_api_assistant_in_chat(chat_id):
+    if not await is_assistant_in_chat(chat_id):
         invite_link = await extract_invite_link(bot, chat_id)
         if invite_link:
-            join_api_url = f"{selected_api}/join?input={urllib.parse.quote(invite_link)}"
+            join_api_url = f"{selected_api}/join?input={quote(invite_link)}"
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(join_api_url, timeout=20) as join_resp:
@@ -1170,7 +1383,7 @@ async def start_playback_task(chat_id, message):
                 return
             for _ in range(10):
                 await asyncio.sleep(3)
-                if await is_api_assistant_in_chat(chat_id):
+                if await is_assistant_in_chat(chat_id):
                     break
             else:
                 await bot.send_message(chat_id, "❌ API Assistant failed to join. Please check the API endpoint.")
@@ -1185,7 +1398,7 @@ async def start_playback_task(chat_id, message):
     last_played_song[chat_id] = song_info
     video_title = song_info.get('title', 'Unknown')
     video_url = song_info.get('url', '')
-    encoded_url = urllib.parse.quote(video_url, safe='')
+    encoded_url = quote(video_url, safe='')
 
     # Determine which API to call based on duration threshold (12 minutes = 720 seconds)
     duration_seconds = song_info.get('duration_seconds', 0)
@@ -1195,17 +1408,17 @@ async def start_playback_task(chat_id, message):
     try:
         async with aiohttp.ClientSession() as session:
             # Use a 30-second timeout for the play API call.
-            async with session.get(api_url, timeout=180) as resp:
+            async with session.get(api_url, timeout=60) as resp:
                 if resp.status != 200:
                     raise Exception(f"API responded with status {resp.status}")
                 data = await resp.json()
     except Exception as e:
         # Inform the user about the delay.
         try:
-            await processing_message.edit("⏳ API server is sleeping. Falling back in 1 sec")
+            await processing_message.edit("⏳ API server is sleeping. Waiting an extra 20 seconds before falling back...")
         except Exception as edit_error:
             print(f"Error editing processing message: {edit_error}")
-        await asyncio.sleep(1)
+        await asyncio.sleep(20)
         fallback_error = f"❌ Frozen Play API Error: {str(e)}\nFalling back to local playback..."
         try:
             await processing_message.edit(fallback_error)
@@ -1239,16 +1452,13 @@ async def start_playback_task(chat_id, message):
     initial_progress = get_progress_bar_styled(0, total_duration)
 
     # Build the initial inline keyboard:
-    # Line 1: playback controls
     control_row = [
         InlineKeyboardButton(text="▷", callback_data="pause"),
         InlineKeyboardButton(text="II", callback_data="resume"),
         InlineKeyboardButton(text="‣‣I", callback_data="skip"),
         InlineKeyboardButton(text="▢", callback_data="stop")
     ]
-    # Line 2: progress bar button
     progress_button = InlineKeyboardButton(text=initial_progress, callback_data="progress")
-    # Line 3: add to playlist button
     playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
 
     base_keyboard = InlineKeyboardMarkup([
@@ -1263,23 +1473,41 @@ async def start_playback_task(chat_id, message):
     except Exception as e:
         print(f"Error deleting processing message: {e}")
 
-    try:
-        # Send a new message with the updated song info and playback controls.
-        new_progress_message = await bot.send_photo(
-            chat_id,
-            photo=song_info['thumbnail'],
-            caption=base_caption,
-            reply_markup=base_keyboard
-        )
-    except Exception as e:
-        print("Error sending new playback message:", e)
-        new_progress_message = await bot.send_photo(
-            chat_id,
-            photo=song_info['thumbnail'],
-            caption=base_caption,
-            reply_markup=base_keyboard
-        )
+    # ─── Generate frosted card instead of sending raw thumbnail ─────────
+    frosted_buffer = None
+    if song_info.get('thumbnail'):
+        try:
+            raw_thumb = None
+            if os.path.isfile(song_info['thumbnail']):
+                with open(song_info['thumbnail'], "rb") as img_f:
+                    raw_thumb = img_f.read()
+            else:
+                raw_thumb = await download_bytes_from_url(song_info['thumbnail'])
+            frosted_buffer = create_frosted_card(
+                raw_thumb,
+                sender_username=f"{song_info['requester']}",
+                title_text=song_info['title'],
+                artist_text=song_info['requester']
+            )
+        except Exception as e:
+            print(f"Error generating frosted card: {e}")
+            frosted_buffer = None
 
+    if frosted_buffer:
+        new_progress_message = await bot.send_photo(
+            chat_id,
+            photo=frosted_buffer,
+            caption=base_caption,
+            reply_markup=base_keyboard
+        )
+    else:
+        # Fallback to raw thumbnail if frosted card fails
+        new_progress_message = await bot.send_photo(
+            chat_id,
+            photo=song_info['thumbnail'],
+            caption=base_caption,
+            reply_markup=base_keyboard
+        )
     global_playback_count += 1
 
     # Start updating the progress caption (actually updating the keyboard)
