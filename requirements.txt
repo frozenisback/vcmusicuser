@@ -1,9 +1,9 @@
 pyrogram
-git+https://github.com/pytgcalls/pytgcalls
+git+https://github.com/pytgcalls/pytgcalls.git
 yt-dlp
 aiohttp
 asyncio
-flask 
+flask
 Flask-RESTful
 tgcrypto
 ffmpeg-python
@@ -16,3 +16,4 @@ asyncpg
 pymongo
 aiofiles
 gender-guesser
+
