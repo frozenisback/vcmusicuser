@@ -29,6 +29,7 @@ from dotenv import load_dotenv
 from flask import Flask, request
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from pyrogram import Client, filters, errors
+from pyrogram.enums import ParseMode
 from pyrogram.enums import ChatType, ChatMemberStatus, ParseMode
 from pyrogram.types import (
     Message,
@@ -50,6 +51,9 @@ from pytgcalls.types import (
 from pytgcalls.types.stream import StreamEnded
 from typing import Union
 import urllib
+
+
+
 
 load_dotenv()
 
@@ -105,6 +109,11 @@ DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
 BACKUP_SEARCH_API_URL= "https://teenage-liz-frozzennbotss-61567ab4.koyeb.app"
 
 
+MAIN_LOOP = None
+ASSISTANT_CHAT_ID = 7386215995
+BOT_CHAT_ID = 7598576464
+BOT_USERNAME = "@vcmusiclubot"
+
 # ─── MongoDB Setup ─────────────────────────────────────────
 mongo_uri = os.environ.get(
     "MONGO_URI",
@@ -133,12 +142,12 @@ members_cache.create_index(
     [("last_synced", ASCENDING)],
     expireAfterSeconds=24 * 3600  # refresh member cache daily
 )
+# ─── NEW: Collection for full-state persistence ───────────────────────────────
+state_backup = db["state_backup"]
 
-# Collection for queue persistence
-queue_backup = db["queue_backups"]
 
 # template & font (adjust paths as needed)
-TEMPLATE_PATH = "copules.png"
+TEMPLATE_PATH = r"C:\Users\PC\Downloads\copules.png"
 FONT_PATH     = "arial.ttf"
 _template = Image.open(TEMPLATE_PATH).convert("RGBA")
 R = 240
@@ -147,6 +156,15 @@ CENTERS = [(348,380), (1170,380)]
 NAME_Y = CENTERS[0][1] + R + 30
 GROUP_Y = 40
 GROUP_FONT_SIZE = 72
+
+import logging
+
+# At module top:
+logger = logging.getLogger(__name__)
+
+# …later in your code:
+logger.exception("Cached couple send failed - regenerating...")
+
 
 
 # Containers for song queues per chat/group
@@ -157,7 +175,7 @@ COOLDOWN = 10
 chat_last_command = {}
 chat_pending_commands = {}
 QUEUE_LIMIT = 20
-MAX_DURATION_SECONDS = 7800  # 2 hours and 10 minutes  # 10 minutes (in seconds)
+MAX_DURATION_SECONDS = 7800  # 10 minutes (in seconds)
 LOCAL_VC_LIMIT = 10
 api_playback_records = []
 playback_mode = {}
@@ -167,12 +185,12 @@ last_suggestions = {}
 global_playback_count = 0  # Increments on every new playback request
 api_server_counter = 0     # Used to select an API server in round-robin fashion
 api_servers = [
-    "https://py-tgcalls-api-1.onrender.com",
+    "https://py-tgcalls-api-fzk2.onrender.com",
     "https://py-tgcalls-api-4vju.onrender.com",
     "http://py-tgcalls-api-yto1.onrender.com",
     "https://py-tgcalls-api-p44l.onrender.com",
     "https://py-tgcalls-api-fzk2.onrender.com",
-    "https://py-tgcalls-api-vjd1.onrender.com"
+    "https://py-tgcalls-api-1.onrender.com"
 ]
 chat_api_server = {}
 global_api_index = 0
@@ -510,52 +528,67 @@ async def invite_assistant(chat_id, invite_link, processing_message):
         return False
 
 
+# Helper to convert ASCII letters to Unicode bold
+def to_bold_unicode(text: str) -> str:
+    bold_text = ""
+    for char in text:
+        if 'A' <= char <= 'Z':
+            bold_text += chr(ord('𝗔') + (ord(char) - ord('A')))
+        elif 'a' <= char <= 'z':
+            bold_text += chr(ord('𝗮') + (ord(char) - ord('a')))
+        else:
+            bold_text += char
+    return bold_text
+
 @bot.on_message(filters.command("start"))
 async def start_handler(_, message):
-    # Calculate uptime
-    current_time = time.time()
-    uptime_seconds = int(current_time - bot_start_time)
-    uptime_str = str(timedelta(seconds=uptime_seconds))
+    # Extract and style the user's first name dynamically
+    user_id = message.from_user.id
+    raw_name = message.from_user.first_name or ""
+    styled_name = to_bold_unicode(raw_name)
+    user_link = f"[{styled_name}](tg://user?id={user_id})"
 
-    # Mention the user
-    user_mention = message.from_user.mention
+    # Style button texts
+    add_me_text = to_bold_unicode("Add Me")
+    updates_text = to_bold_unicode("Updates")
+    support_text = to_bold_unicode("Support")
+    help_text = to_bold_unicode("Help")
 
-    # Caption with bot info and uptime
+    # Caption with bold Unicode font for headings and feature labels
     caption = (
-        f"👋 нєу {user_mention} 💠, 🥀\n\n"
-        "🎶 Wᴇʟᴄᴏᴍᴇ ᴛᴏ Fʀᴏᴢᴇɴ 🥀 ᴍᴜsɪᴄ! 🎵\n\n"
-        "➻ 🚀 A Sᴜᴘᴇʀғᴀsᴛ & Pᴏᴡᴇʀғᴜʟ Tᴇʟᴇɢʀᴀᴍ Mᴜsɪᴄ Bᴏᴛ ᴡɪᴛʜ ᴀᴍᴀᴢɪɴɢ ғᴇᴀᴛᴜʀᴇs. ✨\n\n"
-        "🎧 Sᴜᴘᴘᴏʀᴛᴇᴅ Pʟᴀᴛғᴏʀᴍs: ʏᴏᴜᴛᴜʙᴇ, sᴘᴏᴛɪғʏ, ʀᴇssᴏ, ᴀᴘᴘʟᴇ ᴍᴜsɪᴄ, sᴏᴜɴᴅᴄʟᴏᴜᴅ.\n\n"
-        "🔹 Kᴇʏ Fᴇᴀᴛᴜʀᴇs:\n"
-        "🎵 Playlist Support for your favorite tracks.\n"
-        "🤖 AI Chat for engaging conversations.\n"
-        "🖼️ Image Generation with AI creativity.\n"
-        "👥 Group Management tools for admins.\n"
-        "💡 And many more exciting features!\n\n"
-        f"**Uptime:** `{uptime_str}`\n\n"
-        "──────────────────\n"
-        "๏ ᴄʟɪᴄᴋ ᴛʜᴇ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ ғᴏʀ ᴍᴏᴅᴜʟᴇ ᴀɴᴅ ᴄᴏᴍᴍᴀɴᴅ ɪɴғᴏ.."
+        f"👋 нєу {user_link} 💠, 🥀\n\n"
+        "🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\n\n"
+        "🚀 𝗧𝗢𝗣-𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\n"
+        "🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟-𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\n"
+        "🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\n"
+        "✨ 𝗔𝗨𝗧𝗢-𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\n"
+        "🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\n"
+        "❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡 (pick random pair in group)\n\n"
+        f"๏ ᴄʟɪᴄᴋ {help_text} ʙᴇʟᴏᴡ ғᴏʀ ᴄᴏᴍᴍᴀɴᴅ ʟɪsᴛ."
     )
 
-    # Buttons on the start screen
     buttons = [
-        [InlineKeyboardButton("➕ Add me", url="https://t.me/vcmusiclubot?startgroup=true"),
-         InlineKeyboardButton("💬 Support", url="https://t.me/Frozensupport1")],
-        [InlineKeyboardButton("❓ Help", callback_data="show_help")]
+        [
+            InlineKeyboardButton(f"➕ {add_me_text}", url="https://t.me/vcmusiclubot?startgroup=true"),
+            InlineKeyboardButton(f"📢 {updates_text}", url="https://t.me/vibeshiftbots")
+        ],
+        [
+            InlineKeyboardButton(f"💬 {support_text}", url="https://t.me/Frozensupport1"),
+            InlineKeyboardButton(f"❓ {help_text}", callback_data="show_help")
+        ]
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
 
-    # Send the animation (loops infinitely) instead of a video :contentReference[oaicite:0]{index=0}
     await message.reply_animation(
         animation="https://frozen-imageapi.lagendplayersyt.workers.dev/file/2e483e17-05cb-45e2-b166-1ea476ce9521.mp4",
         caption=caption,
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=reply_markup
     )
 
     # Register chat ID for broadcasting silently
     chat_id = message.chat.id
     chat_type = message.chat.type
-
     if chat_type == ChatType.PRIVATE:
         if not broadcast_collection.find_one({"chat_id": chat_id}):
             broadcast_collection.insert_one({"chat_id": chat_id, "type": "private"})
@@ -564,109 +597,144 @@ async def start_handler(_, message):
             broadcast_collection.insert_one({"chat_id": chat_id, "type": "group"})
 
 
-@bot.on_callback_query(filters.regex("^show_help$"))
-async def show_help_callback(_, callback_query):
-    help_text = "📜 Choose a category to explore commands:"  
-    buttons = [
-        [InlineKeyboardButton("🎵 Play", callback_data="help_play"),
-         InlineKeyboardButton("⏹ Stop", callback_data="help_stop"),
-         InlineKeyboardButton("⏸ Pause", callback_data="help_pause")],
-        [InlineKeyboardButton("▶ Resume", callback_data="help_resume"),
-         InlineKeyboardButton("⏭ Skip", callback_data="help_skip"),
-         InlineKeyboardButton("🔄 Reboot", callback_data="help_reboot")],
-        [InlineKeyboardButton("📶 Ping", callback_data="help_ping"),
-         InlineKeyboardButton("🎶 Playlist", callback_data="help_playlist"),
-         InlineKeyboardButton("🗑 Clear Queue", callback_data="help_clear")],
-        [InlineKeyboardButton("🏠 Home", callback_data="go_back")]
-    ]
-    reply_markup = InlineKeyboardMarkup(buttons)
-    await callback_query.message.edit_text(help_text, reply_markup=reply_markup)
-
-@bot.on_callback_query(filters.regex("^help_play$"))
-async def help_play_callback(_, callback_query):
-    text = "🎵 **Play Command**\n\n➜ Use /play <song name> to play music.\n\n💡 Example: /play shape of you"
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-@bot.on_callback_query(filters.regex("^help_stop$"))
-async def help_stop_callback(_, callback_query):
-    text = "⏹ **Stop Command**\n\n➜ Use /stop or /end to stop the music and clear the queue."
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-@bot.on_callback_query(filters.regex("^help_pause$"))
-async def help_pause_callback(_, callback_query):
-    text = "⏸ **Pause Command**\n\n➜ Use /pause to pause the current song."
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-@bot.on_callback_query(filters.regex("^help_resume$"))
-async def help_resume_callback(_, callback_query):
-    text = "▶ **Resume Command**\n\n➜ Use /resume to continue playing the paused song."
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-@bot.on_callback_query(filters.regex("^help_skip$"))
-async def help_skip_callback(_, callback_query):
-    text = "⏭ **Skip Command**\n\n➜ Use /skip to move to the next song in the queue."
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-@bot.on_callback_query(filters.regex("^help_reboot$"))
-async def help_reboot_callback(_, callback_query):
-    text = "🔄 **Reboot Command**\n\n➜ Use /reboot to restart the bot if needed."
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-@bot.on_callback_query(filters.regex("^help_ping$"))
-async def help_ping_callback(_, callback_query):
-    text = "📶 **Ping Command**\n\n➜ Use /ping to check bot's response time and uptime."
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-@bot.on_callback_query(filters.regex("^help_playlist$"))
-async def help_playlist_callback(_, callback_query):
-    text = "🎶 **Playlist Command**\n\n➜ Use /playlist to view and manage your playlist."
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-@bot.on_callback_query(filters.regex("^help_clear$"))
-async def help_clear_callback(_, callback_query):
-    text = "🗑 **Clear Queue Command**\n\n➜ Use /clear to remove all songs from the queue."
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
 @bot.on_callback_query(filters.regex("^go_back$"))
 async def go_back_callback(_, callback_query):
-    current_time = time.time()
-    uptime_seconds = int(current_time - bot_start_time)
-    uptime_str = str(timedelta(seconds=uptime_seconds))
-    user_mention = callback_query.from_user.mention
+    user_id = callback_query.from_user.id
+    raw_name = callback_query.from_user.first_name or ""
+    styled_name = to_bold_unicode(raw_name)
+    user_link = f"[{styled_name}](tg://user?id={user_id})"
+
+    # Style button texts
+    add_me_text = to_bold_unicode("Add Me")
+    updates_text = to_bold_unicode("Updates")
+    support_text = to_bold_unicode("Support")
+    help_text = to_bold_unicode("Help")
+
     caption = (
-        f"👋 нєу {user_mention} 💠, 🥀\n\n"
-        "🎶 Wᴇʟᴄᴏᴍᴇ ᴛᴏ Fʀᴏᴢᴇɴ 🥀 ᴍᴜsɪᴄ! 🎵\n\n"
-        "➻ 🚀 A Sᴜᴘᴇʀғᴀsᴛ & Pᴏᴡᴇʀғᴜʟ Tᴇʟᴇɢʀᴀᴍ Mᴜsɪᴄ Bᴏᴛ ᴡɪᴛʜ ᴀᴍᴀᴢɪɴɢ ғᴇᴀᴛᴜʀᴇs. ✨\n\n"
-        "🎧 Sᴜᴘᴘᴏʀᴛᴇᴅ Pʟᴀᴛғᴏʀᴍs: ʏᴏᴜᴛᴜʙᴇ, sᴘᴏᴛɪғʏ, ʀᴇssᴏ, ᴀᴘᴘʟᴇ ᴍᴜsɪᴄ, sᴏᴜɴᴅᴄʟᴏᴜᴅ.\n\n"
-        "🔹 Kᴇʏ Fᴇᴀᴛᴜʀᴇs:\n"
-        "🎵 Playlist Support for your favorite tracks.\n"
-        "🤖 AI Chat for engaging conversations.\n"
-        "🖼️ Image Generation with AI creativity.\n"
-        "👥 Group Management tools for admins.\n"
-        "💡 And many more exciting features!\n\n"
-        f"**Uptime:** `{uptime_str}`\n\n"
-        "──────────────────\n"
-        "๏ ᴄʟɪᴄᴋ ᴛʜᴇ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ ғᴏʀ ᴍᴏᴅᴜʟᴇ ᴀɴᴅ ᴄᴏᴍᴍᴀɴᴅ ɪɴғᴏ.."
+        f"👋 нєу {user_link} 💠, 🥀\n\n"
+        "🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\n\n"
+        "🚀 𝗧𝗢𝗣-𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\n\n"
+        "🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟-𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\n\n"
+        "🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\n\n"
+        "✨ 𝗔𝗨𝗧𝗢-𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\n\n"
+        "🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\n\n"
+        "❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 (pick random pair in group)\n\n"
+        f"๏ ᴄʟɪᴄᴋ {help_text} ʙᴇʟᴏᴡ ғᴏʀ ᴄᴏᴍᴍᴀɴᴅ ʟɪsᴛ."
     )
+
     buttons = [
-        [InlineKeyboardButton("➕ Add me", url="https://t.me/vcmusiclubot?startgroup=true"),
-         InlineKeyboardButton("💬 Support", url="https://t.me/Frozensupport1")],
-        [InlineKeyboardButton("❓ Help", callback_data="show_help")]
+        [
+            InlineKeyboardButton(f"➕ {add_me_text}", url="https://t.me/vcmusiclubot?startgroup=true"),
+            InlineKeyboardButton(f"📢 {updates_text}", url="https://t.me/vibeshiftbots")
+        ],
+        [
+            InlineKeyboardButton(f"💬 {support_text}", url="https://t.me/Frozensupport1"),
+            InlineKeyboardButton(f"❓ {help_text}", callback_data="show_help")
+        ]
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
-    await callback_query.message.edit_media(
-        media=InputMediaPhoto(media="https://files.catbox.moe/kao3ip.jpeg", caption=caption),
+
+    # Use edit_caption to keep Markdown link for mention
+    await callback_query.message.edit_caption(
+        caption=caption,
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=reply_markup
     )
+
+
+@bot.on_callback_query(filters.regex("^show_help$"))
+async def show_help_callback(_, callback_query):
+    help_text = "📜 *Choose a category to explore commands:*"
+    buttons = [
+        [
+            InlineKeyboardButton("🎵 Music Controls", callback_data="help_music"),
+            InlineKeyboardButton("🛡️ Admin Tools", callback_data="help_admin")
+        ],
+        [
+            InlineKeyboardButton("❤️ Couple Suggestion", callback_data="help_couple"),
+            InlineKeyboardButton("🔍 Utility", callback_data="help_util")
+        ],
+        [
+            InlineKeyboardButton("🏠 Home", callback_data="go_back")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    await callback_query.message.edit_text(help_text, parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
+
+
+@bot.on_callback_query(filters.regex("^help_music$"))
+async def help_music_callback(_, callback_query):
+    text = (
+        "🎵 *Music & Playback Commands*\n\n"
+        "➜ `/play <song name or URL>`\n"
+        "   • Play a song (YouTube/Spotify/Resso/Apple Music/SoundCloud).\n"
+        "   • If replied to an audio/video, plays it directly.\n\n"
+        "➜ `/playlist`\n"
+        "   • View or manage your saved playlist.\n\n"
+        "➜ `/skip`\n"
+        "   • Skip the currently playing song. (Admins only)\n\n"
+        "➜ `/pause`\n"
+        "   • Pause the current stream. (Admins only)\n\n"
+        "➜ `/resume`\n"
+        "   • Resume a paused stream. (Admins only)\n\n"
+        "➜ `/stop` or `/end`\n"
+        "   • Stop playback and clear the queue. (Admins only)"
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@bot.on_callback_query(filters.regex("^help_admin$"))
+async def help_admin_callback(_, callback_query):
+    text = (
+        "🛡️ *Admin & Moderation Commands*\n\n"
+        "➜ `/mute @user`\n"
+        "   • Mute a user indefinitely. (Admins only)\n\n"
+        "➜ `/unmute @user`\n"
+        "   • Unmute a previously muted user. (Admins only)\n\n"
+        "➜ `/tmute @user <minutes>`\n"
+        "   • Temporarily mute for a set duration. (Admins only)\n\n"
+        "➜ `/kick @user`\n"
+        "   • Kick (ban + unban) a user immediately. (Admins only)\n\n"
+        "➜ `/ban @user`\n"
+        "   • Ban a user. (Admins only)\n\n"
+        "➜ `/unban @user`\n"
+        "   • Unban a previously banned user. (Admins only)"
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@bot.on_callback_query(filters.regex("^help_couple$"))
+async def help_couple_callback(_, callback_query):
+    text = (
+        "❤️ *Couple Suggestion Command*\n\n"
+        "➜ `/couple`\n"
+        "   • Picks two random non-bot members and posts a “couple” image with their names.\n"
+        "   • Caches daily so the same pair appears until midnight UTC.\n"
+        "   • Uses per-group member cache for speed."
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@bot.on_callback_query(filters.regex("^help_util$"))
+async def help_util_callback(_, callback_query):
+    text = (
+        "🔍 *Utility & Extra Commands*\n\n"
+        "➜ `/ping`\n"
+        "   • Check bot’s response time and uptime.\n\n"
+        "➜ `/clear`\n"
+        "   • Clear the entire queue. (Admins only)\n\n"
+        "➜ Auto-Suggestions:\n"
+        "   • When the queue ends, the bot automatically suggests new songs via inline buttons.\n\n"
+        "➜ *Audio Quality & Limits*\n"
+        "   • Streams up to 2 hours 10 minutes, but auto-fallback for longer. (See `MAX_DURATION_SECONDS`)\n"
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
+    await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
+
+
 
 MAX_TITLE_LEN = 20
 
@@ -2148,7 +2216,6 @@ async def create_welcome_image(user) -> str:
 
 
 
-
 @bot.on_message(filters.group & filters.new_chat_members)
 async def welcome_new_member(client: Client, message: Message):
     """
@@ -2455,6 +2522,7 @@ async def make_couple(client: Client, message):
     finally:
         await status.delete()
         processing_chats.discard(chat_id)
+
 
 @bot.on_message(filters.group & filters.command("ban"))
 @safe_handler
@@ -3074,6 +3142,7 @@ def ping_api(url, description):
     except Exception as e:
         print(f"Error pinging {description}: {e}")
 
+
 @bot.on_message(filters.regex(r'^Stream ended in chat id (?P<chat_id>-?\d+)$'))
 async def stream_ended_handler(_, message):
     # Extract the chat ID from the message
@@ -3121,29 +3190,120 @@ async def stream_ended_handler(_, message):
             status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
             await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
         else:
-            await bot.send_message(chat_id, "🚪 No songs left in the queue.")
+            await bot.send_message(chat_id, "No songs left in the queue.")
 
 
-@bot.on_message(filters.command("frozen_check") & filters.chat(ASSISTANT_CHAT_ID))
-async def frozen_check_command(_, message):
-    await message.reply_text("frozen check successful ✨")
 
+# ─── Persistence Helpers (Sync) ────────────────────────────────────────────────
+def save_state_to_db():
+    """
+    Persist all in-memory state dictionaries into MongoDB before a hard restart.
+    We store a single document with _id "singleton" that contains:
+      - chat_containers
+      - chat_last_command
+      - chat_pending_commands
+      - playback_mode
+      - last_played_song
+      - last_suggestions
+      - chat_api_server
+      - global_playback_count
+      - api_server_counter
+      - global_api_index
+    """
+    # Convert integer keys to strings (MongoDB requires string keys for dicts)
+    data = {
+        "chat_containers":       { str(cid): queue for cid, queue in chat_containers.items() },
+        "chat_last_command":     { str(cid): cmd   for cid, cmd   in chat_last_command.items() },
+        "chat_pending_commands": { str(cid): pend  for cid, pend  in chat_pending_commands.items() },
+        "playback_mode":         { str(cid): mode  for cid, mode  in playback_mode.items() },
+        "last_played_song":      { str(cid): song  for cid, song  in last_played_song.items() },
+        "last_suggestions":      { str(cid): sug   for cid, sug   in last_suggestions.items() },
+        "chat_api_server":       { str(cid): srv   for cid, srv   in chat_api_server.items() },
+        "global_playback_count": global_playback_count,
+        "api_server_counter":    api_server_counter,
+        "global_api_index":      global_api_index
+    }
 
-# ─── Persistence Helpers (Sync) ────────────────────────────
-def save_queues_to_db():
-    """Persist and clear in-memory queues before hard restart."""
-    data = { str(cid): queue for cid, queue in chat_containers.items() }
-    queue_backup.replace_one({"_id": "singleton"}, {"_id": "singleton", "queues": data}, upsert=True)
+    state_backup.replace_one(
+        {"_id": "singleton"},
+        {"_id": "singleton", "state": data},
+        upsert=True
+    )
+
+    # Clear only those dictionaries we want to reset on restart
     chat_containers.clear()
+    chat_last_command.clear()
+    chat_pending_commands.clear()
+    playback_mode.clear()
+    last_played_song.clear()
+    last_suggestions.clear()
+    chat_api_server.clear()
+    # Note: We do NOT clear global counters; they'll be reloaded
 
-def load_queues_from_db():
-    """Load any persisted queues on startup, then remove backup."""
-    doc = queue_backup.find_one_and_delete({"_id": "singleton"})
-    if doc and "queues" in doc:
-        for cid_str, queue in doc["queues"].items():
+
+def load_state_from_db():
+    """
+    Load any persisted state from MongoDB on startup, then remove the backup document.
+    Reconstructs all in-memory dictionaries and counters.
+    """
+    doc = state_backup.find_one_and_delete({"_id": "singleton"})
+    if not doc or "state" not in doc:
+        return
+
+    data = doc["state"]
+
+    # Restore chat_containers
+    for cid_str, queue in data.get("chat_containers", {}).items():
+        try:
             chat_containers[int(cid_str)] = queue
+        except ValueError:
+            continue
 
-# ─── HTTP & Restart Handler ───────────────────────────────
+    # Restore simple string mappings
+    for cid_str, cmd in data.get("chat_last_command", {}).items():
+        try:
+            chat_last_command[int(cid_str)] = cmd
+        except ValueError:
+            continue
+
+    for cid_str, pend in data.get("chat_pending_commands", {}).items():
+        try:
+            chat_pending_commands[int(cid_str)] = pend
+        except ValueError:
+            continue
+
+    for cid_str, mode in data.get("playback_mode", {}).items():
+        try:
+            playback_mode[int(cid_str)] = mode
+        except ValueError:
+            continue
+
+    for cid_str, song in data.get("last_played_song", {}).items():
+        try:
+            last_played_song[int(cid_str)] = song
+        except ValueError:
+            continue
+
+    for cid_str, sug in data.get("last_suggestions", {}).items():
+        try:
+            last_suggestions[int(cid_str)] = sug
+        except ValueError:
+            continue
+
+    for cid_str, srv in data.get("chat_api_server", {}).items():
+        try:
+            chat_api_server[int(cid_str)] = srv
+        except ValueError:
+            continue
+
+    # Restore counters
+    global global_playback_count, api_server_counter, global_api_index
+    global_playback_count = data.get("global_playback_count", 0)
+    api_server_counter    = data.get("api_server_counter", 0)
+    global_api_index      = data.get("global_api_index", 0)
+
+
+# ─── HTTP & Restart Handler ────────────────────────────────────────────────────
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -3155,8 +3315,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"Bot status: Running")
         elif self.path == "/restart":
-            # Force hard restart: persist queues, then exec
-            save_queues_to_db()
+            # Persist entire in-memory state, then exec to restart
+            save_state_to_db()
             os.execl(sys.executable, sys.executable, *sys.argv)
         else:
             self.send_response(404)
@@ -3177,23 +3337,52 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-# ─── Server Bootstrap ────────────────────────────────────
+
+# ─── Server Bootstrap ─────────────────────────────────────────────────────────
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("", port), WebhookHandler)
     print(f"HTTP server running on port {port}")
     server.serve_forever()
 
+
 threading.Thread(target=run_http_server, daemon=True).start()
 
-# ─── Main Entry ──────────────────────────────────────────
+
+# ─── Configure Logging ─────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
+
+
+# ─── Main Entry ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # load any pending queues, then start
-    load_queues_from_db()
-    print("Starting Frozen Music Bot...")
+    logger.info("Loading persisted state from MongoDB...")
+    load_state_from_db()
+    logger.info("State loaded successfully.")
+
+    logger.info("Starting Frozen Music Bot services...")
+
+    logger.info("→ Starting PyTgCalls client...")
     call_py.start()
-    bot.run()
+    logger.info("PyTgCalls client started.")
+
+    logger.info("→ Starting Telegram bot (bot.run)...")
+    try:
+        bot.run()
+        logger.info("Telegram bot has started.")
+    except Exception as e:
+        logger.error(f"Error starting Telegram bot: {e}")
+        sys.exit(1)
+
+    # If assistant is used for voice or other tasks
     if not assistant.is_connected:
+        logger.info("Assistant not connected; starting assistant client...")
         assistant.run()
-    print("Bot started successfully.")
+        logger.info("Assistant client connected.")
+
+    logger.info("All services are up and running. Bot started successfully.")
     idle()
