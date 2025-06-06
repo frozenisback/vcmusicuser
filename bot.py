@@ -53,8 +53,6 @@ from typing import Union
 import urllib
 
 
-
-
 load_dotenv()
 
 
@@ -164,8 +162,6 @@ logger = logging.getLogger(__name__)
 
 # …later in your code:
 logger.exception("Cached couple send failed - regenerating...")
-
-
 
 # Containers for song queues per chat/group
 chat_containers = {}
@@ -3191,6 +3187,10 @@ async def stream_ended_handler(_, message):
             await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
         else:
             await bot.send_message(chat_id, "No songs left in the queue.")
+
+@bot.on_message(filters.command("frozen_check") & filters.chat(ASSISTANT_CHAT_ID))
+async def frozen_check_command(_, message):
+    await message.reply_text("frozen check successful ✨")
 
 
 
