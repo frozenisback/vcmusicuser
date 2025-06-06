@@ -147,7 +147,7 @@ state_backup = db["state_backup"]
 
 
 # template & font (adjust paths as needed)
-TEMPLATE_PATH = r"C:\Users\PC\Downloads\copules.png"
+TEMPLATE_PATH = "copules.png"
 FONT_PATH     = "arial.ttf"
 _template = Image.open(TEMPLATE_PATH).convert("RGBA")
 R = 240
