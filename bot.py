@@ -134,8 +134,7 @@ members_cache.create_index(
     expireAfterSeconds=24 * 3600  # refresh member cache daily
 )
 
-# Collection for queue persistence
-queue_backup = db["queue_backups"]
+state_backup = db["state_backup"]
 
 # template & font (adjust paths as needed)
 TEMPLATE_PATH = "copules.png"
