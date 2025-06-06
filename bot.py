@@ -1198,10 +1198,10 @@ async def update_progress_caption(
 
         # Rebuild the keyboard with updated progress bar in the second row
         control_row = [
-            InlineKeyboardButton(text="▶️", callback_data="pause"),
-            InlineKeyboardButton(text="⏸", callback_data="resume"),
-            InlineKeyboardButton(text="⏭", callback_data="skip"),
-            InlineKeyboardButton(text="⏹", callback_data="stop")
+            InlineKeyboardButton(text="▷", callback_data="pause"),
+            InlineKeyboardButton(text="II", callback_data="resume"),
+            InlineKeyboardButton(text="‣‣I", callback_data="skip"),
+            InlineKeyboardButton(text="▢", callback_data="stop")
         ]
         progress_button = InlineKeyboardButton(text=progress_bar, callback_data="progress")
         playlist_button = InlineKeyboardButton(text="➕ᴀᴅᴅ тσ ρℓαυℓιѕт➕", callback_data="add_to_playlist")
@@ -1236,23 +1236,26 @@ async def update_progress_caption(
 async def fallback_local_playback(chat_id: int, message: Message, song_info: dict):
     playback_mode[chat_id] = "local"
     try:
+        # Cancel any existing playback task for this chat
         if chat_id in playback_tasks:
             playback_tasks[chat_id].cancel()
 
-        video_url = song_info.get('url')
+        video_url = song_info.get("url")
         if not video_url:
             print(f"Invalid video URL for song: {song_info}")
             chat_containers[chat_id].pop(0)
             return
 
+        # Notify that we’re falling back to local playback
         try:
             await message.edit(f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ ⚡ {song_info['title']}...")
         except Exception:
             message = await bot.send_message(
                 chat_id,
-                f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ⚡ {song_info['title']}..."
+                f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ ⚡ {song_info['title']}..."
             )
 
+        # Download and start local playback
         media_path = await download_audio(video_url)
         await call_py.play(
             chat_id,
@@ -1260,28 +1263,27 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         )
         playback_tasks[chat_id] = asyncio.current_task()
 
-        total_duration = parse_duration_str(song_info.get('duration', '0:00'))
-        if total_duration <= 0:
-            print("Warning: duration is zero or invalid for this song.")
-            one_line = _one_line_title(song_info['title'])
-        else:
-            one_line = _one_line_title(song_info['title'])
+        # Compute duration and title line
+        total_duration = parse_duration_str(song_info.get("duration", "0:00"))
+        one_line = _one_line_title(song_info["title"]) if total_duration > 0 else _one_line_title(song_info["title"])
 
-        # Build a caption without the progress, since we'll put progress in a button
+        # Build the quoted HTML caption
         base_caption = (
-            f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ (Local Playback)**\n\n"
-            f"**❍ ᴛɪᴛʟє ➥** {one_line}\n"
-            f"**❍ ʙʏ ➥** {song_info['requester']}"
+            "<blockquote>"
+            "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ</b> (Local Playback)\n\n"
+            f"❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\n"
+            f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}"
+            "</blockquote>"
         )
 
         initial_progress = get_progress_bar_styled(0, total_duration)
 
-        # Build the initial inline keyboard:
+        # Build the initial inline keyboard
         control_row = [
             InlineKeyboardButton(text="▷", callback_data="pause"),
             InlineKeyboardButton(text="II", callback_data="resume"),
             InlineKeyboardButton(text="‣‣I", callback_data="skip"),
-            InlineKeyboardButton(text="▢", callback_data="stop")
+            InlineKeyboardButton(text="▢", callback_data="stop"),
         ]
         progress_button = InlineKeyboardButton(text=initial_progress, callback_data="progress")
         playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
@@ -1289,45 +1291,49 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         base_keyboard = InlineKeyboardMarkup([
             control_row,
             [progress_button],
-            [playlist_button]
+            [playlist_button],
         ])
 
-        # ─── Generate frosted card instead of sending raw thumbnail ─────────
+        # Generate frosted card thumbnail if possible
         frosted_buffer = None
-        if song_info.get('thumbnail'):
+        if song_info.get("thumbnail"):
             try:
                 raw_thumb = None
-                if os.path.isfile(song_info['thumbnail']):
-                    with open(song_info['thumbnail'], "rb") as img_f:
+                if os.path.isfile(song_info["thumbnail"]):
+                    with open(song_info["thumbnail"], "rb") as img_f:
                         raw_thumb = img_f.read()
                 else:
-                    raw_thumb = await download_bytes_from_url(song_info['thumbnail'])
+                    raw_thumb = await download_bytes_from_url(song_info["thumbnail"])
                 frosted_buffer = create_frosted_card(
                     raw_thumb,
                     sender_username=f"{song_info['requester']}",
-                    title_text=song_info['title'],
-                    artist_text=song_info['requester']
+                    title_text=song_info["title"],
+                    artist_text=song_info["requester"],
                 )
             except Exception as e:
                 print(f"Error generating frosted card: {e}")
                 frosted_buffer = None
 
+        # Send the photo with HTML parse mode
         if frosted_buffer:
             progress_message = await message.reply_photo(
                 photo=frosted_buffer,
                 caption=base_caption,
-                reply_markup=base_keyboard
+                reply_markup=base_keyboard,
+                parse_mode=ParseMode.HTML
             )
         else:
-            # Fallback to raw thumbnail if frosted card fails
             progress_message = await message.reply_photo(
-                photo=song_info['thumbnail'],
+                photo=song_info["thumbnail"],
                 caption=base_caption,
-                reply_markup=base_keyboard
+                reply_markup=base_keyboard,
+                parse_mode=ParseMode.HTML
             )
+
+        # Delete the original “processing” message
         await message.delete()
 
-        # Schedule periodic updates to the keyboard so the progress button changes
+        # Schedule periodic updates for the progress button
         asyncio.create_task(
             update_progress_caption(
                 chat_id,
@@ -1345,7 +1351,8 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
 async def start_playback_task(chat_id: int, message: Message):
     global global_api_index, global_playback_count
     print(f"Current playback tasks: {len(playback_tasks)}; Chat ID: {chat_id}")
-    # Reuse the same message if available, setting an initial processing message.
+
+    # Prepare or edit the “Processing…” message
     processing_message = message
     status_text = "**✨ Processing... Please wait, may take up to 20 seconds. 💕**"
     try:
@@ -1356,7 +1363,7 @@ async def start_playback_task(chat_id: int, message: Message):
     except Exception:
         processing_message = await bot.send_message(chat_id, status_text)
 
-    # (Existing code) Get or assign an API server for this chat.
+    # Assign an API server for this chat if not already set
     if chat_id in chat_api_server:
         selected_api, server_id, display_server = chat_api_server[chat_id]
     else:
@@ -1366,7 +1373,7 @@ async def start_playback_task(chat_id: int, message: Message):
         chat_api_server[chat_id] = (selected_api, server_id, display_server)
         global_api_index += 1
 
-    # Ensure the API assistant is in the chat.
+    # Ensure the API assistant has joined
     if not await is_assistant_in_chat(chat_id):
         invite_link = await extract_invite_link(bot, chat_id)
         if invite_link:
@@ -1388,31 +1395,31 @@ async def start_playback_task(chat_id: int, message: Message):
                 await bot.send_message(chat_id, "❌ API Assistant failed to join. Please check the API endpoint.")
                 return
 
+    # If no songs in the queue, bail out
     if chat_id not in chat_containers or not chat_containers[chat_id]:
         await bot.send_message(chat_id, "❌ No songs in the queue.")
         return
 
-    # Get the song info from the queue.
+    # Get the first song in the queue
     song_info = chat_containers[chat_id][0]
     last_played_song[chat_id] = song_info
-    video_title = song_info.get('title', 'Unknown')
-    video_url = song_info.get('url', '')
-    encoded_url = quote(video_url, safe='')
+    video_title = song_info.get("title", "Unknown")
+    video_url = song_info.get("url", "")
+    encoded_url = quote(video_url, safe="")
 
-    # Determine which API to call based on duration threshold (12 minutes = 720 seconds)
-    duration_seconds = song_info.get('duration_seconds', 0)
+    # Determine API URL (secondary if duration > 20 minutes)
+    duration_seconds = song_info.get("duration_seconds", 0)
     api_param = "&api=secondary" if duration_seconds > 1200 else ""
     api_url = f"{selected_api}/play?chatid={chat_id}&url={encoded_url}{api_param}"
 
     try:
         async with aiohttp.ClientSession() as session:
-            # Use a 30-second timeout for the play API call.
             async with session.get(api_url, timeout=60) as resp:
                 if resp.status != 200:
                     raise Exception(f"API responded with status {resp.status}")
                 data = await resp.json()
     except Exception as e:
-        # Inform the user about the delay.
+        # If API fails, fall back to local
         try:
             await processing_message.edit("⏳ API server is sleeping. Waiting an extra 20 seconds before falling back...")
         except Exception as edit_error:
@@ -1426,36 +1433,38 @@ async def start_playback_task(chat_id: int, message: Message):
         await fallback_local_playback(chat_id, processing_message, song_info)
         return
 
-    # At this point, the API call succeeded.
+    # Log the successful API play call
     record = {
         "chat_id": chat_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
         "song_title": video_title,
         "api_response": data,
-        "server": display_server
+        "server": display_server,
     }
     api_playback_records.append(record)
     playback_mode[chat_id] = "api"
 
-    total_duration = parse_duration_str(song_info.get('duration', '0:00'))
-    one_line = _one_line_title(song_info['title'])
+    # Prepare the HTML caption for API playback
+    total_duration = parse_duration_str(song_info.get("duration", "0:00"))
+    one_line = _one_line_title(song_info["title"]) if total_duration > 0 else _one_line_title(song_info["title"])
 
-    # Build a caption without the progress, since we'll move progress into a button
     base_caption = (
-        f"**ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴧϻɪηɢ ⏤͟͞●** (API Playback)\n\n"
-        f"**❍ ᴛɪᴛʟє ➥** {one_line}\n"
-        f"**❍ ʙʏ ➥** {song_info['requester']}\n"
-        f"**❍ ʟᴅs sᴇʀᴠᴇʀ ➥** {display_server}"
+        "<blockquote>"
+        "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ ⏤͟͞●</b> (API Playback)\n\n"
+        f"❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\n"
+        f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}\n"
+        f"❍ <b>ʟᴅs sᴇʀᴠᴇʀ:</b> {display_server}"
+        "</blockquote>"
     )
 
     initial_progress = get_progress_bar_styled(0, total_duration)
 
-    # Build the initial inline keyboard:
+    # Build the inline keyboard for API playback
     control_row = [
         InlineKeyboardButton(text="▷", callback_data="pause"),
         InlineKeyboardButton(text="II", callback_data="resume"),
         InlineKeyboardButton(text="‣‣I", callback_data="skip"),
-        InlineKeyboardButton(text="▢", callback_data="stop")
+        InlineKeyboardButton(text="▢", callback_data="stop"),
     ]
     progress_button = InlineKeyboardButton(text=initial_progress, callback_data="progress")
     playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
@@ -1463,53 +1472,56 @@ async def start_playback_task(chat_id: int, message: Message):
     base_keyboard = InlineKeyboardMarkup([
         control_row,
         [progress_button],
-        [playlist_button]
+        [playlist_button],
     ])
 
-    # Delete the old processing message when starting playback.
+    # Delete the old “processing” message
     try:
         await processing_message.delete()
     except Exception as e:
         print(f"Error deleting processing message: {e}")
 
-    # ─── Generate frosted card instead of sending raw thumbnail ─────────
+    # Generate frosted card thumbnail if possible
     frosted_buffer = None
-    if song_info.get('thumbnail'):
+    if song_info.get("thumbnail"):
         try:
             raw_thumb = None
-            if os.path.isfile(song_info['thumbnail']):
-                with open(song_info['thumbnail'], "rb") as img_f:
+            if os.path.isfile(song_info["thumbnail"]):
+                with open(song_info["thumbnail"], "rb") as img_f:
                     raw_thumb = img_f.read()
             else:
-                raw_thumb = await download_bytes_from_url(song_info['thumbnail'])
+                raw_thumb = await download_bytes_from_url(song_info["thumbnail"])
             frosted_buffer = create_frosted_card(
                 raw_thumb,
                 sender_username=f"{song_info['requester']}",
-                title_text=song_info['title'],
-                artist_text=song_info['requester']
+                title_text=song_info["title"],
+                artist_text=song_info["requester"],
             )
         except Exception as e:
             print(f"Error generating frosted card: {e}")
             frosted_buffer = None
 
+    # Send the photo with HTML parse mode
     if frosted_buffer:
         new_progress_message = await bot.send_photo(
             chat_id,
             photo=frosted_buffer,
             caption=base_caption,
-            reply_markup=base_keyboard
+            reply_markup=base_keyboard,
+            parse_mode=ParseMode.HTML
         )
     else:
-        # Fallback to raw thumbnail if frosted card fails
         new_progress_message = await bot.send_photo(
             chat_id,
-            photo=song_info['thumbnail'],
+            photo=song_info["thumbnail"],
             caption=base_caption,
-            reply_markup=base_keyboard
+            reply_markup=base_keyboard,
+            parse_mode=ParseMode.HTML
         )
+
     global_playback_count += 1
 
-    # Start updating the progress caption (actually updating the keyboard)
+    # Start updating the progress button periodically
     asyncio.create_task(
         update_progress_caption(
             chat_id,
