@@ -3129,21 +3129,116 @@ async def frozen_check_command(_, message):
     await message.reply_text("frozen check successful ✨")
 
 
-# ─── Persistence Helpers (Sync) ────────────────────────────
-def save_queues_to_db():
-    """Persist and clear in-memory queues before hard restart."""
-    data = { str(cid): queue for cid, queue in chat_containers.items() }
-    queue_backup.replace_one({"_id": "singleton"}, {"_id": "singleton", "queues": data}, upsert=True)
+# ─── Persistence Helpers (Sync) ────────────────────────────────────────────────
+def save_state_to_db():
+    """
+    Persist all in-memory state dictionaries into MongoDB before a hard restart.
+    We store a single document with _id "singleton" that contains:
+      - chat_containers
+      - chat_last_command
+      - chat_pending_commands
+      - playback_mode
+      - last_played_song
+      - last_suggestions
+      - chat_api_server
+      - global_playback_count
+      - api_server_counter
+      - global_api_index
+    """
+    # Convert integer keys to strings (MongoDB requires string keys for dicts)
+    data = {
+        "chat_containers":       { str(cid): queue for cid, queue in chat_containers.items() },
+        "chat_last_command":     { str(cid): cmd   for cid, cmd   in chat_last_command.items() },
+        "chat_pending_commands": { str(cid): pend  for cid, pend  in chat_pending_commands.items() },
+        "playback_mode":         { str(cid): mode  for cid, mode  in playback_mode.items() },
+        "last_played_song":      { str(cid): song  for cid, song  in last_played_song.items() },
+        "last_suggestions":      { str(cid): sug   for cid, sug   in last_suggestions.items() },
+        "chat_api_server":       { str(cid): srv   for cid, srv   in chat_api_server.items() },
+        "global_playback_count": global_playback_count,
+        "api_server_counter":    api_server_counter,
+        "global_api_index":      global_api_index
+    }
+
+    state_backup.replace_one(
+        {"_id": "singleton"},
+        {"_id": "singleton", "state": data},
+        upsert=True
+    )
+
+    # Clear only those dictionaries we want to reset on restart
     chat_containers.clear()
+    chat_last_command.clear()
+    chat_pending_commands.clear()
+    playback_mode.clear()
+    last_played_song.clear()
+    last_suggestions.clear()
+    chat_api_server.clear()
+    # Note: We do NOT clear global counters; they'll be reloaded
 
-def load_queues_from_db():
-    """Load any persisted queues on startup, then remove backup."""
-    doc = queue_backup.find_one_and_delete({"_id": "singleton"})
-    if doc and "queues" in doc:
-        for cid_str, queue in doc["queues"].items():
+
+def load_state_from_db():
+    """
+    Load any persisted state from MongoDB on startup, then remove the backup document.
+    Reconstructs all in-memory dictionaries and counters.
+    """
+    doc = state_backup.find_one_and_delete({"_id": "singleton"})
+    if not doc or "state" not in doc:
+        return
+
+    data = doc["state"]
+
+    # Restore chat_containers
+    for cid_str, queue in data.get("chat_containers", {}).items():
+        try:
             chat_containers[int(cid_str)] = queue
+        except ValueError:
+            continue
 
-# ─── HTTP & Restart Handler ───────────────────────────────
+    # Restore simple string mappings
+    for cid_str, cmd in data.get("chat_last_command", {}).items():
+        try:
+            chat_last_command[int(cid_str)] = cmd
+        except ValueError:
+            continue
+
+    for cid_str, pend in data.get("chat_pending_commands", {}).items():
+        try:
+            chat_pending_commands[int(cid_str)] = pend
+        except ValueError:
+            continue
+
+    for cid_str, mode in data.get("playback_mode", {}).items():
+        try:
+            playback_mode[int(cid_str)] = mode
+        except ValueError:
+            continue
+
+    for cid_str, song in data.get("last_played_song", {}).items():
+        try:
+            last_played_song[int(cid_str)] = song
+        except ValueError:
+            continue
+
+    for cid_str, sug in data.get("last_suggestions", {}).items():
+        try:
+            last_suggestions[int(cid_str)] = sug
+        except ValueError:
+            continue
+
+    for cid_str, srv in data.get("chat_api_server", {}).items():
+        try:
+            chat_api_server[int(cid_str)] = srv
+        except ValueError:
+            continue
+
+    # Restore counters
+    global global_playback_count, api_server_counter, global_api_index
+    global_playback_count = data.get("global_playback_count", 0)
+    api_server_counter    = data.get("api_server_counter", 0)
+    global_api_index      = data.get("global_api_index", 0)
+
+
+# ─── HTTP & Restart Handler ────────────────────────────────────────────────────
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
@@ -3155,8 +3250,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"Bot status: Running")
         elif self.path == "/restart":
-            # Force hard restart: persist queues, then exec
-            save_queues_to_db()
+            # Persist entire in-memory state, then exec to restart
+            save_state_to_db()
             os.execl(sys.executable, sys.executable, *sys.argv)
         else:
             self.send_response(404)
@@ -3177,23 +3272,52 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-# ─── Server Bootstrap ────────────────────────────────────
+
+# ─── Server Bootstrap ─────────────────────────────────────────────────────────
 def run_http_server():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("", port), WebhookHandler)
     print(f"HTTP server running on port {port}")
     server.serve_forever()
 
+
 threading.Thread(target=run_http_server, daemon=True).start()
 
-# ─── Main Entry ──────────────────────────────────────────
+
+# ─── Configure Logging ─────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
+
+
+# ─── Main Entry ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # load any pending queues, then start
-    load_queues_from_db()
-    print("Starting Frozen Music Bot...")
+    logger.info("Loading persisted state from MongoDB...")
+    load_state_from_db()
+    logger.info("State loaded successfully.")
+
+    logger.info("Starting Frozen Music Bot services...")
+
+    logger.info("→ Starting PyTgCalls client...")
     call_py.start()
-    bot.run()
+    logger.info("PyTgCalls client started.")
+
+    logger.info("→ Starting Telegram bot (bot.run)...")
+    try:
+        bot.run()
+        logger.info("Telegram bot has started.")
+    except Exception as e:
+        logger.error(f"Error starting Telegram bot: {e}")
+        sys.exit(1)
+
+    # If assistant is used for voice or other tasks
     if not assistant.is_connected:
+        logger.info("Assistant not connected; starting assistant client...")
         assistant.run()
-    print("Bot started successfully.")
+        logger.info("Assistant client connected.")
+
+    logger.info("All services are up and running. Bot started successfully.")
     idle()
