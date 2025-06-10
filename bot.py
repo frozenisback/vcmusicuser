@@ -647,7 +647,7 @@ async def show_help_callback(_, callback_query):
 async def help_music_callback(_, callback_query):
     text = (
         ">🎵 *Music & Playback Commands*\n\n"
-        "➜ `/play <song name or URL>`\n"
+        ">➜ `/play <song name or URL>`\n"
         "   • Play a song (YouTube/Spotify/Resso/Apple Music/SoundCloud).\n"
         "   • If replied to an audio/video, plays it directly.\n\n"
         ">➜ `/playlist`\n"
