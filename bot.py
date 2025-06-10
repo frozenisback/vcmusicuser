@@ -679,6 +679,7 @@ async def download_bytes_from_url(url: str) -> bytes:
             resp.raise_for_status()
             return await resp.read()
 
+
 def create_frosted_card(
     image_bytes: bytes,
     sender_username: str = "@username",
@@ -690,19 +691,38 @@ def create_frosted_card(
     2. Creates a centered glass card with rounded edges.
     3. Pastes a 300×300 thumbnail in the top-left of the card.
     4. Draws title, artist name, and a progress bar to the right of the thumbnail.
-    5. Adds playback icons, “Requested by” on the right, and “Powered by VibeshiftBots” on the left.
+    5. Adds “Requested by” on the right, and “Powered by VibeshiftBots” on the left.
+    6. Adds a LIVE badge at the top.
+    Plus: Adds a royal white-golden glow behind all text and makes text very bright.
     """
 
     # 0) Enforce title character limit (truncate if necessary)
     if len(title_text) > MAX_TITLE_LEN:
         title_text = title_text[: (MAX_TITLE_LEN - 1) ] + "…"
 
-    # 1) Load & resize original to 1280×720
+    # 1) Load original
     orig = Image.open(BytesIO(image_bytes)).convert("RGB")
+
+    # 1a) Trim black stripes from top/bottom
+    gray = orig.convert("L")
+    w, h = gray.size
+    top = 0
+    for y in range(h):
+        if max(gray.crop((0, y, w, y+1)).getdata()) > 16:
+            top = y
+            break
+    bottom = h
+    for y in range(h-1, -1, -1):
+        if max(gray.crop((0, y, w, y+1)).getdata()) > 16:
+            bottom = y + 1
+            break
+    orig = orig.crop((0, top, w, bottom))
+
+    # 1b) Resize to 1280×720
     orig = orig.resize((1280, 720), Image.Resampling.LANCZOS)
 
-    # 2) Blur background
-    blurred_bg = orig.filter(ImageFilter.GaussianBlur(radius=25))
+    # 2) Blur background (heavier so only colours remain)
+    blurred_bg = orig.filter(ImageFilter.GaussianBlur(radius=100))
 
     # 3) Convert to RGBA canvas
     canvas = blurred_bg.convert("RGBA")
@@ -731,6 +751,15 @@ def create_frosted_card(
 
     draw = ImageDraw.Draw(canvas)
 
+    # Glow helper: draws a golden blurred glow under text
+    def add_glow(text, position, font):
+        glow_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        glow_draw = ImageDraw.Draw(glow_layer)
+        glow_color = (255, 215, 0, 180)  # soft golden
+        glow_draw.text(position, text, font=font, fill=glow_color)
+        glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=8))
+        canvas.alpha_composite(glow_layer)
+
     # 9) Subtle border around the card
     draw.rounded_rectangle(
         [card_x, card_y, card_x + card_w, card_y + card_h],
@@ -738,6 +767,29 @@ def create_frosted_card(
         outline=(30, 30, 30, 200),
         width=2
     )
+
+    # ─────── New: LIVE badge only ───────
+    badge_text = "LIVE"
+    badge_w, badge_h = 80, 30
+    badge_x = card_x + card_w - badge_w - 20
+    badge_y = card_y + 20
+
+    # Red rounded rectangle for badge
+    draw.rounded_rectangle(
+        [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
+        radius=5,
+        fill=(255, 0, 0, 255)
+    )
+    # Golden glow behind badge text
+    font_live = ImageFont.truetype("arial.ttf", size=20) if True else ImageFont.load_default()
+    add_glow(badge_text, (badge_x + 50, badge_y + 25), font_live)
+    # Bright white LIVE text centered
+    text_bbox = draw.textbbox((0, 0), badge_text, font=font_live)
+    text_w = text_bbox[2] - text_bbox[0]
+    text_h = text_bbox[3] - text_bbox[1]
+    text_x = badge_x + (badge_w - text_w) // 2
+    text_y = badge_y + (badge_h - text_h) // 2
+    draw.text((text_x, text_y), badge_text, font=font_live, fill=(255, 255, 255, 255))
 
     # 10) Prepare thumbnail: center‐crop then resize to 300×300
     W, H = orig.size
@@ -766,23 +818,20 @@ def create_frosted_card(
     font_time = ImageFont.load_default()
     font_footer = ImageFont.load_default()
     font_watermark = ImageFont.load_default()
-    font_icons = ImageFont.load_default()
-
     try:
         font_title = ImageFont.truetype("arial.ttf", size=48)
         font_artist = ImageFont.truetype("arial.ttf", size=36)
         font_time = ImageFont.truetype("arial.ttf", size=28)
         font_footer = ImageFont.truetype("arial.ttf", size=24)
         font_watermark = ImageFont.truetype("arial.ttf", size=18)
-        font_icons = ImageFont.truetype("arial.ttf", size=48)
     except:
-        pass  # If Arial isn’t found, PIL will fall back to default fonts
+        pass
 
-    # 13) Draw title & artist (title already truncated if needed)
+    # 13) Draw title with glow
     text_x = card_x + 350
     text_y = card_y + 60
+    add_glow(title_text, (text_x, text_y), font_title)
     draw.text((text_x, text_y), title_text, font=font_title, fill=(255, 255, 255, 255))
-    draw.text((text_x, text_y + 50), artist_text, font=font_artist, fill=(200, 200, 200, 220))
 
     # 14) Draw progress bar
     bar_x0 = card_x + 370
@@ -792,13 +841,11 @@ def create_frosted_card(
     bar_x1 = bar_x0 + bar_length
     bar_y1 = bar_y0 + bar_height
 
-    # Track (grey)
     draw.rounded_rectangle(
         [bar_x0, bar_y0, bar_x1, bar_y1],
         radius=3,
         fill=(180, 180, 180, 120)
     )
-    # Filled portion at 35% (static demo)
     fill_pct = 0.35
     filled_length = int(bar_length * fill_pct)
     draw.rounded_rectangle(
@@ -806,7 +853,6 @@ def create_frosted_card(
         radius=3,
         fill=(255, 255, 255, 200)
     )
-    # Thumb circle
     thumb_radius = 10
     cx = bar_x0 + filled_length
     cy = bar_y0 + bar_height // 2
@@ -814,32 +860,27 @@ def create_frosted_card(
         [cx - thumb_radius, cy - thumb_radius, cx + thumb_radius, cy + thumb_radius],
         fill=(255, 255, 255, 255)
     )
-    # Time stamps (static end time)
-    draw.text((bar_x1 + 10, bar_y0 - 8), "4:20", font=font_time, fill=(220, 220, 220, 200))
+    # Glow behind time text
+    time_text = "4:20"
+    time_pos = (bar_x1 + 10, bar_y0 - 8)
+    add_glow(time_text, time_pos, font_time)
+    draw.text(time_pos, time_text, font=font_time, fill=(255, 255, 255, 255))
 
-    # 15) Playback icons under the bar
-    icon_y = card_y + 280
-    center_x = card_x + (card_w // 2) + 20
-    prev_x = card_x + (card_w // 2) - 70
-    play_x = card_x + (card_w // 2) + 10
-    next_x = card_x + (card_w // 2) + 50
-    draw.text((prev_x, icon_y), "<<", font=font_icons, fill=(240, 240, 240, 220))
-    draw.text((play_x, icon_y), "II", font=font_icons, fill=(240, 240, 240, 220))
-    draw.text((next_x, icon_y), ">>", font=font_icons, fill=(240, 240, 240, 220))
-
-    # 16) “Requested by @username”
+    # 16) “Requested by @username” with glow
     footer_text = f"Requested by {sender_username}"
     footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
     footer_w = footer_bbox[2] - footer_bbox[0]
     footer_x = card_x + card_w - 20 - footer_w
     footer_y = card_y + card_h - 40
-    draw.text((footer_x, footer_y), footer_text, font=font_footer, fill=(200, 200, 200, 180))
+    add_glow(footer_text, (footer_x, footer_y), font_footer)
+    draw.text((footer_x, footer_y), footer_text, font=font_footer, fill=(255, 255, 255, 230))
 
-    # 17) “Powered by VibeshiftBots”
+    # 17) “Powered by VibeshiftBots” with glow
     watermark_text = "Powered by VibeshiftBots"
     wm_x = card_x + 30
     wm_y = card_y + card_h - 30
-    draw.text((wm_x, wm_y), watermark_text, font=font_watermark, fill=(200, 200, 200, 120))
+    add_glow(watermark_text, (wm_x, wm_y), font_watermark)
+    draw.text((wm_x, wm_y), watermark_text, font=font_watermark, fill=(255, 255, 255, 200))
 
     # 18) Return as BytesIO (PNG)
     output = BytesIO()
