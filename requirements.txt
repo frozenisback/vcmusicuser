@@ -1,4 +1,4 @@
-kurigram
+kurigram==2.2.4
 git+https://github.com/pytgcalls/pytgcalls.git
 yt-dlp
 aiohttp
