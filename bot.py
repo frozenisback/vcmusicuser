@@ -1287,10 +1287,10 @@ async def update_progress_caption(
 
         # Rebuild the keyboard with updated progress bar in the second row
         control_row = [
-            InlineKeyboardButton(text="▷", callback_data="pause"),
-            InlineKeyboardButton(text="II", callback_data="resume"),
-            InlineKeyboardButton(text="‣‣I", callback_data="skip"),
-            InlineKeyboardButton(text="▢", callback_data="stop")
+            InlineKeyboardButton(text="▶️", callback_data="pause"),
+            InlineKeyboardButton(text="⏸", callback_data="resume"),
+            InlineKeyboardButton(text="⏭", callback_data="skip"),
+            InlineKeyboardButton(text="⏹", callback_data="stop")
         ]
         progress_button = InlineKeyboardButton(text=progress_bar, callback_data="progress")
         playlist_button = InlineKeyboardButton(text="➕ᴀᴅᴅ тσ ρℓαυℓιѕт➕", callback_data="add_to_playlist")
@@ -1406,7 +1406,7 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         # Send the photo with HTML parse mode
         if frosted_buffer:
             progress_message = await message.reply_photo(
-                song_info["thumbnail"],
+                photo=frosted_buffer,
                 caption=base_caption,
                 reply_markup=base_keyboard,
                 parse_mode=ParseMode.HTML
@@ -1539,8 +1539,8 @@ async def start_playback_task(chat_id: int, message: Message):
 
     base_caption = (
         "<blockquote>"
-        "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ ⏤͟͞●</b> (API Playback)\n\n"
-        f"❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\n"
+        "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ ⏤͟͞●</b> (API Playback)</blockquote>\n\n"
+        f"<blockquote>❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\n"
         f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}\n"
         f"❍ <b>ʟᴅs sᴇʀᴠᴇʀ:</b> {display_server}"
         "</blockquote>"
@@ -1594,7 +1594,7 @@ async def start_playback_task(chat_id: int, message: Message):
     if frosted_buffer:
         new_progress_message = await bot.send_photo(
             chat_id,
-            photo=song_info["thumbnail"],
+            photo=frosted_buffer,
             caption=base_caption,
             reply_markup=base_keyboard,
             parse_mode=ParseMode.HTML
