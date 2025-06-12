@@ -3042,7 +3042,7 @@ async def download_auddio(client, message):
     # 1) Snapshot the last seen message ID in source_bot's chat
     last_id = 0
     async for msg in client.get_chat_history(source_bot, limit=1):
-        last_id = msg.id
+        last_id = msg.id  # <- use .id instead of .message_id
         break
 
     # 2) Send the YouTube link
@@ -3060,7 +3060,7 @@ async def download_auddio(client, message):
                 await client.forward_messages(
                     chat_id=destination_bot,
                     from_chat_id=source_bot,
-                    message_ids=msg.id
+                    message_ids=msg.id  # <- use .id here too
                 )
                 return
 
