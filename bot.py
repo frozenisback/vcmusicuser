@@ -3039,35 +3039,42 @@ async def download_auddio(client, message):
     source_bot      = "@YtbAudioBot"
     destination_bot = "@vc_music_clone_bot"
 
-    # 1) Snapshot the last seen message ID in source_bot's chat
-    last_id = 0
-    async for msg in client.get_chat_history(source_bot, limit=1):
-        last_id = msg.id  # <- use .id instead of .message_id
-        break
+    try:
+        # 1) Snapshot the last seen message ID in source_bot's chat
+        last_id = 0
+        async for msg in client.get_chat_history(source_bot, limit=1):
+            last_id = msg.id
+            break
 
-    # 2) Send the YouTube link
-    await client.send_message(source_bot, youtube_link)
+        # 2) Send the YouTube link
+        await client.send_message(source_bot, youtube_link)
 
-    # 3) Poll for up to 60 seconds for a *new* audio or voice message
-    for _ in range(60):
-        async for msg in client.get_chat_history(source_bot, limit=5):
-            # ignore anything that isn’t strictly newer than our snapshot
-            if msg.id <= last_id:
-                continue
+        # 3) Poll for a *new* audio message up to 60 seconds
+        for _ in range(60):
+            async for msg in client.get_chat_history(source_bot, limit=5):
+                if msg.id <= last_id:
+                    continue
 
-            if msg.audio or msg.voice:
-                # forward the new audio to the destination bot
-                await client.forward_messages(
-                    chat_id=destination_bot,
-                    from_chat_id=source_bot,
-                    message_ids=msg.id  # <- use .id here too
-                )
-                return
+                if msg.audio or msg.voice:
+                    try:
+                        # Forward to your destination bot or user
+                        await client.forward_messages(
+                            chat_id=destination_bot,
+                            from_chat_id=source_bot,
+                            message_ids=msg.id
+                        )
+                        await message.reply("✅ Audio successfully forwarded.")
+                        return
+                    except Exception as e:
+                        await message.reply(f"⚠️ Forward failed: {e}")
+                        return
 
-        await asyncio.sleep(1)
+            await asyncio.sleep(1)
 
-    # If no fresh audio arrives, let the user know
-    await message.reply("⚠️ Failed to download audio: operation timed out.")
+        await message.reply("⚠️ Failed to download audio: operation timed out.")
+
+    except Exception as e:
+        await message.reply(f"❌ Unexpected error: `{e}`")
 
 
 import requests
