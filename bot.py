@@ -1406,7 +1406,7 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         # Send the photo with HTML parse mode
         if frosted_buffer:
             progress_message = await message.reply_photo(
-                photo=frosted_buffer,
+                song_info["thumbnail"],
                 caption=base_caption,
                 reply_markup=base_keyboard,
                 parse_mode=ParseMode.HTML
@@ -1594,7 +1594,7 @@ async def start_playback_task(chat_id: int, message: Message):
     if frosted_buffer:
         new_progress_message = await bot.send_photo(
             chat_id,
-            photo=frosted_buffer,
+            photo=song_info["thumbnail"],
             caption=base_caption,
             reply_markup=base_keyboard,
             parse_mode=ParseMode.HTML
