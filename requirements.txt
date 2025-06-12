@@ -1,4 +1,4 @@
-pyrogram
+kurigram
 git+https://github.com/pytgcalls/pytgcalls.git
 yt-dlp
 aiohttp
