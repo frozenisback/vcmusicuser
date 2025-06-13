@@ -1287,10 +1287,10 @@ async def update_progress_caption(
 
         # Rebuild the keyboard with updated progress bar in the second row
         control_row = [
-            InlineKeyboardButton(text="▶️", callback_data="pause"),
-            InlineKeyboardButton(text="⏸", callback_data="resume"),
-            InlineKeyboardButton(text="⏭", callback_data="skip"),
-            InlineKeyboardButton(text="⏹", callback_data="stop")
+            InlineKeyboardButton(text="▷", callback_data="pause"),
+            InlineKeyboardButton(text="II", callback_data="resume"),
+            InlineKeyboardButton(text="‣‣I", callback_data="skip"),
+            InlineKeyboardButton(text="▢", callback_data="stop")
         ]
         progress_button = InlineKeyboardButton(text=progress_bar, callback_data="progress")
         playlist_button = InlineKeyboardButton(text="➕ᴀᴅᴅ тσ ρℓαυℓιѕт➕", callback_data="add_to_playlist")
@@ -1503,7 +1503,7 @@ async def start_playback_task(chat_id: int, message: Message):
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=60) as resp:
+            async with session.get(api_url, timeout=120) as resp:
                 if resp.status != 200:
                     raise Exception(f"API responded with status {resp.status}")
                 data = await resp.json()
@@ -1513,7 +1513,7 @@ async def start_playback_task(chat_id: int, message: Message):
             await processing_message.edit("⏳ API server is sleeping. Waiting an extra 20 seconds before falling back...")
         except Exception as edit_error:
             print(f"Error editing processing message: {edit_error}")
-        await asyncio.sleep(20)
+        await asyncio.sleep(1)
         fallback_error = f"❌ Frozen Play API Error: {str(e)}\nFalling back to local playback..."
         try:
             await processing_message.edit(fallback_error)
@@ -2723,7 +2723,7 @@ async def stop_handler(client, message):
 @bot.on_message(filters.command("song"))
 async def song_command_handler(_, message):
     keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🎶 Download Now", url="https://t.me/songdownloderfrozenbot?start=true")]]
+        [[InlineKeyboardButton("🎶 Download Now", url="https://t.me/songdownloader1bot?start=true")]]
     )
     text = (
         "ᴄʟɪᴄᴋ ᴛʜᴇ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴜsᴇ ᴛʜᴇ sᴏɴɢ ᴅᴏᴡɴʟᴏᴀᴅᴇʀ ʙᴏᴛ. 🎵\n\n"
@@ -3049,7 +3049,7 @@ async def download_auddio(client, message):
     await client.send_message(source_bot, youtube_link)
 
     # 3) Poll for up to 60 seconds for a *new* audio or voice message
-    for _ in range(60):
+    for _ in range(20):
         async for msg in client.get_chat_history(source_bot, limit=5):
             # ignore anything that isn’t strictly newer than our snapshot
             if msg.id <= last_id:
