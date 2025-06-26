@@ -989,7 +989,7 @@ async def play_handler(_, message: Message):
             except FloodWait as fw:
                 # Telegram join-rate-limit triggered
                 await processing_message.edit(
-                    f"⏳ Join rate limit reached. Please wait {fw.x} seconds before trying again.\n\n You can try to invite the bot manually. \n\n assistant: @xyz92929 \nSupport: @frozensupport1\nUpdates - @vibeshiftbots"
+                    f"⏳ Join rate limit reached. Please wait {fw.x} seconds before trying again.\n\n💕 You can try to invite the bot manually. \n\n ✨assistant: @xyz92929 \nSupport: @frozensupport1\nUpdates - @vibeshiftbots"
                 )
                 return
 
