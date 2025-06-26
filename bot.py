@@ -954,19 +954,50 @@ async def play_handler(_, message: Message):
         # Ensure bot is in chat
         if not await is_assistant_in_chat(chat_id):
             invite_link = await extract_invite_link(bot, chat_id)
-            if invite_link and await invite_assistant(chat_id, invite_link, processing_message):
+            try:
+                # Notify the user we're attempting to join
                 await processing_message.edit("⏳ Assistant is joining... Please wait.")
+                # Try to invite/join, catching rate limits and permission issues
+                await safe_invite_assistant(bot, chat_id, invite_link, processing_message)
+
+                # Poll for successful join
                 for _ in range(10):
                     await asyncio.sleep(3)
                     if await is_assistant_in_chat(chat_id):
                         break
                 else:
                     await processing_message.edit(
-                        "❌ Assistant failed to join. Please unban the assistant.\nSupport: @frozensupport1"
+                        "❌ Assistant failed to join after invitation. Please unban the assistant.\n"
+                        "Support: @frozensupport1"
                     )
                     return
-            else:
-                await processing_message.edit("❌ Please give bot invite-link permission.\nSupport: @frozensupport1")
+
+            except PermissionError as pe:
+                # Missing invite-link permission or invite rejected
+                if pe.args[0] == "NO_INVITE_LINK":
+                    await processing_message.edit(
+                        "❌ I don’t have permission to generate an invite link. "
+                        "Please grant the bot `Invite Users` permission.\nSupport: @frozensupport1"
+                    )
+                else:
+                    await processing_message.edit(
+                        "❌ Invite link was rejected. Make sure the bot isn’t banned "
+                        "and has psroper chat permisions.\nSupport: @frozensupport1"
+                    )
+                return
+
+            except FloodWait as fw:
+                # Telegram join-rate-limit triggered
+                await processing_message.edit(
+                    f"⏳ Join rate limit reached. Please wait {fw.x} seconds before trying again.\n\n You can try to invite the bot manually. \n\n assistant: @xyz92929 \nSupport: @frozensupport1\nUpdates - @vibeshiftbots"
+                )
+                return
+
+            except Exception as e:
+                # Any other invite failure
+                await processing_message.edit(
+                    f"❌ Failed to invite assistant: {e}\nSupport: @frozensupport1"
+                )
                 return
 
         # Fetch fresh media reference and download
@@ -1043,7 +1074,6 @@ async def play_handler(_, message: Message):
 
     # Delegate to query processor
     await process_play_command(message, query)
-
 
 async def process_play_command(message: Message, query: str):
     chat_id = message.chat.id
