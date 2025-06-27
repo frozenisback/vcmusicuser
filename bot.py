@@ -3055,7 +3055,7 @@ async def download_auddio(client, message):
 
     youtube_link    = message.command[1]
     source_bot      = "@YtbAudioBot"
-    destination_bot = "@vc_music_clone_bot"
+    destination_bot = "@wdougfqbot"
 
     # 1) Snapshot the last seen message ID in source_bot's chat
     last_id = 0
