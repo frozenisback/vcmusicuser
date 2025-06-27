@@ -1473,7 +1473,17 @@ async def start_playback_task(chat_id: int, message: Message):
     global global_api_index, global_playback_count
     print(f"Current playback tasks: {len(playback_tasks)}; Chat ID: {chat_id}")
 
-    # Prepare or edit the “Processing…” message
+    # Helper: two-button support/admin markup
+    support_buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("Support", url="https://t.me/Frozensupport1"),
+                InlineKeyboardButton("Admin", url="https://t.me/xyz09723")
+            ]
+        ]
+    )
+
+    # 1) “Processing…” message
     processing_message = message
     status_text = "**✨ Processing... Please wait, may take up to 20 seconds. 💕**"
     try:
@@ -1484,7 +1494,7 @@ async def start_playback_task(chat_id: int, message: Message):
     except Exception:
         processing_message = await bot.send_message(chat_id, status_text)
 
-    # Assign an API server for this chat if not already set
+    # 2) Pick or reuse an API server
     if chat_id in chat_api_server:
         selected_api, server_id, display_server = chat_api_server[chat_id]
     else:
@@ -1494,26 +1504,69 @@ async def start_playback_task(chat_id: int, message: Message):
         chat_api_server[chat_id] = (selected_api, server_id, display_server)
         global_api_index += 1
 
-    # Ensure the API assistant has joined
-    if not await is_assistant_in_chat(chat_id):
+    # 3) Check assistant’s chat-member status via direct Bot API
+    get_member_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
+    params = {"chat_id": chat_id, "user_id": ASSISTANT_CHAT_ID}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(get_member_url, params=params, timeout=10) as resp:
+            data = await resp.json()
+
+    if not data.get("ok"):
+        await bot.send_message(
+            chat_id,
+            f"❌ Could not verify assistant status: {data.get('description', 'unknown error')}",
+            reply_markup=support_buttons
+        )
+        return
+
+    status = data["result"]["status"]  # “creator”, “administrator”, “member”, “restricted”, “left”, “kicked”
+
+    # 4) If banned (kicked), stop here
+    if status == "kicked":
+        await bot.send_message(
+            chat_id,
+            "❌ The assistant is banned from this group. Please unban it before playing music.",
+            reply_markup=support_buttons
+        )
+        return
+
+    # 5) If not already in the group, call your /join API
+    if status not in ("creator", "administrator", "member"):
         invite_link = await extract_invite_link(bot, chat_id)
         if invite_link:
-            join_api_url = f"{selected_api}/join?input={quote(invite_link)}"
+            join_url = f"{selected_api}/join"
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(join_api_url, timeout=20) as join_resp:
+                    async with session.get(
+                        join_url,
+                        params={"chat": invite_link},
+                        timeout=20
+                    ) as join_resp:
+                        body = await join_resp.text()
                         if join_resp.status != 200:
-                            raise Exception(f"Join API responded with status {join_resp.status}")
+                            raise Exception(f"Status {join_resp.status}, Response: {body}")
             except Exception as e:
-                error_text = f"❌ API Assistant join error: {str(e)}. Please check the API endpoint."
-                await bot.send_message(chat_id, error_text)
+                await bot.send_message(
+                    chat_id,
+                    f"❌ API Assistant join error: {e}. Please check the API endpoint.",
+                    reply_markup=support_buttons
+                )
                 return
+
+            # 6) Poll until the assistant appears as a member
             for _ in range(10):
                 await asyncio.sleep(3)
-                if await is_assistant_in_chat(chat_id):
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(get_member_url, params=params, timeout=10) as resp:
+                        data = await resp.json()
+                if data.get("ok") and data["result"]["status"] in ("creator", "administrator", "member"):
                     break
             else:
-                await bot.send_message(chat_id, "❌ API Assistant failed to join. Please check the API endpoint.")
+                await bot.send_message(
+                    chat_id,
+                    "❌ API Assistant failed to join. Please check the API endpoint.",
+                    reply_markup=support_buttons
+                )
                 return
 
     # If no songs in the queue, bail out
