@@ -171,8 +171,10 @@ api_servers = [
     "http://py-tgcalls-api-yto1.onrender.com",
     "https://py-tgcalls-api-p44l.onrender.com",
     "https://py-tgcalls-api-fzk2.onrender.com",
-    "https://py-tgcalls-api-vjd1.onrender.com"
+    "https://py-tgcalls-api-vjd1.onrender.com",
+    "https://py-tgcalls-api-he1n.onrender.com"
 ]
+
 chat_api_server = {}
 global_api_index = 0
 
@@ -1402,6 +1404,8 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         # 3) Advance to the next song
         await skip_to_next_song(chat_id, message)
 
+
+
 async def start_playback_task(chat_id: int, message: Message):
     global global_api_index, global_playback_count
     print(f"Current playback tasks: {len(playback_tasks)}; Chat ID: {chat_id}")
@@ -1437,9 +1441,17 @@ async def start_playback_task(chat_id: int, message: Message):
         chat_api_server[chat_id] = (selected_api, server_id, display_server)
         global_api_index += 1
 
+    # 2a) Override assistant for API server 1
+    if server_id == 7:
+        assistant_chat_id = 6565013496
+        assistant_username = "@acekiller_010185"
+    else:
+        assistant_chat_id = ASSISTANT_CHAT_ID
+        assistant_username = None
+
     # 3) Check assistant’s chat-member status via direct Bot API
     get_member_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
-    params = {"chat_id": chat_id, "user_id": ASSISTANT_CHAT_ID}
+    params = {"chat_id": chat_id, "user_id": assistant_chat_id}
     async with aiohttp.ClientSession() as session:
         async with session.get(get_member_url, params=params, timeout=10) as resp:
             data = await resp.json()
@@ -1529,10 +1541,10 @@ async def start_playback_task(chat_id: int, message: Message):
         # If API fails, fall back to local
         try:
             await processing_message.edit("⏳ API server is sleeping. Waiting an extra 20 seconds before falling back...")
-        except Exception as edit_error:
-            print(f"Error editing processing message: {edit_error}")
+        except Exception:
+            pass
         await asyncio.sleep(1)
-        fallback_error = f"❌ Frozen Play API Error: {str(e)}\nFalling back to local playback..."
+        fallback_error = f"❌ Frozen Play API Error: {e}\nFalling back to local playback..."
         try:
             await processing_message.edit(fallback_error)
         except Exception:
@@ -1585,8 +1597,8 @@ async def start_playback_task(chat_id: int, message: Message):
     # Delete the old “processing” message
     try:
         await processing_message.delete()
-    except Exception as e:
-        print(f"Error deleting processing message: {e}")
+    except Exception:
+        pass
 
     # Generate frosted card thumbnail if possible
     frosted_buffer = None
@@ -1601,11 +1613,10 @@ async def start_playback_task(chat_id: int, message: Message):
             frosted_buffer = create_frosted_card(
                 raw_thumb,
                 sender_username=f"{song_info['requester']}",
-                title_text=song_info["title"],
-                artist_text=song_info["requester"],
+                title_text=song_info['title'],
+                artist_text=song_info['requester'],
             )
-        except Exception as e:
-            print(f"Error generating frosted card: {e}")
+        except Exception:
             frosted_buffer = None
 
     # Send the photo with HTML parse mode
