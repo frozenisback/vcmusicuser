@@ -3020,7 +3020,7 @@ async def play_help_handler(_, message):
     )
     await message.reply(help_text)
 
-@bot.on_message(filters.private & ~filters.command("start") & ~filters.chat(7634862283))
+@bot.on_message(filters.private & ~filters.command("start") & ~filters.chat(7634862283) & ~filters.chat(6565013496))
 async def private_only_groups_handler(_, message):
     group_info_text = (
         "⚠️ **This bot only works in groups!**\n\n"
