@@ -172,8 +172,10 @@ api_servers = [
     "https://py-tgcalls-api-p44l.onrender.com",
     "https://py-tgcalls-api-fzk2.onrender.com",
     "https://py-tgcalls-api-vjd1.onrender.com",
-    "https://py-tgcalls-api-he1n.onrender.com"
+    "https://py-tgcalls-api-he1n.onrender.com",
+    "https://py-tgcalls-api-y1gs.onrender.com"  
 ]
+
 
 chat_api_server = {}
 global_api_index = 0
@@ -1442,7 +1444,7 @@ async def start_playback_task(chat_id: int, message: Message):
         global_api_index += 1
 
     # 2a) Override assistant for API server 1
-    if server_id == 7:
+    if server_id in (7, 8):
         assistant_chat_id = 6565013496
         assistant_username = "@acekiller_010185"
     else:
