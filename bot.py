@@ -1293,6 +1293,8 @@ async def update_progress_caption(
 
 
 
+LOG_CHAT_ID = "@frozenmusiclogs"
+
 async def fallback_local_playback(chat_id: int, message: Message, song_info: dict):
     playback_mode[chat_id] = "local"
     try:
@@ -1394,6 +1396,18 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
             )
         )
 
+        # ——— Log start of local stream in your channel —————————————
+        asyncio.create_task(
+            bot.send_message(
+                LOG_CHAT_ID,
+                "#started_streaming\n"
+                f"• Title: {song_info.get('title','Unknown')}\n"
+                f"• Duration: {song_info.get('duration','Unknown')}\n"
+                f"• Requested by: {song_info.get('requester','Unknown')}\n"
+                f"• Mode: local"
+            )
+        )
+
     except Exception as e:
         # 1) Log & notify the user
         print(f"Error during fallback local playback in chat {chat_id}: {e}")
@@ -1408,6 +1422,7 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
 
         # 3) Advance to the next song
         await skip_to_next_song(chat_id, message)
+
 
 
 
@@ -1446,15 +1461,15 @@ async def start_playback_task(chat_id: int, message: Message):
         chat_api_server[chat_id] = (selected_api, server_id, display_server)
         global_api_index += 1
 
-    # 2a) Override assistant for API server 1
-    if server_id in (7, 8, 9, 10):
+    # 2a) Override assistant for API server 7 or 8
+    if server_id in (7, 8):
         assistant_chat_id = 6565013496
         assistant_username = "@acekiller_010185"
     else:
         assistant_chat_id = ASSISTANT_CHAT_ID
         assistant_username = None
 
-    # 3) Check assistant’s chat-member status via direct Bot API
+    # 3) Check assistant’s chat‑member status via Bot API
     get_member_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
     params = {"chat_id": chat_id, "user_id": assistant_chat_id}
     async with aiohttp.ClientSession() as session:
@@ -1469,9 +1484,9 @@ async def start_playback_task(chat_id: int, message: Message):
         )
         return
 
-    status = data["result"]["status"]  # “creator”, “administrator”, “member”, “restricted”, “left”, “kicked”
+    status = data["result"]["status"]
 
-    # 4) If banned (kicked), stop here
+    # 4) If banned, stop here
     if status == "kicked":
         await bot.send_message(
             chat_id,
@@ -1480,30 +1495,79 @@ async def start_playback_task(chat_id: int, message: Message):
         )
         return
 
-    # 5) If not already in the group, call your /join API
+    # 5) If not in group, attempt /join
     if status not in ("creator", "administrator", "member"):
         invite_link = await extract_invite_link(bot, chat_id)
         if invite_link:
-            join_url = f"{selected_api}/join"
             try:
+                # First attempt on selected_api
+                join_url = f"{selected_api}/join"
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        join_url,
-                        params={"chat": invite_link},
-                        timeout=20
-                    ) as join_resp:
+                    async with session.get(join_url, params={"chat": invite_link}, timeout=20) as join_resp:
                         body = await join_resp.text()
                         if join_resp.status != 200:
                             raise Exception(f"Status {join_resp.status}, Response: {body}")
-            except Exception as e:
-                await bot.send_message(
-                    chat_id,
-                    f"❌ API Assistant join error: {e}. Please check the API endpoint.",
-                    reply_markup=support_buttons
-                )
-                return
 
-            # 6) Poll until the assistant appears as a member
+            except Exception as e:
+                err = str(e)
+                fallback_done = False
+
+                # CHANNELS_TOO_MUCH on servers 1–6? -> try servers 7 then 8
+                if "CHANNELS_TOO_MUCH" in err and server_id in range(1, 7):
+                    for fb_id in (7, 8):
+                        fb_api = api_servers[fb_id - 1]
+                        try:
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get(f"{fb_api}/join", params={"chat": invite_link}, timeout=20) as fb_resp:
+                                    fb_body = await fb_resp.text()
+                                    if fb_resp.status != 200:
+                                        raise Exception(f"Status {fb_resp.status}, Response: {fb_body}")
+                            # success: switch to fallback server
+                            selected_api = fb_api
+                            server_id = fb_id
+                            display_server = fb_id
+                            chat_api_server[chat_id] = (selected_api, server_id, display_server)
+                            fallback_done = True
+                            break
+                        except Exception:
+                            continue
+
+                # CHANNELS_TOO_MUCH on servers 7–8? -> fallback to server 1
+                elif "CHANNELS_TOO_MUCH" in err and server_id in (7, 8):
+                    fb_api = api_servers[0]
+                    try:
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(f"{fb_api}/join", params={"chat": invite_link}, timeout=20) as fb_resp:
+                                fb_body = await fb_resp.text()
+                                if fb_resp.status != 200:
+                                    raise Exception(f"Status {fb_resp.status}, Response: {fb_body}")
+                        selected_api = fb_api
+                        server_id = 1
+                        display_server = 1
+                        chat_api_server[chat_id] = (selected_api, server_id, display_server)
+                        fallback_done = True
+                    except Exception as e2:
+                        err = str(e2)
+
+                # If still not handled, send error
+                if not fallback_done and "CHANNELS_TOO_MUCH" in err:
+                    await bot.send_message(
+                        chat_id,
+                        f"❌ API Assistant join error: {err}. Please leave some channels and try again.",
+                        reply_markup=support_buttons
+                    )
+                    return
+
+                # If any other error
+                if not fallback_done and "CHANNELS_TOO_MUCH" not in err:
+                    await bot.send_message(
+                        chat_id,
+                        f"❌ API Assistant join error: {err}. Please check the API endpoint.",
+                        reply_markup=support_buttons
+                    )
+                    return
+
+            # 6) Poll until joined
             for _ in range(10):
                 await asyncio.sleep(3)
                 async with aiohttp.ClientSession() as session:
@@ -1519,19 +1583,21 @@ async def start_playback_task(chat_id: int, message: Message):
                 )
                 return
 
-    # If no songs in the queue, bail out
+    # If no songs left, bail
     if chat_id not in chat_containers or not chat_containers[chat_id]:
         await bot.send_message(chat_id, "❌ No songs in the queue.")
         return
 
-    # Get the first song in the queue
+    # --- rest remains unchanged ---
+
+    # Get song info
     song_info = chat_containers[chat_id][0]
     last_played_song[chat_id] = song_info
     video_title = song_info.get("title", "Unknown")
     video_url = song_info.get("url", "")
     encoded_url = quote(video_url, safe="")
 
-    # Determine API URL (secondary if duration > 20 minutes)
+    # Determine API URL
     duration_seconds = song_info.get("duration_seconds", 0)
     api_param = "&api=secondary" if duration_seconds > 1200 else ""
     api_url = f"{selected_api}/play?chatid={chat_id}&url={encoded_url}{api_param}"
@@ -1543,7 +1609,7 @@ async def start_playback_task(chat_id: int, message: Message):
                     raise Exception(f"API responded with status {resp.status}")
                 data = await resp.json()
     except Exception as e:
-        # If API fails, fall back to local
+        # Fallback to local playback
         try:
             await processing_message.edit("⏳ API server is sleeping. Waiting an extra 20 seconds before falling back...")
         except Exception:
@@ -1557,7 +1623,7 @@ async def start_playback_task(chat_id: int, message: Message):
         await fallback_local_playback(chat_id, processing_message, song_info)
         return
 
-    # Log the successful API play call
+    # Log success
     record = {
         "chat_id": chat_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -1568,10 +1634,9 @@ async def start_playback_task(chat_id: int, message: Message):
     api_playback_records.append(record)
     playback_mode[chat_id] = "api"
 
-    # Prepare the HTML caption for API playback
+    # Build caption & keyboard
     total_duration = parse_duration_str(song_info.get("duration", "0:00"))
-    one_line = _one_line_title(song_info["title"]) if total_duration > 0 else _one_line_title(song_info["title"])
-
+    one_line = _one_line_title(song_info["title"])
     base_caption = (
         "<blockquote>"
         "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ ⏤͟͞●</b> (API Playback)</blockquote>\n\n"
@@ -1580,10 +1645,8 @@ async def start_playback_task(chat_id: int, message: Message):
         f"❍ <b>ʟᴅs sᴇʀᴠᴇʀ:</b> {display_server}"
         "</blockquote>"
     )
-
     initial_progress = get_progress_bar_styled(0, total_duration)
 
-    # Build the inline keyboard for API playback
     control_row = [
         InlineKeyboardButton(text="▷", callback_data="pause"),
         InlineKeyboardButton(text="II", callback_data="resume"),
@@ -1599,13 +1662,13 @@ async def start_playback_task(chat_id: int, message: Message):
         [playlist_button],
     ])
 
-    # Delete the old “processing” message
+    # Delete processing message
     try:
         await processing_message.delete()
     except Exception:
         pass
 
-    # Generate frosted card thumbnail if possible
+    # Create thumbnail card
     frosted_buffer = None
     if song_info.get("thumbnail"):
         try:
@@ -1624,7 +1687,7 @@ async def start_playback_task(chat_id: int, message: Message):
         except Exception:
             frosted_buffer = None
 
-    # Send the photo with HTML parse mode
+    # Send photo + caption
     if frosted_buffer:
         new_progress_message = await bot.send_photo(
             chat_id,
@@ -1644,7 +1707,7 @@ async def start_playback_task(chat_id: int, message: Message):
 
     global_playback_count += 1
 
-    # Start updating the progress button periodically
+    # Kick off progress updates
     asyncio.create_task(
         update_progress_caption(
             chat_id,
@@ -1652,6 +1715,18 @@ async def start_playback_task(chat_id: int, message: Message):
             time.time(),
             total_duration,
             base_caption
+        )
+    )
+
+    # ——— Log start of API stream in your channel —————————————
+    asyncio.create_task(
+        bot.send_message(
+            LOG_CHAT_ID,
+            "#started_streaming\n"
+            f"• Title: {song_info.get('title','Unknown')}\n"
+            f"• Duration: {song_info.get('duration','Unknown')}\n"
+            f"• Requested by: {song_info.get('requester','Unknown')}\n"
+            f"• LDS Server: {display_server}"
         )
     )
 
