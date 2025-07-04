@@ -102,7 +102,7 @@ API_ASSISTANT_USERNAME = "@xyz92929"
 # API Endpoints
 API_URL = os.environ.get("API_URL")
 DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
-BACKUP_SEARCH_API_URL= "https://teenage-liz-frozzennbotss-61567ab4.koyeb.app"
+BACKUP_SEARCH_API_URL= "https://odd-block-a945.tenopno.workers.dev"
 
 
 # ─── MongoDB Setup ─────────────────────────────────────────
