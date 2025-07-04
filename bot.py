@@ -193,69 +193,15 @@ async def process_pending_command(chat_id, delay):
 
 
 async def show_suggestions(chat_id, last_song_url, status_message=None):
-    try:
-        suggestions_api = f"https://odd-block-a945.tenopno.workers.dev/related?input={urllib.parse.quote(last_song_url)}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(suggestions_api) as resp:
-                if resp.status != 200:
-                    error_text = f"Suggestions API returned status {resp.status} for chat {chat_id} using URL: {last_song_url}"
-                    print(error_text)
-                    await bot.send_message(5268762773, error_text)
-                    if status_message:
-                        try:
-                            await status_message.edit("❌ Failed to fetch suggestions from the API.")
-                        except Exception as e:
-                            print("Error editing status message:", e)
-                            await bot.send_message(chat_id, "❌ Failed to fetch suggestions from the API.")
-                    else:
-                        await bot.send_message(chat_id, "❌ Failed to fetch suggestions from the API.")
-                    return
-                data = await resp.json()
-                suggestions = data.get("suggestions", [])
-                if not suggestions:
-                    error_text = "No suggestions returned from API."
-                    print(error_text)
-                    await bot.send_message(5268762773, f"Suggestions API error in chat {chat_id}: {error_text}")
-                    if status_message:
-                        try:
-                            await status_message.edit("❌ No suggestions available from the API.")
-                        except Exception as e:
-                            print("Error editing status message:", e)
-                            await bot.send_message(chat_id, "❌ No suggestions available from the API.")
-                    else:
-                        await bot.send_message(chat_id, "❌ No suggestions available from the API.")
-                    return
-                # Save suggestions for later use in callback queries.
-                last_suggestions[chat_id] = suggestions
-                # Build inline buttons with callback data "suggestion|<index>"
-                buttons = [
-                    [InlineKeyboardButton(text=suggestion.get("title", "Suggestion"), callback_data=f"suggestion|{i}")]
-                    for i, suggestion in enumerate(suggestions)
-                ]
-                markup = InlineKeyboardMarkup(buttons)
-                new_text = "✨ No more songs in the queue. Here are some suggestions based on the last played song: ✨"
-                if status_message:
-                    try:
-                        await status_message.edit(new_text, reply_markup=markup)
-                    except Exception as e:
-                        print("Error editing status message in show_suggestions:", e)
-                        await bot.send_message(chat_id, new_text, reply_markup=markup)
-                else:
-                    await bot.send_message(chat_id, new_text, reply_markup=markup)
-    except Exception as e:
-        error_text = f"Error fetching suggestions: {str(e)}"
-        print(error_text)
-        await bot.send_message(5268762773, f"Suggestions API error in chat {chat_id}: {error_text}")
-        if status_message:
-            try:
-                await status_message.edit(f"❌ Error fetching suggestions: {str(e)}")
-            except Exception as ex:
-                print("Error editing status message:", ex)
-                await bot.send_message(chat_id, f"❌ Error fetching suggestions: {str(e)}")
-        else:
-            await bot.send_message(chat_id, f"❌ Error fetching suggestions: {str(e)}")
-        await leave_voice_chat(chat_id)
-
+    """Auto‑suggestions are temporarily disabled."""
+    text = "😔 Suggestions are temporarily turned off."
+    if status_message:
+        try:
+            await status_message.edit(text)
+        except Exception:
+            await bot.send_message(chat_id, text)
+    else:
+        await bot.send_message(chat_id, text)
 
 
 
