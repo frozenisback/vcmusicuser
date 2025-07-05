@@ -1408,7 +1408,7 @@ async def start_playback_task(chat_id: int, message: Message):
         global_api_index += 1
 
     # 2a) Override assistant for API server 7 or 8
-    if server_id in (7, 8):
+    if server_id in (7, 8, 9, 10):
         assistant_chat_id = 6565013496
         assistant_username = "@acekiller_010185"
     else:
@@ -1460,7 +1460,7 @@ async def start_playback_task(chat_id: int, message: Message):
 
                 # CHANNELS_TOO_MUCH on servers 1–6? -> try servers 7 then 8
                 if "CHANNELS_TOO_MUCH" in err and server_id in range(1, 7):
-                    for fb_id in (7, 8):
+                    for fb_id in (7, 8, 9, 10):
                         fb_api = api_servers[fb_id - 1]
                         try:
                             async with aiohttp.ClientSession() as session:
@@ -1479,7 +1479,7 @@ async def start_playback_task(chat_id: int, message: Message):
                             continue
 
                 # CHANNELS_TOO_MUCH on servers 7–8? -> fallback to server 1
-                elif "CHANNELS_TOO_MUCH" in err and server_id in (7, 8):
+                elif "CHANNELS_TOO_MUCH" in err and server_id in (7, 8, 9, 10):
                     fb_api = api_servers[0]
                     try:
                         async with aiohttp.ClientSession() as session:
@@ -3259,25 +3259,13 @@ async def stream_ended_handler(_, message):
             await bot.send_message(chat_id, "⏭ Skipping to the next song...")
             await start_playback_task(chat_id, message)
         else:
-            # Queue is empty; fetch suggestions.
-            last_song = last_played_song.get(chat_id)
-            if last_song and last_song.get('url'):
-                status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
-                await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
-            else:
-                await bot.send_message(
-                    chat_id,
-                    "❌ No more songs in the queue.\nLeaving the voice chat. 💕\n\nSupport: @frozensupport1"
-                )
-                await leave_voice_chat(chat_id)
+            await bot.send_message(
+                chat_id,
+                "❌ No more songs in the queue.\n\nSupport: @frozensupport1"
+            )
     else:
-        # No songs in the queue.
-        last_song = last_played_song.get(chat_id)
-        if last_song and last_song.get('url'):
-            status_msg = await bot.send_message(chat_id, "😔 No more songs in the queue. Fetching song suggestions...")
-            await show_suggestions(chat_id, last_song.get('url'), status_message=status_msg)
-        else:
-            await bot.send_message(chat_id, "🚪 No songs left in the queue.")
+        await bot.send_message(chat_id, "😫 No songs left in the queue.")
+
 
 
 @bot.on_message(filters.command("frozen_check") & filters.chat(ASSISTANT_CHAT_ID))
