@@ -172,7 +172,7 @@ api_servers = [
     "https://py-tgcalls-api-p44l.onrender.com",
     "https://py-tgcalls-api-fzk2.onrender.com",
     "https://py-tgcalls-api-vjd1.onrender.com",
-    "https://py-tgcalls-api-he1n.onrender.com",
+    "https://playbackapi-ghdr.onrender.com",
     "https://py-tgcalls-api-y1gs.onrender.com",
     "https://playbackapi.onrender.com",
     "https://playbackapi-k0ah.onrender.com"
