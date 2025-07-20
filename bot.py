@@ -175,8 +175,11 @@ api_servers = [
     "https://playbackapi-ghdr.onrender.com",
     "https://py-tgcalls-api-y1gs.onrender.com",
     "https://playbackapi.onrender.com",
-    "https://playbackapi-k0ah.onrender.com"
+    "https://playbackapi-k0ah.onrender.com",
+    "https://playbackapi-xar2.onrender.com",  # ✅ newly added
+    "https://playbackapi-5gv7.onrender.com"   # ✅ newly added
 ]
+
 
 
 
@@ -1408,7 +1411,7 @@ async def start_playback_task(chat_id: int, message: Message):
         global_api_index += 1
 
     # 2a) Override assistant for API server 7 or 8
-    if server_id in (7, 8, 9, 10):
+    if server_id in (7, 8, 9, 10, 11, 12):
         assistant_chat_id = 6565013496
         assistant_username = "@acekiller_010185"
     else:
@@ -1436,7 +1439,7 @@ async def start_playback_task(chat_id: int, message: Message):
     if status == "kicked":
         await bot.send_message(
             chat_id,
-            "❌ The assistant is banned from this group. Please unban it before playing music.",
+            "❌ The assistant is banned from this group. Please unban it before playing music.\n\n Assistant1 username - @xyz92929\n\nAssistant2 username - @acekiller_010185 ",
             reply_markup=support_buttons
         )
         return
