@@ -1548,7 +1548,7 @@ async def start_playback_task(chat_id: int, message: Message):
 
     # Determine API URL
     duration_seconds = song_info.get("duration_seconds", 0)
-    api_param = "&api=secondary" if duration_seconds > 1200 else ""
+    api_param = "&api=2" if duration_seconds > 1200 else ""
     api_url = f"{selected_api}/play?chatid={chat_id}&url={encoded_url}{api_param}"
 
     try:
