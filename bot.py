@@ -897,7 +897,7 @@ def create_frosted_card(
 
 @bot.on_message(
     filters.group & filters.regex(
-        r'^/(?:(?:play|p|ply))(?:command)?(?:@\w+)?(?:\s*(?P<query>.+))?$'
+        r'^/(?!playlist\b)(?:p|ply|play)(?:command)?(?:@\w+)?(?:\s+(?P<query>.+))?$'
     )
 )
 async def play_handler(_, message: Message):
