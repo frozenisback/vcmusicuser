@@ -1116,11 +1116,11 @@ async def process_play_command(
                  InlineKeyboardButton("🗑 Clear", callback_data="clear")]
             ])
             await message.reply(
-                f"✨ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ :\n\n"
-                f"<b>❍ ᴛɪᴛʟє ➥ {title}\n"
-                f"<b>❍ ᴛɪϻє ➥ {readable}\n"
-                f"<b>❍ ʙʏ ➥ {requester_html}\n"
-                f"<b>Queue number: {len(chat_containers[chat_id]) - 1}",
+                f"<b>✨ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:</b>\n\n"
+                f"<b>❍ ᴛɪᴛʟє ➥</b> {title}\n"
+                f"<b>❍ ᴛɪϻє ➥</b>{readable}\n"
+                f"<b>❍ ʙʏ ➥</b>{requester_html}\n"
+                f"<b>Queue number:</b>{len(chat_containers[chat_id]) - 1}",
                 reply_markup=queue_buttons,
                 parse_mode=ParseMode.HTML
             )
