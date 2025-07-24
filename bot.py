@@ -1117,10 +1117,10 @@ async def process_play_command(
             ])
             await message.reply(
                 f"✨ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ :\n\n"
-                f"**❍ ᴛɪᴛʟє ➥** {title}\n"
-                f"**❍ ᴛɪϻє ➥** {readable}\n"
-                f"**❍ ʙʏ ➥** {requester_html}\n"
-                f"**Queue number:** {len(chat_containers[chat_id]) - 1}",
+                f"<b>❍ ᴛɪᴛʟє ➥ {title}\n"
+                f"<b>❍ ᴛɪϻє ➥ {readable}\n"
+                f"<b>❍ ʙʏ ➥ {requester_html}\n"
+                f"<b>Queue number: {len(chat_containers[chat_id]) - 1}",
                 reply_markup=queue_buttons,
                 parse_mode=ParseMode.HTML
             )
