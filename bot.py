@@ -1383,12 +1383,12 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         await skip_to_next_song(chat_id, message)
 
 
-async def start_playback_task(chat_id: int, message: Message, requester_id: int):
+async def start_playback_task(chat_id: int, message: Message, requester_id: int = None):
     global global_api_index, global_playback_count
     print(f"Current playback tasks: {len(chat_containers.get(chat_id, []))}; Chat ID: {chat_id}")
 
     # Determine premium status
-    is_premium = requester_id in premium_users
+    is_premium = requester_id in premium_users if requester_id is not None else False
 
     # Helper: two-button support/admin markup
     support_buttons = InlineKeyboardMarkup(
