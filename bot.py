@@ -152,7 +152,7 @@ GROUP_FONT_SIZE = 72
 chat_containers = {}
 playback_tasks = {}  # To manage playback tasks per chat
 bot_start_time = time.time()
-premium_users = {5268762773, 7459107790, 7100030755}
+premium_users = {}
 COOLDOWN = 10
 chat_last_command = {}
 chat_pending_commands = {}
@@ -1403,9 +1403,9 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     # 1) “Processing…” message
     processing_message = message
     status_text = (
-        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:<b>sᴘᴇᴇᴅ 𝟻x!🚀<b>\nᴘʟᴇᴀsᴇ ᴡᴀɪᴛ ᴀ ғᴇᴡ sᴇᴄᴏɴᴅs…" 
+        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:<b>sᴘᴇᴇᴅ 𝟻x!🚀<b>\nᴘʟᴇᴀsᴇ ᴡᴀɪᴛ ᴀ ғᴇᴡ sᴇᴄᴏɴᴅs…</b>" 
         if is_premium 
-        else "<b> ᴘʀᴏᴄᴇssɪɴɢ...ғʀᴇᴇ ᴘʟᴀɴ, ᴍᴀʏ ᴛᴀᴋᴇ ᴜᴘ ᴛᴏ 𝟸𝟶 sᴇᴄᴏɴᴅs. 💕"
+        else "<b>⚡️Processing Fast as fu*k🚀 eta-: 4 seconds</b>"
     )
     try:
         if processing_message:
@@ -1544,7 +1544,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     duration_seconds = song_info.get("duration_seconds", 0)
     if is_premium:
         api_param = "&api=3"
-    elif duration_seconds > 1200:
+    elif duration_seconds > 7200:
         api_param = "&api=2"
     else:
         api_param = ""
