@@ -3134,7 +3134,7 @@ async def dooownload_from_source(client, message):
     if "youtube.com" in link or "youtu.be" in link:
         source_bot = "@YtbAudioBot"
     elif "instagram.com" in link or "tiktok.com" in link:
-        source_bot = "@SaveOFFbot"
+        source_bot = "@instasavegrambot"
     else:
         return await message.reply("❌ Unsupported link. Only YouTube, Instagram, and TikTok are allowed.")
 
