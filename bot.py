@@ -3119,57 +3119,6 @@ async def download_auddio(client, message):
     # If no fresh audio arrives, let the user know
     await message.reply("⚠️ Failed to download audio: operation timed out.")
 
-@assistant.on_message(filters.command("doown") & (filters.private | filters.group))
-async def dooownload_from_source(client, message):
-    if len(message.command) < 2:
-        return await message.reply("Usage: /doown <link>&chatid=<some_id>")
-
-    full_input = message.command[1]
-    parts = full_input.split("&chatid=")
-
-    link = parts[0].strip()
-    chat_id_tag = parts[1].strip() if len(parts) > 1 else None
-
-    # Pick the source bot based on link type
-    if "youtube.com" in link or "youtu.be" in link:
-        source_bot = "@YtbAudioBot"
-    elif "instagram.com" in link or "tiktok.com" in link:
-        source_bot = "@instasavegrambot"
-    else:
-        return await message.reply("❌ Unsupported link. Only YouTube, Instagram, and TikTok are allowed.")
-
-    destination_bot = "@ytaudiovideobot"
-
-    # Snapshot: get last message ID in source bot
-    last_id = 0
-    async for msg in client.get_chat_history(source_bot, limit=1):
-        last_id = msg.id
-        break
-
-    # Send the link to the source bot
-    await client.send_message(source_bot, link)
-
-    # Poll for new media for up to 60 seconds
-    for _ in range(60):
-        async for msg in client.get_chat_history(source_bot, limit=5):
-            if msg.id <= last_id:
-                continue
-
-            if msg.audio or msg.voice or msg.video or msg.document:
-                # Send as a copy with caption
-                try:
-                    await msg.copy(
-                        chat_id=destination_bot,
-                        caption=f"chatid={chat_id_tag}" if chat_id_tag else None
-                    )
-                except Exception as e:
-                    await message.reply(f"❌ Failed to send media: {e}")
-                return  # ✅ Exit after success
-
-        await asyncio.sleep(1)
-
-    await message.reply("⚠️ Failed to fetch media: source bot didn't respond in time.")
-
 
 import requests
 
