@@ -3122,9 +3122,13 @@ async def download_auddio(client, message):
 @assistant.on_message(filters.command("doown") & (filters.private | filters.group))
 async def dooownload_from_source(client, message):
     if len(message.command) < 2:
-        return await message.reply("Usage: /doown <link>")
+        return await message.reply("Usage: /doown <link>&chatid=<some_id>")
 
-    link = message.command[1].strip().lower()
+    full_input = message.command[1]
+    parts = full_input.split("&chatid=")
+
+    link = parts[0].strip()
+    chat_id_tag = parts[1].strip() if len(parts) > 1 else None
 
     # Pick the source bot based on link type
     if "youtube.com" in link or "youtu.be" in link:
@@ -3136,7 +3140,7 @@ async def dooownload_from_source(client, message):
 
     destination_bot = "@ytaudiovideobot"
 
-    # Get last message ID in source bot
+    # Snapshot: get last message ID in source bot
     last_id = 0
     async for msg in client.get_chat_history(source_bot, limit=1):
         last_id = msg.id
@@ -3145,19 +3149,22 @@ async def dooownload_from_source(client, message):
     # Send the link to the source bot
     await client.send_message(source_bot, link)
 
-    # Wait for new downloadable media
+    # Poll for new media for up to 60 seconds
     for _ in range(60):
         async for msg in client.get_chat_history(source_bot, limit=5):
             if msg.id <= last_id:
                 continue
 
             if msg.audio or msg.voice or msg.video or msg.document:
-                await client.forward_messages(
-                    chat_id=destination_bot,
-                    from_chat_id=source_bot,
-                    message_ids=msg.id
-                )
-                return  # ✅ Silent exit after successful forward
+                # Send as a copy with caption
+                try:
+                    await msg.copy(
+                        chat_id=destination_bot,
+                        caption=f"chatid={chat_id_tag}" if chat_id_tag else None
+                    )
+                except Exception as e:
+                    await message.reply(f"❌ Failed to send media: {e}")
+                return  # ✅ Exit after success
 
         await asyncio.sleep(1)
 
