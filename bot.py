@@ -1544,7 +1544,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     duration_seconds = song_info.get("duration_seconds", 0)
     if is_premium:
         api_param = "&api=3"
-    elif duration_seconds > 7200:
+    elif duration_seconds > 3540:
         api_param = "&api=2"
     else:
         api_param = ""
