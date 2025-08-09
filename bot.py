@@ -1405,7 +1405,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     status_text = (
         "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:<b>sᴘᴇᴇᴅ 𝟻x!🚀<b>\nᴘʟᴇᴀsᴇ ᴡᴀɪᴛ ᴀ ғᴇᴡ sᴇᴄᴏɴᴅs…</b>" 
         if is_premium 
-        else "<b>⚡️Processing Fast as fu*k🚀 eta-: 4 seconds</b>"
+        else "<b>𝐩𝐫𝐨𝐜𝐞𝐬𝐬𝐢𝐧𝐠 🥀 free plan </b>"
     )
     try:
         if processing_message:
