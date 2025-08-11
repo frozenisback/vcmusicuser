@@ -1077,7 +1077,7 @@ async def process_play_command(
         secs = isodate.parse_duration(duration_iso).total_seconds()
         if secs > MAX_DURATION_SECONDS:
             await processing_message.edit(
-                "❌ Streams longer than 10 min are not allowed. We are facing some server issues—please try later."
+                "❌ Streams longer than 2 hours are not allowed. We are facing some server issues—please try later."
             )
             return
 
