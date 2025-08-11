@@ -51,15 +51,6 @@ from pytgcalls.types.stream import StreamEnded
 from typing import Union
 import urllib
 
-try:
-    import resource
-    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    resource.setrlimit(resource.RLIMIT_AS, (480 * 1024 * 1024, hard))
-except ImportError:
-    pass
-
-load_dotenv()
-
 
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
