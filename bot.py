@@ -54,7 +54,7 @@ import urllib
 try:
     import resource
     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    resource.setrlimit(resource.RLIMIT_AS, (450 * 1024 * 1024, hard))
+    resource.setrlimit(resource.RLIMIT_AS, (480 * 1024 * 1024, hard))
 except ImportError:
     pass
 
