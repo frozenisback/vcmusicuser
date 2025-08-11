@@ -51,6 +51,13 @@ from pytgcalls.types.stream import StreamEnded
 from typing import Union
 import urllib
 
+try:
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    resource.setrlimit(resource.RLIMIT_AS, (450 * 1024 * 1024, hard))
+except ImportError:
+    pass
+
 load_dotenv()
 
 
