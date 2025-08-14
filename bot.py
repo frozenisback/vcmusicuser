@@ -1403,7 +1403,9 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     status_text = (
         "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:<b>sᴘᴇᴇᴅ 𝟻x!🚀<b>\nᴘʟᴇᴀsᴇ ᴡᴀɪᴛ ᴀ ғᴇᴡ sᴇᴄᴏɴᴅs…</b>" 
         if is_premium 
-        else "<b>𝐩𝐫𝐨𝐜𝐞𝐬𝐬𝐢𝐧𝐠 🥀 free plan </b>"
+        else "<b>✨ Hold on…
+Your track is getting tuned, polished, and sent to the stage! 🥀
+💕 Streaming will start in just a moment… </b>"
     )
     try:
         if processing_message:
