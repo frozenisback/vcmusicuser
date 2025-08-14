@@ -1401,11 +1401,12 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     # 1) “Processing…” message
     processing_message = message
     status_text = (
-        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:<b>sᴘᴇᴇᴅ 𝟻x!🚀<b>\nᴘʟᴇᴀsᴇ ᴡᴀɪᴛ ᴀ ғᴇᴡ sᴇᴄᴏɴᴅs…</b>" 
-        if is_premium 
-        else "<b>✨ Hold on…
-Your track is getting tuned, polished, and sent to the stage! 🥀
-💕 Streaming will start in just a moment… </b>"
+        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\n"
+        "<b>ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ᴀ ꜰᴇᴡ ꜱᴇᴄᴏɴᴅꜱ…</b>"
+        if is_premium
+        else "<b>✨ Hold on…\n"
+             "Your track is getting tuned, polished, and sent to the stage! 🥀\n"
+             "💕 Streaming will start in just a moment…</b>"
     )
     try:
         if processing_message:
