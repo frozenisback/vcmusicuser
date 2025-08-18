@@ -2299,6 +2299,81 @@ async def create_welcome_image(user) -> str:
 
 
 
+@bot.on_message(filters.new_chat_members, group=2)
+async def join_watcher(_, message):
+    try:
+        chat = message.chat
+        for member in message.new_chat_members:
+            if member.id == (await bot.get_me()).id:  # bot itself
+                count = await bot.get_chat_members_count(chat.id)
+                username = chat.username if chat.username else "Private Group"
+
+                # ✅ Log to your log channel/group
+                msg = (
+                    f"#newgroup\n\n"
+                    f"📌 Chat Name: {chat.title}\n"
+                    f"🍂 Chat ID: `{chat.id}`\n"
+                    f"🔐 Chat Username: @{username}\n"
+                    f"📈 Members: {count}\n"
+                    f"🤔 Added By: {message.from_user.mention}"
+                )
+                await bot.send_message(LOG_CHAT_ID, msg)
+
+                # ✅ Welcome message in the group
+                await bot.send_message(
+                    chat.id,
+                    "👋 Thanks for adding me here!\n\nClick below to learn how to use me:",
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("📖 How to use me", url="https://telegramvcmusicbot.vercel.app/docs")]]
+                    ),
+                )
+
+                # ✅ Save group to broadcast DB
+                if not broadcast_collection.find_one({"chat_id": chat.id}):
+                    broadcast_collection.insert_one(
+                        {"chat_id": chat.id, "type": "group"}
+                    )
+    except Exception as e:
+        print(f"[Join Watcher Error] {e}")
+
+
+
+@bot.on_message(filters.left_chat_member)
+async def on_left_chat_member(_, message: Message):
+    try:
+        left_chat_member = message.left_chat_member
+
+        if left_chat_member and left_chat_member.id == (await bot.get_me()).id:
+            remove_by = (
+                message.from_user.mention if message.from_user else "Unknown User"
+            )
+            title = message.chat.title
+            username = (
+                f"@{message.chat.username}" if message.chat.username else "Private Chat"
+            )
+            chat_id = message.chat.id
+
+            msg = (
+                f"#leftgroup\n\n"
+                f"📌 Chat Title: {title}\n"
+                f"🍂 Chat ID: `{chat_id}`\n"
+                f"🔐 Username: {username}\n"
+                f"❌ Removed By: {remove_by}\n"
+                f"🤖 Bot: @{(await bot.get_me()).username}"
+            )
+
+            # ✅ Log to your log channel/group
+            await bot.send_message(LOG_CHAT_ID, msg)
+
+            # ✅ Remove from broadcast DB
+            broadcast_collection.delete_one({"chat_id": chat_id})
+
+    except Exception as e:
+        print(f"[Left Chat Handler Error] {e}")
+
+
+
+
 
 @bot.on_message(filters.group & filters.new_chat_members)
 async def welcome_new_member(client: Client, message: Message):
