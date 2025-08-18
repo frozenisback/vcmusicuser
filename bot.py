@@ -3117,33 +3117,6 @@ async def play_help_handler(_, message):
     )
     await message.reply(help_text)
 
-@bot.on_message(
-    filters.private 
-    & ~filters.command("start") 
-    & ~filters.chat(7634862283) 
-    & ~filters.chat(6565013496) 
-    & ~filters.chat(7598576464)
-)
-async def private_only_groups_handler(_, message):
-    group_info_text = (
-        "⚠️ **This bot only works in groups!**\n\n"
-        "To play a song in a group, use the command like this:\n"
-        "`/play <song name>`\n\n"
-        "For more instructions, please use the `/playhelp` command in your group chat.\n\n"
-        "**Languages:**\n"
-        "🇬🇧 English: Use `/play` followed by the song name.\n"
-        "🇪🇸 Español: Usa `/play` seguido del nombre de la canción.\n"
-        "🇫🇷 Français: Utilisez `/play` suivi du nom de la chanson.\n"
-        "🇩🇪 Deutsch: Verwenden Sie `/play` gefolgt vom Namen des Liedes.\n"
-        "🇨🇳 中文: 使用 `/play` 后跟歌曲名称。\n"
-        "🇷🇺 Русский: Используйте `/play`, за которым следует название песни.\n"
-        "🇦🇪 عربي: استخدم `/play` متبوعًا باسم الأغنية.\n"
-        "🇲🇲 မြန်မာ: `/play` နဲ့ သီချင်းအမည်ကို ထည့်ပါ။\n"
-        "🇮🇳 हिन्दी: `/play` के बाद गीत का नाम लिखें।"
-    )
-    await message.reply(group_info_text)
-
-
 
 @bot.on_message(filters.group & filters.command("clear"))
 async def clear_handler(_, message):
