@@ -2792,69 +2792,34 @@ async def kick_handler(_, message):
 
 BOT_ID = 7598576464
 IGNORE_IDS = {7634862283, 6565013496, 7598576464}
+CMD_LIST = ["ai", "ask", "playlist", "help", "play"]
 
-@bot.on_message(
-    filters.private |
-    filters.reply |
-    filters.command(["ai", "ask", "playlist", "help", "play"]) |
-    filters.regex(r"(?i)\b(hi|hello|hey|yo)\b")
+# --- Custom filter: only replies to our bot's messages ---
+reply_to_bot = filters.create(
+    lambda _flt, _client, m: bool(
+        m.reply_to_message
+        and m.reply_to_message.from_user
+        and m.reply_to_message.from_user.id == BOT_ID
+    )
 )
-async def ai_handler(_, message: Message):
-    # --- Ignore messages from blocked IDs ---
-    if message.from_user and message.from_user.id in IGNORE_IDS:
+
+def is_ignored(m: Message) -> bool:
+    uid = m.from_user.id if m.from_user else None
+    cid = m.chat.id if m.chat else None
+    return (uid in IGNORE_IDS) or (cid in IGNORE_IDS)
+
+def strip_non_text(text: str) -> str:
+    if not text:
+        return ""
+    return text if re.search(r"[A-Za-z0-9]", text) else ""
+
+async def process_ai(message: Message, user_text: str, context: dict):
+    if is_ignored(message):
         return
 
-    user_text = None
-    context = {}
-
-    # --- Case 0: Always take private messages as query ---
-    if message.chat.type == "private":
-        user_text = message.text or message.caption or ""
-        context["type"] = "private"
-
-    # --- Case 1: Reply to bot ---
-    elif (
-        message.reply_to_message 
-        and message.reply_to_message.from_user 
-        and message.reply_to_message.from_user.id == BOT_ID
-    ):
-        replied_text = message.reply_to_message.text or message.reply_to_message.caption
-        context["replied_to"] = replied_text
-        user_text = message.text
-        context["type"] = "reply"
-
-    # --- Case 2: Commands ---
-    elif message.text and message.text.split(maxsplit=1)[0].lower() in ["/ai", "/ask", "/playlist", "/help", "/play"]:
-        cmd = message.text.split(maxsplit=1)[0].lower()
-        user_text = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None
-        context["type"] = "command"
-        # Show error only if it's an empty command (not a reply)
-        if not user_text:
-            await message.reply_text(
-                "❌ Please provide a query.\n\n"
-                "_Reply to a bot message or use commands like_ /ai, /playlist, /play."
-            )
-            return
-
-    # --- Case 3: Greetings ---
-    elif message.text and re.search(r"(?i)\b(hi|hello|hey|yo)\b", message.text):
-        user_text = message.text
-        context["type"] = "greeting"
-
-    # --- If no valid input at all ---
-    if not user_text:
-        return  # silently ignore if nothing matches
-
-    # Temporary "thinking" message
+    # Show thinking
     thinking_msg = await message.reply_text("✨ **Thinking...**")
 
-    # Clean helper
-    def strip_non_text(text):
-        if not text:
-            return ""
-        return text if re.search(r"[A-Za-z0-9]", text) else ""
-
-    # Build structured prompt
     prompt = {
         "system_instruction": (
             "You are an AI assistant inside a Telegram music bot called Frozen Music by Kust Bots.\n"
@@ -2874,19 +2839,15 @@ async def ai_handler(_, message: Message):
         "query": strip_non_text(user_text),
         "context": {
             "type": context.get("type", ""),
-            "replied_to": strip_non_text(context.get("replied_to", ""))
-        }
+            "replied_to": strip_non_text(context.get("replied_to", "")),
+        },
     }
 
-    # Call external AI API
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 "https://api.ashlynn-repo.tech/chat/",
-                params={
-                    "question": json.dumps(prompt),
-                    "model": "meta-ai"
-                }
+                params={"question": json.dumps(prompt), "model": "meta-ai"},
             ) as resp:
                 data = await resp.json()
                 ai_reply = data.get("response", "⚠️ **AI gave no response.**")
@@ -2894,10 +2855,55 @@ async def ai_handler(_, message: Message):
         ai_reply = "⚠️ **Something went wrong while contacting the AI.**"
 
     # Send exactly as returned
-    formatted_reply = ai_reply
+    await thinking_msg.edit_text(ai_reply, parse_mode=ParseMode.MARKDOWN)
 
-    # Edit "thinking" message
-    await thinking_msg.edit_text(formatted_reply, parse_mode=ParseMode.MARKDOWN)
+
+# ============ HANDLERS ============
+
+# 1) Replies to bot messages (in groups/supergroups). Treat as query even with no keyword.
+@bot.on_message(reply_to_bot & ~filters.user(list(IGNORE_IDS)) & ~filters.command(CMD_LIST))
+async def handle_reply_to_bot(_, message: Message):
+    replied_text = message.reply_to_message.text or message.reply_to_message.caption
+    context = {"type": "reply", "replied_to": replied_text}
+    user_text = message.text or message.caption or ""
+    await process_ai(message, user_text, context)
+
+
+# 2) Commands everywhere (private or groups). Require text after the command.
+@bot.on_message(filters.command(CMD_LIST) & ~filters.user(list(IGNORE_IDS)))
+async def handle_commands(_, message: Message):
+    parts = message.text.split(maxsplit=1) if message.text else []
+    arg = parts[1] if len(parts) > 1 else None
+
+    if not arg:
+        await message.reply_text(
+            "❌ Please provide a query.\n\n"
+            "_Reply to a bot message or use commands like_ /ai, /playlist, /play."
+        )
+        return
+
+    context = {"type": "command"}
+    await process_ai(message, arg, context)
+
+
+# 3) Private messages: take EVERYTHING as a query (except commands which are handled above).
+@bot.on_message(filters.private & ~filters.command(CMD_LIST) & ~filters.user(list(IGNORE_IDS)))
+async def handle_private(_, message: Message):
+    user_text = (message.text or message.caption or "").strip()
+    context = {"type": "private"}
+    await process_ai(message, user_text, context)
+
+
+# 4) Greetings in groups (avoid private & commands to prevent duplicates).
+@bot.on_message(
+    filters.regex(r"(?i)\b(hi|hello|hey|yo)\b")
+    & ~filters.private
+    & ~filters.command(CMD_LIST)
+    & ~filters.user(list(IGNORE_IDS))
+)
+async def handle_greetings(_, message: Message):
+    context = {"type": "greeting"}
+    await process_ai(message, message.text, context)
 
 
 
@@ -3205,26 +3211,6 @@ async def ping_handler(_, message):
     except Exception as e:
         await message.reply(f"❌ Failed to execute the command. Error: {str(e)}\n\nSupport: @frozensupport1")
 
-
-@bot.on_message(filters.group & filters.command(["playhelp", "help"]) & ~filters.chat(7634862283))
-async def play_help_handler(_, message):
-    help_text = (
-        "📝 **How to Use the Play Command**\n\n"
-        "Usage: `/play <song name>`\n"
-        "Example: `/play Shape of You`\n\n"
-        "This command works only in groups.\n\n"
-        "**Instructions in Multiple Languages:**\n\n"
-        "🇬🇧 **English:** Use `/play` followed by the song name.\n"
-        "🇪🇸 **Español:** Usa `/play` seguido del nombre de la canción.\n"
-        "🇫🇷 **Français:** Utilisez `/play` suivi du nom de la chanson.\n"
-        "🇩🇪 **Deutsch:** Verwenden Sie `/play` gefolgt vom Namen des Liedes.\n"
-        "🇨🇳 **中文:** 使用 `/play` 后跟歌曲名称。\n"
-        "🇷🇺 **Русский:** Используйте `/play`, за которым следует название песни.\n"
-        "🇦🇪 **عربي:** استخدم `/play` متبوعًا باسم الأغنية.\n"
-        "🇲🇲 **မြန်မာ:** `/play` နဲ့ သီချင်းအမည်ကို ထည့်ပါ။\n"
-        "🇮🇳 **हिन्दी:** `/play` के बाद गीत का नाम लिखें।"
-    )
-    await message.reply(help_text)
 
 
 @bot.on_message(filters.group & filters.command("clear"))
