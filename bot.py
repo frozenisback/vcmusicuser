@@ -2791,18 +2791,29 @@ async def kick_handler(_, message):
 
 
 BOT_ID = 7598576464
+IGNORE_IDS = {7634862283, 6565013496, 7598576464}
 
 @bot.on_message(
+    filters.private |
     filters.reply |
     filters.command(["ai", "ask", "playlist", "help", "play"]) |
     filters.regex(r"(?i)\b(hi|hello|hey|yo)\b")
 )
 async def ai_handler(_, message: Message):
+    # --- Ignore messages from blocked IDs ---
+    if message.from_user and message.from_user.id in IGNORE_IDS:
+        return
+
     user_text = None
     context = {}
 
+    # --- Case 0: Always take private messages as query ---
+    if message.chat.type == "private":
+        user_text = message.text or message.caption or ""
+        context["type"] = "private"
+
     # --- Case 1: Reply to bot ---
-    if (
+    elif (
         message.reply_to_message 
         and message.reply_to_message.from_user 
         and message.reply_to_message.from_user.id == BOT_ID
@@ -2832,7 +2843,7 @@ async def ai_handler(_, message: Message):
 
     # --- If no valid input at all ---
     if not user_text:
-        return  # silently ignore if not a command, not a reply, not a greeting
+        return  # silently ignore if nothing matches
 
     # Temporary "thinking" message
     thinking_msg = await message.reply_text("✨ **Thinking...**")
@@ -2887,7 +2898,6 @@ async def ai_handler(_, message: Message):
 
     # Edit "thinking" message
     await thinking_msg.edit_text(formatted_reply, parse_mode=ParseMode.MARKDOWN)
-
 
 
 
