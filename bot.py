@@ -2790,6 +2790,105 @@ async def kick_handler(_, message):
     await message.reply(f"👢 User [{user_id}](tg://user?id={user_id}) has been kicked.")
 
 
+BOT_ID = 7598576464
+
+@bot.on_message(
+    filters.reply |
+    filters.command(["ai", "ask", "playlist", "help", "play"]) |
+    filters.regex(r"(?i)\b(hi|hello|hey|yo)\b")
+)
+async def ai_handler(_, message: Message):
+    user_text = None
+    context = {}
+
+    # --- Case 1: Reply to bot ---
+    if (
+        message.reply_to_message 
+        and message.reply_to_message.from_user 
+        and message.reply_to_message.from_user.id == BOT_ID
+    ):
+        replied_text = message.reply_to_message.text or message.reply_to_message.caption
+        context["replied_to"] = replied_text
+        user_text = message.text
+        context["type"] = "reply"
+
+    # --- Case 2: Commands ---
+    elif message.text and message.text.split(maxsplit=1)[0].lower() in ["/ai", "/ask", "/playlist", "/help", "/play"]:
+        cmd = message.text.split(maxsplit=1)[0].lower()
+        user_text = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None
+        context["type"] = "command"
+        # Show error only if it's an empty command (not a reply)
+        if not user_text:
+            await message.reply_text(
+                "❌ Please provide a query.\n\n"
+                "_Reply to a bot message or use commands like_ /ai, /playlist, /play."
+            )
+            return
+
+    # --- Case 3: Greetings ---
+    elif message.text and re.search(r"(?i)\b(hi|hello|hey|yo)\b", message.text):
+        user_text = message.text
+        context["type"] = "greeting"
+
+    # --- If no valid input at all ---
+    if not user_text:
+        return  # silently ignore if not a command, not a reply, not a greeting
+
+    # Temporary "thinking" message
+    thinking_msg = await message.reply_text("✨ **Thinking...**")
+
+    # Clean helper
+    def strip_non_text(text):
+        if not text:
+            return ""
+        return text if re.search(r"[A-Za-z0-9]", text) else ""
+
+    # Build structured prompt
+    prompt = {
+        "system_instruction": (
+            "You are an AI assistant inside a Telegram music bot called Frozen Music by Kust Bots.\n"
+            "Always help users in a friendly way with **emojis** and clear formatting.\n\n"
+            "Supported commands:\n"
+            "- **/play <song>** → Play music 🎶\n"
+            "- **/playlist** → View & manage playlist 📂\n"
+            "- **/skip** → Skip track ⏭️\n"
+            "- **/stop** → Stop music ⏹️\n"
+            "- **/start** → Show commands 📜\n\n"
+            "If user asks how to play their playlist:\n"
+            "1. Type `/playlist`\n"
+            "2. Tap **Play Your Playlist** ▶️\n"
+            "3. Songs will start playing automatically!\n\n"
+            "Do NOT mention external platforms, meta, APIs, or any technical details—only focus on helping."
+        ),
+        "query": strip_non_text(user_text),
+        "context": {
+            "type": context.get("type", ""),
+            "replied_to": strip_non_text(context.get("replied_to", ""))
+        }
+    }
+
+    # Call external AI API
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.ashlynn-repo.tech/chat/",
+                params={
+                    "question": json.dumps(prompt),
+                    "model": "meta-ai"
+                }
+            ) as resp:
+                data = await resp.json()
+                ai_reply = data.get("response", "⚠️ **AI gave no response.**")
+    except Exception:
+        ai_reply = "⚠️ **Something went wrong while contacting the AI.**"
+
+    # Send exactly as returned
+    formatted_reply = ai_reply
+
+    # Edit "thinking" message
+    await thinking_msg.edit_text(formatted_reply, parse_mode=ParseMode.MARKDOWN)
+
+
 
 
 @bot.on_message(filters.group & filters.command(["stop", "end"]))
