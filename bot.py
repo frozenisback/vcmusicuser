@@ -1400,21 +1400,30 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
 
     # 1) “Processing…” message
     processing_message = message
-    status_text = (
-        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\n"
-        "<b>ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ᴀ ꜰᴇᴡ ꜱᴇᴄᴏɴᴅꜱ…</b>"
-        if is_premium
-        else "<b>✨ Hold on…\n"
-             "Your track is getting tuned, polished, and sent to the stage! 🥀\n"
-             "💕 Streaming will start in just a moment…</b>"
-    )
+    if is_premium:
+        status_text = (
+            "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\n"
+            "⚠️ <b>Server is experiencing a slight delay...</b>\n"
+            "⏳ It may take up to 20 seconds to start streaming.\n"
+            "🎵 Add your songs to the queue while you wait!\n"
+            "🚀 After this, playback will be lightning-fast (~0.5s)!"
+        )
+    else:
+        status_text = (
+            "✨ Hold on…\n"
+            "⚠️ <b>Server is experiencing a slight delay...</b>\n"
+            "⏳ It may take up to 20 seconds to start streaming.\n"
+            "🎵 Add your songs to the queue while you wait!\n"
+            "💕 Streaming will start in just a moment (~0.5s)!"
+        )
+
     try:
         if processing_message:
-            await processing_message.edit_text(status_text, parse_mode=ParseMode.HTML)
+            await processing_message.edit_text(status_text, parse_mode=ParseMode.HTML, reply_markup=support_buttons)
         else:
-            processing_message = await bot.send_message(chat_id, status_text, parse_mode=ParseMode.HTML)
+            processing_message = await bot.send_message(chat_id, status_text, parse_mode=ParseMode.HTML, reply_markup=support_buttons)
     except Exception:
-        processing_message = await bot.send_message(chat_id, status_text, parse_mode=ParseMode.HTML)
+        processing_message = await bot.send_message(chat_id, status_text, parse_mode=ParseMode.HTML, reply_markup=support_buttons)
 
     # 2) Pick or reuse an API server
     if chat_id in chat_api_server:
