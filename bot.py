@@ -1383,8 +1383,9 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
 
 async def start_playback_task(chat_id: int, message: Message, requester_id: int = None):
     global global_api_index, global_playback_count
+    
     print(f"Current playback tasks: {len(chat_containers.get(chat_id, []))}; Chat ID: {chat_id}")
-
+    
     # Determine premium status
     is_premium = requester_id in premium_users if requester_id is not None else False
 
@@ -1400,26 +1401,28 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
 
     # 1) “Processing…” message
     processing_message = message
-
-    if is_premium:
-        status_text = (
-            "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\n"
-            "<b>ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ᴀ ꜰᴇᴡ ꜱᴇᴄᴏɴᴅꜱ…</b>"
-        )
-    else:
-        status_text = (
-            "✨ Hold on…\n"
-            "Your track is getting tuned, polished, and sent to the stage! 🥀\n"
-            "💕 Streaming will start in just a moment…"
-        )
+    status_text = (
+        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\n"
+        "<b>ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ᴀ ꜰᴇᴡ ꜱᴇᴄᴏɴᴅꜱ…</b>"
+        if is_premium
+        else
+        "<b>✨ Hold on…\n"
+        "Your track is getting tuned, polished, and sent to the stage! 🥀\n"
+        "💕 Streaming will start in just a moment…</b>"
+    )
 
     try:
         if processing_message:
-            await processing_message.edit_text(status_text, parse_mode=ParseMode.HTML, reply_markup=support_buttons)
+            await processing_message.edit_text(status_text, parse_mode=ParseMode.HTML)
         else:
-            processing_message = await bot.send_message(chat_id, status_text, parse_mode=ParseMode.HTML, reply_markup=support_buttons)
+            processing_message = await bot.send_message(
+                chat_id, status_text, parse_mode=ParseMode.HTML
+            )
     except Exception:
-        processing_message = await bot.send_message(chat_id, status_text, parse_mode=ParseMode.HTML, reply_markup=support_buttons)
+        processing_message = await bot.send_message(
+            chat_id, status_text, parse_mode=ParseMode.HTML
+        )
+
 
     # 2) Pick or reuse an API server
     if chat_id in chat_api_server:
