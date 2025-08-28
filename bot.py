@@ -93,7 +93,7 @@ BACKUP_SEARCH_API_URL= "https://odd-block-a945.tenopno.workers.dev"
 # ─── MongoDB Setup ─────────────────────────────────────────
 mongo_uri = os.environ.get(
     "MONGO_URI",
-    "mongodb+srv://frozenbotss:frozenbots@cluster0.s0tak.mongodb.net/?retryWrites=true&w=majority"
+    "mongodb+srv://frozenbotss:noobop0011@cluster0.s0tak.mongodb.net/?retryWrites=true&w=majority"
 )
 mongo_client = MongoClient(mongo_uri)
 db = mongo_client["music_bot"]
