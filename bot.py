@@ -605,11 +605,19 @@ async def download_bytes_from_url(url: str) -> bytes:
             resp.raise_for_status()
             return await resp.read()
 
+def format_duration_for_card(seconds: int) -> str:
+    # Converts seconds to M:SS format (for display on card)
+    if seconds <= 0:
+        return "0:00"
+    m, s = divmod(seconds, 60)
+    return f"{m}:{s:02d}"
+
 def create_frosted_card(
     image_bytes: bytes,
     sender_username: str = "@username",
     title_text: str = "Title",
-    artist_text: str = "Artist Name"
+    artist_text: str = "Artist Name",
+    time_text: str = "0:00"   # <─ accept dynamic time text
 ) -> BytesIO:
     """
     1. Blurs the background.
@@ -766,8 +774,7 @@ def create_frosted_card(
         [cx - thumb_radius, cy - thumb_radius, cx + thumb_radius, cy + thumb_radius],
         fill=(255, 255, 255, 255)
     )
-    # Glow behind time text
-    time_text = "4:20"
+    # Glow behind time text (now uses passed-in time_text)
     time_pos = (bar_x1 + 10, bar_y0 - 8)
     add_glow(time_text, time_pos, font_time)
     draw.text(time_pos, time_text, font=font_time, fill=(255, 255, 255, 255))
@@ -790,6 +797,7 @@ def create_frosted_card(
     canvas.convert("RGB").save(output, format="PNG")
     output.seek(0)
     return output
+
 @bot.on_message(
     filters.group & filters.regex(
         r'^/(?!playlist\b)(?:p|ply|play)(?:command)?(?:@\w+)?(?:\s+(?P<query>.+))?$'
@@ -1167,6 +1175,7 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
                     sender_username=song_info["requester"],
                     title_text=song_info['title'],
                     artist_text=song_info['requester'],
+                    time_text=format_duration_for_card(total_duration)
                 )
             except Exception as e:
                 print(f"Error generating frosted card: {e}")
@@ -1453,6 +1462,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
                 sender_username=f"{song_info['requester']}",
                 title_text=song_info['title'],
                 artist_text=song_info['requester'],
+                time_text=format_duration_for_card(total_duration)
             )
         except Exception:
             frosted_buffer = None
