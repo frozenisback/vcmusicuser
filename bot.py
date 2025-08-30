@@ -1462,7 +1462,6 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
                 sender_username=f"{song_info['requester']}",
                 title_text=song_info['title'],
                 artist_text=song_info['requester'],
-                time_text=format_duration_for_card(total_duration)
             )
         except Exception:
             frosted_buffer = None
