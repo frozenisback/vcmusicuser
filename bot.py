@@ -594,6 +594,7 @@ async def help_util_callback(_, callback_query):
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
     await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 MAX_TITLE_LEN = 20
+
 async def download_bytes_from_url(url: str) -> bytes:
     """
     Given a URL, perform an HTTP GET and return the raw bytes.
@@ -603,6 +604,7 @@ async def download_bytes_from_url(url: str) -> bytes:
         async with sess.get(url) as resp:
             resp.raise_for_status()
             return await resp.read()
+
 def create_frosted_card(
     image_bytes: bytes,
     sender_username: str = "@username",
@@ -618,6 +620,10 @@ def create_frosted_card(
     6. Adds a LIVE badge at the top.
     Plus: Adds a royal white-golden glow behind all text and makes text very bright.
     """
+    import re
+    # Strip HTML tags from sender_username if any
+    sender_username = re.sub(r"<.*?>", "", str(sender_username)).strip()
+
     # 0) Enforce title character limit (truncate if necessary)
     if len(title_text) > MAX_TITLE_LEN:
         title_text = title_text[: (MAX_TITLE_LEN - 1) ] + "…"
@@ -764,7 +770,7 @@ def create_frosted_card(
     time_text = "4:20"
     time_pos = (bar_x1 + 10, bar_y0 - 8)
     add_glow(time_text, time_pos, font_time)
-    draw.text(time_pos, time_text, font=font_time, fill=(255, 255, 255, 255))
+    draw.text(time_pos, time_text, font=time_font, fill=(255, 255, 255, 255))
     # 16) “Requested by @username” with glow
     footer_text = f"Requested by {sender_username}"
     footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
@@ -774,7 +780,7 @@ def create_frosted_card(
     add_glow(footer_text, (footer_x, footer_y), font_footer)
     draw.text((footer_x, footer_y), footer_text, font=font_footer, fill=(255, 255, 255, 230))
     # 17) “Powered by VibeshiftBots” with glow
-    watermark_text = "Powered by VibeshiftBots"
+    watermark_text = "Powered by KustBots"
     wm_x = card_x + 30
     wm_y = card_y + card_h - 30
     add_glow(watermark_text, (wm_x, wm_y), font_watermark)
