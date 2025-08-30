@@ -51,11 +51,12 @@ from pytgcalls.types.stream import StreamEnded
 from typing import Union
 import urllib
 
-API_ID = 29568441
-API_HASH = "b32ec0fb66d22da6f77d355fbace4f2a"
-BOT_TOKEN = "7598576464:AAFtOfwYwLp1kcAFLmie99HVzubUVgtTU-k"
-ASSISTANT_SESSION = "BQHDLbkAXOR_HiFwYc_fJOHdpF0J7kPCU2gPnV-BNpgehzXc03IFouSAAwdN3dhWgYIysCSyneEhKk2F55gFT2WuHjUZvEIh0KDIe3_xAXqhlZ_jJOaCgF0FBypYD-zC99QKqeS5FdlpMJTjcRMCBDUV7M_RoI0Gttg5nV8tA_iCjpO8hbjw9TDSIpaNgeYCrXd3o1kvcbm6y6jfekSBUvtRj76xYVG14f0BImjKnFzH8Ad86FdytYR0KdZ_FFlVBWz4cXg4gSajOEkTF-swaLOmEC8gyGLflVTKq45LizoCT_mgj2WB-BfnmEfLFXfxkNvkm8HnF1uclSzU42mjuktGJvJtHgAAAAHHEsDLAA"
-OWNER_ID = 5268762773
+
+API_ID = int(os.environ.get("API_ID"))
+API_HASH = os.environ.get("API_HASH")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+ASSISTANT_SESSION = os.environ.get("ASSISTANT_SESSION")
+OWNER_ID = int(os.environ.get("OWNER_ID", 5268762773))
 # ——— Monkey-patch resolve_peer ——————————————
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 _original_resolve_peer = Client.resolve_peer
@@ -88,8 +89,8 @@ ASSISTANT_USERNAME = "@xyz92929"
 ASSISTANT_CHAT_ID = 7634862283
 API_ASSISTANT_USERNAME = "@xyz92929"
 # API Endpoints
-API_URL = "https://mute-sky-a701.frozenbotsweb.workers.dev/search?q="
-DOWNLOAD_API_URL = "https://frozen-youtube-api-search-link-b89x.onrender.com/download?url="
+API_URL = os.environ.get("API_URL")
+DOWNLOAD_API_URL = os.environ.get("DOWNLOAD_API_URL")
 BACKUP_SEARCH_API_URL= "https://odd-block-a945.tenopno.workers.dev"
 # ─── MongoDB Setup ─────────────────────────────────────────
 mongo_uri = os.environ.get(
