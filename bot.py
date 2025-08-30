@@ -621,9 +621,9 @@ def create_frosted_card(
     Plus: Adds a royal white-golden glow behind all text and makes text very bright.
     """
     import re
-    # Strip HTML tags from sender_username if any
+    # --- FIX: Strip HTML tags from sender_username if any ---
     sender_username = re.sub(r"<.*?>", "", str(sender_username)).strip()
-
+    
     # 0) Enforce title character limit (truncate if necessary)
     if len(title_text) > MAX_TITLE_LEN:
         title_text = title_text[: (MAX_TITLE_LEN - 1) ] + "…"
@@ -770,7 +770,7 @@ def create_frosted_card(
     time_text = "4:20"
     time_pos = (bar_x1 + 10, bar_y0 - 8)
     add_glow(time_text, time_pos, font_time)
-    draw.text(time_pos, time_text, font=time_font, fill=(255, 255, 255, 255))
+    draw.text(time_pos, time_text, font=font_time, fill=(255, 255, 255, 255))
     # 16) “Requested by @username” with glow
     footer_text = f"Requested by {sender_username}"
     footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
