@@ -2498,7 +2498,7 @@ async def kick_handler(_, message):
     await bot.unban_chat_member(message.chat.id, user_id)  
     await message.reply(f"👢 User [{user_id}](tg://user?id={user_id}) has been kicked.")
 BOT_ID = 7598576464
-IGNORE_IDS = {7634862283, 6565013496, 7598576464}
+IGNORE_IDS = {7634862283, 6565013496, 7598576464, -1002830799357}
 CMD_LIST = ["ai", "ask", "playlist", "help", "play"]
 # --- Custom filter: only replies to our bot's messages ---
 reply_to_bot = filters.create(
