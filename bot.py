@@ -2415,15 +2415,11 @@ async def ban_handler(_, message: Message):
 RUPEE_TO_USD = 0.012  # approximate conversion rate
 
 def escape_html(text: str) -> str:
-    """
-    Escape text for safe HTML output in Telegram messages.
-    """
+    """Escape text for safe HTML output in Telegram messages."""
     return html_lib.escape(text)
 
 def convert_rupees_to_usd(text: str) -> str:
-    """
-    Replace first occurrence of ₹<number> with ₹<number> (~$<usd> USD).
-    """
+    """Replace first occurrence of ₹<number> with ₹<number> (~$<usd> USD)."""
     match = re.search(r"₹(\d+(?:\.\d+)?)", text)
     if not match:
         return text
@@ -2459,29 +2455,25 @@ def beautify_message(text: str) -> str:
 
     # 3) Extract "Rain of ..." line
     rain_line_match = re.search(r"(Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
-    if rain_line_match:
-        rain_line = escape_html(rain_line_match.group(1))
-    else:
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        rain_line = escape_html(lines[0]) if lines else ""
+    rain_line = escape_html(rain_line_match.group(1)) if rain_line_match else ""
 
     # 4) Users list → each user inside its own blockquote
-    users_match = re.search(r"Users:\s*(.+)", text, flags=re.IGNORECASE)
     users_html = ""
+    users_match = re.search(r"Users:\s*(.+)", text, flags=re.IGNORECASE)
     if users_match:
-        users_list = [u.strip() for u in re.split(r",\s*", users_match.group(1).strip()) if u.strip()]
+        users_list = [u.strip() for u in re.split(r",\s*", users_match.group(1)) if u.strip()]
+        # Each user in its own <blockquote>
         user_blocks = [f"<blockquote>• {escape_html(u)}</blockquote>" for u in users_list]
-        # Join users with line breaks to prevent footer from sticking
-        users_html = "<br/>".join(user_blocks)
+        users_html = "\n".join(user_blocks)  # Use newline to separate blockquotes
 
-    # 5) Footer (underline + italic + bold), two lines below users
+    # 5) Footer: underline + italic + bold, two lines below users
     footer_html = "<br/><br/><b><i><u>✨ Powered by @kustbots ✨</u></i></b>"
 
-    # 6) Assemble final HTML message
-    parts = [heading_html, rain_line, users_html, footer_html]
+    # 6) Assemble final HTML message with proper separation
+    final_html = "<br/><br/>".join(
+        section for section in [heading_html, rain_line, users_html, footer_html] if section
+    )
 
-    # Ensure proper separation with <br/><br/> between sections
-    final_html = "<br/><br/>".join([p for p in parts if p])
     return final_html
 
 # --- Handler ---
