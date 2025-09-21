@@ -2424,7 +2424,6 @@ def escape_html(text: str) -> str:
 def convert_rupees_to_usd(text: str) -> str:
     """
     Replace first occurrence of ₹<number> with ₹<number> (~$<usd> USD).
-    Keeps one decimal place in INR display and two decimals for USD.
     """
     match = re.search(r"₹(\d+(?:\.\d+)?)", text)
     if not match:
@@ -2436,15 +2435,17 @@ def convert_rupees_to_usd(text: str) -> str:
 
 def beautify_message(text: str) -> str:
     """
-    Produce the desired HTML-formatted message:
+    Output example:
 
-    <u>RAIN ALERT IN INDIA!</u>
+    <u><b>RAIN ALERT IN INDIA!</b></u>
 
     Rain of ₹233.0 (~$2.80 USD) SOL for 10 users.
 
-    <blockquote>• Oppo18<br/>• Robinhood62<br/> ...</blockquote>
+    <blockquote>• Oppo18</blockquote>
+    <blockquote>• Robinhood62</blockquote>
+    ...
 
-    ✨ Powered by @kustbots ✨
+    <u><i>✨ Powered by @kustbots ✨</i></u>
     """
     if not text:
         return ""
@@ -2452,31 +2453,27 @@ def beautify_message(text: str) -> str:
     # 1) Convert ₹ -> show USD
     text = convert_rupees_to_usd(text)
 
-    # 2) Force the underlined headline
-    heading_html = "<u>RAIN ALERT IN INDIA!</u>"
+    # 2) Heading: underline + bold
+    heading_html = "<u><b>RAIN ALERT IN INDIA!</b></u>"
 
-    # 3) Try to extract a "Rain of ..." sentence; fallback to the first non-empty line
+    # 3) Extract "Rain of ..." line
     rain_line_match = re.search(r"(Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
     if rain_line_match:
         rain_line = escape_html(rain_line_match.group(1))
     else:
-        # fallback: first non-empty line after trimming
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         rain_line = escape_html(lines[0]) if lines else ""
 
-    # 4) Users: convert "Users: A, B, C" into HTML blockquote with bullet lines
+    # 4) Users list → each user inside its own blockquote
     users_match = re.search(r"Users:\s*(.+)", text, flags=re.IGNORECASE)
     users_html = ""
     if users_match:
-        # Split on comma and handle trailing commas/spaces/newlines
         users_list = [u.strip() for u in re.split(r",\s*", users_match.group(1).strip()) if u.strip()]
-        # Escape HTML-sensitive chars in usernames
-        users_lines = [f"• {escape_html(u)}" for u in users_list]
-        # Join with <br/> and wrap in <blockquote>
-        users_html = "<blockquote>" + "<br/>".join(users_lines) + "</blockquote>"
+        user_blocks = [f"<blockquote>• {escape_html(u)}</blockquote>" for u in users_list]
+        users_html = "".join(user_blocks)
 
-    # 5) Footer (branding)
-    footer_html = "✨ Powered by @kustbots ✨"
+    # 5) Footer (underline + italic)
+    footer_html = "<u><i>✨ Powered by @kustbots ✨</i></u>"
 
     # 6) Assemble final HTML message
     parts = [heading_html]
@@ -2489,20 +2486,22 @@ def beautify_message(text: str) -> str:
     final_html = "<br/><br/>".join(parts)
     return final_html
 
-# --- Handler (Kurigram / Pyrogram style) ---
+# --- Handler ---
 @assistant.on_message(filters.chat([-1002154728967, -1003087943509]))
 async def forward_rain_alerts(_, message):
     try:
-        # Use message.text or message.caption (whichever is present)
         source_text = message.text or message.caption or ""
-        # Only process messages that start with the exact prefix "🌧☔️ Rain"
+        # Only process messages that start with "🌧☔️ Rain"
         if not source_text.lstrip().startswith("🌧☔️ Rain"):
-            return  # ignore messages that don't start with the required prefix
+            return
 
         new_text = beautify_message(source_text)
 
-        # Send with HTML parsing so <u>, <blockquote> and other tags work
-        await _.send_message(-1002920923696, new_text, parse_mode=ParseMode.HTML)
+        await _.send_message(
+            -1002920923696,
+            new_text,
+            parse_mode=ParseMode.HTML
+        )
     except Exception as e:
         print(f"Forwarding error: {e}")
 
