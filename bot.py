@@ -2444,7 +2444,7 @@ def beautify_message(text):
 async def forward_rain_alerts(_, message):
     try:
         new_text = beautify_message(message.text)
-        await _.send_message(-1002920923696, new_text, parse_mode="Markdown")
+        await _.send_message(-1002920923696, new_text, parse_mode=ParseMode.HTML)
     except Exception as e:
         print(f"Forwarding error: {e}")
 
