@@ -2450,10 +2450,10 @@ def beautify_message(text: str) -> str:
     text = convert_rupees_to_usd(text)
 
     # 2) Heading: underline + bold
-    heading_html = "<u><b>RAIN ALERT IN INDIA!</b></u><br/><br/>"
+    heading_html = "<u><b>RAIN ALERT IN INDIA!</b></u>"
 
     # 3) Extract "Rain of ..." line
-    rain_line_match = re.search(r"(Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
+    rain_line_match = re.search(r"(<br/><br/>Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
     if rain_line_match:
         rain_line = escape_html(rain_line_match.group(1))
     else:
@@ -2472,7 +2472,7 @@ def beautify_message(text: str) -> str:
         users_html = "<br/>".join(user_blocks)
 
     # 5) Footer (underline + italic + bold)
-    footer_html = "<br/><br/><b><i><u>Powered by @kustbots ✨</u></i></b>"
+    footer_html = "<br/><br/><br/><b><i><u>Powered by @kustbots ✨</u></i></b>"
 
     # 6) Assemble final HTML message with proper spacing
     final_html = heading_html + "<br/><br/>"  # Heading with two line breaks
