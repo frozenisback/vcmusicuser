@@ -2413,6 +2413,7 @@ async def ban_handler(_, message: Message):
     await bot.ban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been banned.")
 
+
 RUPEE_TO_USD = 0.012  # approximate conversion rate
 
 def escape_html(text: str) -> str:
@@ -2436,18 +2437,6 @@ def convert_rupees_to_usd(text: str) -> str:
 def beautify_message(text: str) -> str:
     """
     Beautify rain alert message for Telegram HTML.
-
-    Output example:
-
-    <u><b>RAIN ALERT IN INDIA!</b></u>
-
-    Rain of ₹233.0 (~$2.80 USD) SOL for 10 users.
-
-    <blockquote>• Oppo18</blockquote>
-    <blockquote>• Robinhood62</blockquote>
-    ...
-
-    <b><i><u>✨ Powered by @kustbots ✨</u></i></b>
     """
     if not text:
         return ""
@@ -2466,16 +2455,18 @@ def beautify_message(text: str) -> str:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         rain_line = escape_html(lines[0]) if lines else ""
 
-    # 4) Users list → each user inside its own blockquote
-    users_match = re.search(r"Users:\s*(.+)", text, flags=re.IGNORECASE)
+    # 4) Extract users from "Users: ..." line
     users_html = ""
+    users_match = re.search(r"Users:\s*(.+)", text, flags=re.IGNORECASE)
     if users_match:
-        users_list = [u.strip() for u in re.split(r",\s*", users_match.group(1).strip()) if u.strip()]
+        users_text = users_match.group(1)
+        # Split by commas and clean up
+        users_list = [u.strip() for u in users_text.split(",") if u.strip()]
+        # Create blockquote for each user
         user_blocks = [f"<blockquote>• {escape_html(u)}</blockquote>" for u in users_list]
-        # Join users with line breaks to prevent footer from sticking
         users_html = "<br/>".join(user_blocks)
 
-    # 5) Footer (underline + italic + bold), two lines below users (without quote)
+    # 5) Footer (underline + italic + bold)
     footer_html = "<b><i><u>✨ Powered by @kustbots ✨</u></i></b>"
 
     # 6) Assemble final HTML message with proper spacing
