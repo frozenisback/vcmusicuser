@@ -2413,14 +2413,19 @@ async def ban_handler(_, message: Message):
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been banned.")
 
 
+import re
+import html as html_lib
+from pyrogram import filters
+from pyrogram.types import Message
+from pyrogram.enums import ParseMode
+
 RUPEE_TO_USD = 0.012  # approximate conversion rate
 
-def escape_markdown_v2(text: str) -> str:
+def escape_html(text: str) -> str:
     """
-    Escape text for safe MarkdownV2 output in Telegram messages.
+    Escape text for safe HTML output in Telegram messages.
     """
-    escape_chars = '_*[]()~`>#+-=|{}.!'
-    return ''.join(f'\\{char}' if char in escape_chars else char for char in text)
+    return html_lib.escape(text)
 
 def convert_rupees_to_usd(text: str) -> str:
     """
@@ -2436,7 +2441,7 @@ def convert_rupees_to_usd(text: str) -> str:
 
 def beautify_message(text: str) -> str:
     """
-    Beautify rain alert message for Telegram MarkdownV2.
+    Beautify rain alert message for Telegram HTML.
     """
     if not text:
         return ""
@@ -2444,40 +2449,41 @@ def beautify_message(text: str) -> str:
     # 1) Convert ₹ -> show USD
     text = convert_rupees_to_usd(text)
 
-    # 2) Heading: underline + bold (using MarkdownV2 syntax)
-    heading = "__*RAIN ALERT IN INDIA\\!*__"
+    # 2) Heading: underline + bold
+    heading_html = "<u><b>RAIN ALERT IN INDIA!</b></u><br/><br/>"
 
     # 3) Extract "Rain of ..." line
     rain_line_match = re.search(r"(Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
     if rain_line_match:
-        rain_line = escape_markdown_v2(rain_line_match.group(1))
+        rain_line = escape_html(rain_line_match.group(1))
     else:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        rain_line = escape_markdown_v2(lines[0]) if lines else ""
+        rain_line = escape_html(lines[0]) if lines else ""
 
     # 4) Extract users from "Users: ..." line
-    users_section = ""
+    users_html = ""
     users_match = re.search(r"Users:\s*(.+)", text, flags=re.IGNORECASE)
     if users_match:
         users_text = users_match.group(1)
         # Split by commas and clean up
         users_list = [u.strip() for u in users_text.split(",") if u.strip()]
-        # Create each user with bullet point
-        user_lines = [f"• {escape_markdown_v2(u)}" for u in users_list]
-        users_section = "\n".join(user_lines)
+        # Create blockquote for each user
+        user_blocks = [f"<blockquote>• {escape_html(u)}</blockquote>" for u in users_list]
+        users_html = "<br/>".join(user_blocks)
 
-    # 5) Footer
-    footer = "__*✨ Powered by @kustbots ✨*__"
+    # 5) Footer (underline + italic + bold)
+    footer_html = "<br/><br/><b><i><u>Powered by @kustbots ✨</u></i></b>"
 
-    # 6) Assemble final message with proper line breaks
-    final_message = f"{heading}\n\n{rain_line}"
+    # 6) Assemble final HTML message with proper spacing
+    final_html = heading_html + "<br/><br/>"  # Heading with two line breaks
+    final_html += rain_line + "<br/><br/>"  # Rain line with two line breaks
     
-    if users_section:
-        final_message += f"\n\n{users_section}"
+    if users_html:
+        final_html += users_html + "<br/><br/>"  # Users with two line breaks
     
-    final_message += f"\n\n{footer}"
+    final_html += footer_html  # Footer without blockquote, two lines below users
     
-    return final_message
+    return final_html
 
 # --- Handler ---
 @assistant.on_message(filters.chat([-1002154728967, -1003087943509]))
@@ -2493,7 +2499,7 @@ async def forward_rain_alerts(_, message: Message):
         await _.send_message(
             -1002920923696,
             new_text,
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode=ParseMode.HTML
         )
     except Exception as e:
         print(f"Forwarding error: {e}")
