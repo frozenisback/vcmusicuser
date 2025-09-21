@@ -2412,14 +2412,19 @@ async def ban_handler(_, message: Message):
         return
     await bot.ban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been banned.")
+
 RUPEE_TO_USD = 0.012  # approximate conversion rate
 
 def escape_html(text: str) -> str:
-    """Escape text for safe HTML output in Telegram messages."""
+    """
+    Escape text for safe HTML output in Telegram messages.
+    """
     return html_lib.escape(text)
 
 def convert_rupees_to_usd(text: str) -> str:
-    """Replace first occurrence of ₹<number> with ₹<number> (~$<usd> USD)."""
+    """
+    Replace first occurrence of ₹<number> with ₹<number> (~$<usd> USD).
+    """
     match = re.search(r"₹(\d+(?:\.\d+)?)", text)
     if not match:
         return text
@@ -2442,7 +2447,7 @@ def beautify_message(text: str) -> str:
     <blockquote>• Robinhood62</blockquote>
     ...
 
-    <br/><br/><b><i><u>✨ Powered by @kustbots ✨</u></i></b>
+    <b><i><u>✨ Powered by @kustbots ✨</u></i></b>
     """
     if not text:
         return ""
@@ -2455,30 +2460,38 @@ def beautify_message(text: str) -> str:
 
     # 3) Extract "Rain of ..." line
     rain_line_match = re.search(r"(Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
-    rain_line = escape_html(rain_line_match.group(1)) if rain_line_match else ""
+    if rain_line_match:
+        rain_line = escape_html(rain_line_match.group(1))
+    else:
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        rain_line = escape_html(lines[0]) if lines else ""
 
     # 4) Users list → each user inside its own blockquote
-    users_html = ""
     users_match = re.search(r"Users:\s*(.+)", text, flags=re.IGNORECASE)
+    users_html = ""
     if users_match:
-        users_list = [u.strip() for u in re.split(r",\s*", users_match.group(1)) if u.strip()]
-        # Each user in its own <blockquote>
+        users_list = [u.strip() for u in re.split(r",\s*", users_match.group(1).strip()) if u.strip()]
         user_blocks = [f"<blockquote>• {escape_html(u)}</blockquote>" for u in users_list]
-        users_html = "\n".join(user_blocks)  # Use newline to separate blockquotes
+        # Join users with line breaks to prevent footer from sticking
+        users_html = "<br/>".join(user_blocks)
 
-    # 5) Footer: underline + italic + bold, two lines below users
-    footer_html = "<br/><br/><b><i><u>✨ Powered by @kustbots ✨</u></i></b>"
+    # 5) Footer (underline + italic + bold), two lines below users (without quote)
+    footer_html = "<b><i><u>✨ Powered by @kustbots ✨</u></i></b>"
 
-    # 6) Assemble final HTML message with proper separation
-    final_html = "<br/><br/>".join(
-        section for section in [heading_html, rain_line, users_html, footer_html] if section
-    )
-
+    # 6) Assemble final HTML message with proper spacing
+    final_html = heading_html + "<br/><br/>"  # Heading with two line breaks
+    final_html += rain_line + "<br/><br/>"  # Rain line with two line breaks
+    
+    if users_html:
+        final_html += users_html + "<br/><br/>"  # Users with two line breaks
+    
+    final_html += footer_html  # Footer without blockquote, two lines below users
+    
     return final_html
 
 # --- Handler ---
 @assistant.on_message(filters.chat([-1002154728967, -1003087943509]))
-async def forward_rain_alerts(_, message):
+async def forward_rain_alerts(_, message: Message):
     try:
         source_text = message.text or message.caption or ""
         # Only process messages that start with "🌧☔️ Rain"
