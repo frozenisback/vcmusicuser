@@ -2411,6 +2411,43 @@ async def ban_handler(_, message: Message):
         return
     await bot.ban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been banned.")
+
+RUPEE_TO_USD = 0.012  # approximate conversion rate
+
+def convert_rupees_to_usd(text):
+    # Find ₹ amount in text
+    match = re.search(r"₹(\d+(?:\.\d+)?)", text)
+    if match:
+        inr = float(match.group(1))
+        usd = inr * RUPEE_TO_USD
+        return re.sub(r"₹\d+(?:\.\d+)?", f"₹{inr} (~${usd:.2f} USD)", text)
+    return text
+
+def beautify_message(text):
+    # Add emojis, headers, formatting
+    text = text.replace("Rain in India", "🌦️💧 *RAIN ALERT IN INDIA!* 💧🌦️")
+    text = convert_rupees_to_usd(text)
+    
+    # Highlight users nicely
+    users_match = re.search(r"Users:\s*(.+)", text)
+    if users_match:
+        users_list = users_match.group(1).split(", ")
+        users_str = "\n".join([f"• {u}" for u in users_list])
+        text = re.sub(r"Users: .+", f"*Users who received rain:*\n{users_str}", text)
+    
+    # Replace the "By: rain-bot." line with your branding
+    text = re.sub(r"By:.*", "✨ *Powered by @KustBots* ✨", text)
+    
+    return text
+
+@assistant.on_message(filters.chat(-1002154728967))
+async def forward_rain_alerts(_, message):
+    try:
+        new_text = beautify_message(message.text)
+        await _.send_message(-1002920923696, new_text)
+    except Exception as e:
+        print(f"Forwarding error: {e}")
+
 @bot.on_message(filters.group & filters.command("unban"))
 @safe_handler
 async def unban_handler(_, message: Message):
