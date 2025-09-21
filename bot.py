@@ -2445,7 +2445,7 @@ def beautify_message(text: str) -> str:
     <blockquote>• Robinhood62</blockquote>
     ...
 
-    <u><i>✨ Powered by @kustbots ✨</i></u>
+    <br/><br/><b><i><u>✨ Powered by @kustbots ✨</u></i></b>
     """
     if not text:
         return ""
@@ -2470,10 +2470,10 @@ def beautify_message(text: str) -> str:
     if users_match:
         users_list = [u.strip() for u in re.split(r",\s*", users_match.group(1).strip()) if u.strip()]
         user_blocks = [f"<blockquote>• {escape_html(u)}</blockquote>" for u in users_list]
-        users_html = "".join(user_blocks)
+        users_html = "<br/>".join(user_blocks)
 
-    # 5) Footer (underline + italic)
-    footer_html = "<u><i>✨ Powered by @kustbots ✨</i></u>"
+    # 5) Footer (underline + italic + bold), two lines below users
+    footer_html = "<br/><br/><b><i><u>✨ Powered by @kustbots ✨</u></i></b>"
 
     # 6) Assemble final HTML message
     parts = [heading_html]
@@ -2485,6 +2485,25 @@ def beautify_message(text: str) -> str:
 
     final_html = "<br/><br/>".join(parts)
     return final_html
+
+# --- Handler ---
+@assistant.on_message(filters.chat([-1002154728967, -1003087943509]))
+async def forward_rain_alerts(_, message):
+    try:
+        source_text = message.text or message.caption or ""
+        # Only process messages that start with "🌧☔️ Rain"
+        if not source_text.lstrip().startswith("🌧☔️ Rain"):
+            return
+
+        new_text = beautify_message(source_text)
+
+        await _.send_message(
+            -1002920923696,
+            new_text,
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        print(f"Forwarding error: {e}")
 
 # --- Handler ---
 @assistant.on_message(filters.chat([-1002154728967, -1003087943509]))
