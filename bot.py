@@ -2440,7 +2440,7 @@ def beautify_message(text):
     
     return text
 
-@assistant.on_message(filters.chat(-1002154728967))
+@assistant.on_message(filters.chat((-1002154728967, -1002703032590)))
 async def forward_rain_alerts(_, message):
     try:
         new_text = beautify_message(message.text)
