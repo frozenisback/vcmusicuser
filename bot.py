@@ -2435,6 +2435,8 @@ def convert_rupees_to_usd(text: str) -> str:
 
 def beautify_message(text: str) -> str:
     """
+    Beautify rain alert message for Telegram HTML.
+
     Output example:
 
     <u><b>RAIN ALERT IN INDIA!</b></u>
@@ -2470,20 +2472,17 @@ def beautify_message(text: str) -> str:
     if users_match:
         users_list = [u.strip() for u in re.split(r",\s*", users_match.group(1).strip()) if u.strip()]
         user_blocks = [f"<blockquote>• {escape_html(u)}</blockquote>" for u in users_list]
+        # Join users with line breaks to prevent footer from sticking
         users_html = "<br/>".join(user_blocks)
 
     # 5) Footer (underline + italic + bold), two lines below users
     footer_html = "<br/><br/><b><i><u>✨ Powered by @kustbots ✨</u></i></b>"
 
     # 6) Assemble final HTML message
-    parts = [heading_html]
-    if rain_line:
-        parts.append(rain_line)
-    if users_html:
-        parts.append(users_html)
-    parts.append(footer_html)
+    parts = [heading_html, rain_line, users_html, footer_html]
 
-    final_html = "<br/><br/>".join(parts)
+    # Ensure proper separation with <br/><br/> between sections
+    final_html = "<br/><br/>".join([p for p in parts if p])
     return final_html
 
 # --- Handler ---
