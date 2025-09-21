@@ -50,6 +50,7 @@ from pytgcalls.types import (
 from pytgcalls.types.stream import StreamEnded
 from typing import Union
 import urllib
+import html as html_lib
 
 
 API_ID = int(os.environ.get("API_ID"))
@@ -2414,36 +2415,93 @@ async def ban_handler(_, message: Message):
 
 RUPEE_TO_USD = 0.012  # approximate conversion rate
 
-def convert_rupees_to_usd(text):
-    # Find ₹ amount in text
+def escape_html(text: str) -> str:
+    """
+    Escape text for safe HTML output in Telegram messages.
+    """
+    return html_lib.escape(text)
+
+def convert_rupees_to_usd(text: str) -> str:
+    """
+    Replace first occurrence of ₹<number> with ₹<number> (~$<usd> USD).
+    Keeps one decimal place in INR display and two decimals for USD.
+    """
     match = re.search(r"₹(\d+(?:\.\d+)?)", text)
-    if match:
-        inr = float(match.group(1))
-        usd = inr * RUPEE_TO_USD
-        return re.sub(r"₹\d+(?:\.\d+)?", f"₹{inr} (~${usd:.2f} USD)", text)
-    return text
+    if not match:
+        return text
+    inr = float(match.group(1))
+    usd = inr * RUPEE_TO_USD
+    inr_str = f"{inr:.1f}"
+    return re.sub(r"₹\d+(?:\.\d+)?", f"₹{inr_str} (~${usd:.2f} USD)", text, count=1)
 
-def beautify_message(text):
-    # Add emojis, headers, formatting
-    text = text.replace("Rain in India", "🌦️💧 *RAIN ALERT IN INDIA!* 💧🌦️")
+def beautify_message(text: str) -> str:
+    """
+    Produce the desired HTML-formatted message:
+
+    <u>RAIN ALERT IN INDIA!</u>
+
+    Rain of ₹233.0 (~$2.80 USD) SOL for 10 users.
+
+    <blockquote>• Oppo18<br/>• Robinhood62<br/> ...</blockquote>
+
+    ✨ Powered by @kustbots ✨
+    """
+    if not text:
+        return ""
+
+    # 1) Convert ₹ -> show USD
     text = convert_rupees_to_usd(text)
-    
-    # Highlight users nicely
-    users_match = re.search(r"Users:\s*(.+)", text)
-    if users_match:
-        users_list = users_match.group(1).split(", ")
-        users_str = "\n".join([f"• {u}" for u in users_list])
-        text = re.sub(r"Users: .+", f"*Users who received rain:*\n{users_str}", text)
-    
-    # Replace the "By: rain-bot." line with your branding
-    text = re.sub(r"By:.*", "✨ *Powered by @KustBots* ✨", text)
-    
-    return text
 
+    # 2) Force the underlined headline
+    heading_html = "<u>RAIN ALERT IN INDIA!</u>"
+
+    # 3) Try to extract a "Rain of ..." sentence; fallback to the first non-empty line
+    rain_line_match = re.search(r"(Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
+    if rain_line_match:
+        rain_line = escape_html(rain_line_match.group(1))
+    else:
+        # fallback: first non-empty line after trimming
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        rain_line = escape_html(lines[0]) if lines else ""
+
+    # 4) Users: convert "Users: A, B, C" into HTML blockquote with bullet lines
+    users_match = re.search(r"Users:\s*(.+)", text, flags=re.IGNORECASE)
+    users_html = ""
+    if users_match:
+        # Split on comma and handle trailing commas/spaces/newlines
+        users_list = [u.strip() for u in re.split(r",\s*", users_match.group(1).strip()) if u.strip()]
+        # Escape HTML-sensitive chars in usernames
+        users_lines = [f"• {escape_html(u)}" for u in users_list]
+        # Join with <br/> and wrap in <blockquote>
+        users_html = "<blockquote>" + "<br/>".join(users_lines) + "</blockquote>"
+
+    # 5) Footer (branding)
+    footer_html = "✨ Powered by @kustbots ✨"
+
+    # 6) Assemble final HTML message
+    parts = [heading_html]
+    if rain_line:
+        parts.append(rain_line)
+    if users_html:
+        parts.append(users_html)
+    parts.append(footer_html)
+
+    final_html = "<br/><br/>".join(parts)
+    return final_html
+
+# --- Handler (Kurigram / Pyrogram style) ---
 @assistant.on_message(filters.chat([-1002154728967, -1003087943509]))
 async def forward_rain_alerts(_, message):
     try:
-        new_text = beautify_message(message.text)
+        # Use message.text or message.caption (whichever is present)
+        source_text = message.text or message.caption or ""
+        # Only process messages that start with the exact prefix "🌧☔️ Rain"
+        if not source_text.lstrip().startswith("🌧☔️ Rain"):
+            return  # ignore messages that don't start with the required prefix
+
+        new_text = beautify_message(source_text)
+
+        # Send with HTML parsing so <u>, <blockquote> and other tags work
         await _.send_message(-1002920923696, new_text, parse_mode=ParseMode.HTML)
     except Exception as e:
         print(f"Forwarding error: {e}")
