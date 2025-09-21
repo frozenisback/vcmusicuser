@@ -2452,13 +2452,13 @@ def beautify_message(text: str) -> str:
     # 2) Heading: underline + bold
     heading_html = "<u><b>RAIN ALERT IN INDIA!</b></u>"
 
-    # 3) Extract "Rain of ..." line
-    rain_line_match = re.search(r"(<br/><br/>Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
+    # 3) Extract "Rain of ..." line and start it with <br/><br/>
+    rain_line_match = re.search(r"(Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
     if rain_line_match:
-        rain_line = escape_html(rain_line_match.group(1))
+        rain_line = "<br/><br/>" + escape_html(rain_line_match.group(1))
     else:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        rain_line = escape_html(lines[0]) if lines else ""
+        rain_line = "<br/><br/>" + escape_html(lines[0]) if lines else ""
 
     # 4) Extract users from "Users: ..." line
     users_html = ""
@@ -2475,13 +2475,13 @@ def beautify_message(text: str) -> str:
     footer_html = "<br/><br/><br/><b><i><u>Powered by @kustbots ✨</u></i></b>"
 
     # 6) Assemble final HTML message with proper spacing
-    final_html = heading_html + "<br/><br/>"  # Heading with two line breaks
-    final_html += rain_line + "<br/><br/>"  # Rain line with two line breaks
+    final_html = heading_html  # Heading
+    final_html += rain_line  # Rain line with leading <br/><br/>
     
     if users_html:
-        final_html += users_html + "<br/><br/>"  # Users with two line breaks
+        final_html += "<br/><br/>" + users_html  # Users with spacing
     
-    final_html += footer_html  # Footer without blockquote, two lines below users
+    final_html += footer_html  # Footer, always two lines below users
     
     return final_html
 
