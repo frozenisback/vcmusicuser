@@ -2412,7 +2412,6 @@ async def ban_handler(_, message: Message):
         return
     await bot.ban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been banned.")
-
 RUPEE_TO_USD = 0.012  # approximate conversion rate
 
 def escape_html(text: str) -> str:
@@ -2484,25 +2483,6 @@ def beautify_message(text: str) -> str:
     # Ensure proper separation with <br/><br/> between sections
     final_html = "<br/><br/>".join([p for p in parts if p])
     return final_html
-
-# --- Handler ---
-@assistant.on_message(filters.chat([-1002154728967, -1003087943509]))
-async def forward_rain_alerts(_, message):
-    try:
-        source_text = message.text or message.caption or ""
-        # Only process messages that start with "🌧☔️ Rain"
-        if not source_text.lstrip().startswith("🌧☔️ Rain"):
-            return
-
-        new_text = beautify_message(source_text)
-
-        await _.send_message(
-            -1002920923696,
-            new_text,
-            parse_mode=ParseMode.HTML
-        )
-    except Exception as e:
-        print(f"Forwarding error: {e}")
 
 # --- Handler ---
 @assistant.on_message(filters.chat([-1002154728967, -1003087943509]))
