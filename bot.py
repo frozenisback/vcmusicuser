@@ -50,6 +50,8 @@ from pytgcalls.types import (
 from pytgcalls.types.stream import StreamEnded
 from typing import Union
 import urllib
+import html
+from typing import List
 
 
 API_ID = int(os.environ.get("API_ID"))
@@ -2412,78 +2414,132 @@ async def ban_handler(_, message: Message):
     await bot.ban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been banned.")
 
-
-import re
-import html as html_lib
-from pyrogram import filters
-from pyrogram.types import Message
-from pyrogram.enums import ParseMode
-
 RUPEE_TO_USD = 0.012  # approximate conversion rate
+ZERO_WIDTH = "\u200b"  # zero-width space — used to prevent Telegram from merging consecutive blockquotes
 
 def escape_html(text: str) -> str:
     """
     Escape text for safe HTML output in Telegram messages.
     """
-    return html_lib.escape(text)
+    return html.escape(text, quote=False)
 
 def convert_rupees_to_usd(text: str) -> str:
     """
-    Replace first occurrence of ₹<number> with ₹<number> (~$<usd> USD).
+    Replace the first occurrence of ₹<number> with ₹<number> (~$<usd> USD).
+    Keeps one decimal for INR and two decimals for USD.
     """
-    match = re.search(r"₹(\d+(?:\.\d+)?)", text)
+    match = re.search(r"₹\s*(\d+(?:\.\d+)?)", text)
     if not match:
         return text
     inr = float(match.group(1))
     usd = inr * RUPEE_TO_USD
     inr_str = f"{inr:.1f}"
-    return re.sub(r"₹\d+(?:\.\d+)?", f"₹{inr_str} (~${usd:.2f} USD)", text, count=1)
+    return re.sub(r"₹\s*\d+(?:\.\d+)?", f"₹{inr_str} (~${usd:.2f} USD)", text, count=1)
+
+def extract_users(text: str, after_anchor: str = None) -> List[str]:
+    """
+    Extract a list of usernames from the message text.
+    Strategy:
+    - If after_anchor is provided (usually the Rain line), we take the substring after it.
+    - Then we remove common trailing parts like "Powered by", "✨", currency lines, etc.
+    - Finally split by bullets / separators and filter empty tokens.
+    """
+    s = text
+
+    if after_anchor:
+        idx = text.lower().find(after_anchor.lower())
+        if idx != -1:
+            s = text[idx + len(after_anchor):]
+
+    # Remove any "Powered by ..." footer if present
+    s = re.split(r"Powered by|powered by|✨", s)[0]
+
+    # Replace common bullet characters with a single separator
+    separators_re = r"[•·\u2022\-\*•,;\n\r]+"
+    parts = re.split(separators_re, s)
+
+    users = []
+    for p in parts:
+        p = p.strip()
+        # skip empty and skip obvious noise words
+        if not p:
+            continue
+        # Remove stray punctuation at ends
+        p = p.strip(" \"'•·\u2022•")
+        # ignore lines that look like "for 10 users" or "Rain of ..." or pure numbers
+        if re.match(r"^(for\b|\d+$|\d+\s+users\b|rain\b|sol\b|usdt\b|ltc\b)", p, flags=re.IGNORECASE):
+            continue
+        # final cleanup
+        if p:
+            users.append(p)
+    return users
 
 def beautify_message(text: str) -> str:
     """
     Beautify rain alert message for Telegram HTML.
+    Produces:
+      <u><b>RAIN ALERT IN INDIA!</b></u>
+      <br/><br/>
+      Rain of ₹... (~$... USD) ... for N users.
+      <br/><br/>
+      <blockquote>• user1</blockquote>&#8203;
+      <blockquote>• user2</blockquote>&#8203;
+      ...
+      <br/><br/><br/>
+      <i><u>Powered by @kustbots ✨</u></i>
+    Notes:
+      - ZERO_WIDTH is inserted between blockquotes to prevent Telegram from merging them.
+      - All user text is escaped for HTML.
     """
     if not text:
         return ""
 
-    # 1) Convert ₹ -> show USD
-    text = convert_rupees_to_usd(text)
+    # 1) Convert INR -> show USD
+    text_with_usd = convert_rupees_to_usd(text)
 
-    # 2) Heading: underline + bold
+    # 2) Heading
     heading_html = "<u><b>RAIN ALERT IN INDIA!</b></u>"
 
-    # 3) Extract "Rain of ..." line and start it with <br/><br/>
-    rain_line_match = re.search(r"(Rain of [^\n\r]+)", text, flags=re.IGNORECASE)
+    # 3) Try to extract the "Rain of ..." line (first occurrence)
+    rain_line_match = re.search(r"(Rain of[^\n\r]+)", text_with_usd, flags=re.IGNORECASE)
     if rain_line_match:
-        rain_line = "<br/><br/>" + escape_html(rain_line_match.group(1))
+        rain_line_raw = rain_line_match.group(1).strip()
+        rain_line = "<br/><br/>" + escape_html(rain_line_raw)
+        anchor = rain_line_raw  # used for extracting users after this anchor
     else:
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        rain_line = "<br/><br/>" + escape_html(lines[0]) if lines else ""
+        # fallback: first non-empty line
+        lines = [ln.strip() for ln in text_with_usd.splitlines() if ln.strip()]
+        if lines:
+            rain_line = "<br/><br/>" + escape_html(lines[0])
+            anchor = lines[0]
+        else:
+            rain_line = ""
+            anchor = None
 
-    # 4) Extract users from "Users: ..." line
+    # 4) Extract users robustly
+    users_list = extract_users(text_with_usd, after_anchor=anchor)
     users_html = ""
-    users_match = re.search(r"Users:\s*(.+)", text, flags=re.IGNORECASE)
-    if users_match:
-        users_text = users_match.group(1)
-        # Split by commas and clean up
-        users_list = [u.strip() for u in users_text.split(",") if u.strip()]
-        # Create blockquote for each user
-        user_blocks = [f"<blockquote>• {escape_html(u)}</blockquote>" for u in users_list]
-        users_html = "<br/>".join(user_blocks)
+    if users_list:
+        blocks = []
+        for u in users_list:
+            safe_u = escape_html(u)
+            # wrap each username in its own blockquote and add a zero-width space after to avoid merging
+            blocks.append(f"<blockquote>• {safe_u}</blockquote>{ZERO_WIDTH}")
+        # join with a <br/> before the first block to add spacing
+        users_html = "<br/>".join(blocks)
 
-    # 5) Footer (underline + italic + bold)
-    footer_html = "<br/><br/><br/><b><i><u>Powered by @kustbots ✨</u></i></b>"
+    # 5) Footer
+    footer_html = "<br/><br/><br/><i><u>Powered by @kustbots ✨</u></i>"
 
-    # 6) Assemble final HTML message with proper spacing
-    final_html = heading_html  # Heading
-    final_html += rain_line  # Rain line with leading <br/><br/>
-    
+    # 6) Assemble
+    final_html = heading_html
+    final_html += rain_line
     if users_html:
-        final_html += "<br/><br/>" + users_html  # Users with spacing
-    
-    final_html += footer_html  # Footer, always two lines below users
-    
+        final_html += "<br/><br/>" + users_html
+    final_html += footer_html
+
     return final_html
+
 
 # --- Handler ---
 @assistant.on_message(filters.chat([-1002154728967, -1003087943509]))
