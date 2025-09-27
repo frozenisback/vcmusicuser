@@ -1122,12 +1122,14 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         # Cancel any existing playback task for this chat
         if chat_id in playback_tasks:
             playback_tasks[chat_id].cancel()
+            
         # Validate URL
         video_url = song_info.get("url")
         if not video_url:
             print(f"Invalid video URL for song: {song_info}")
             chat_containers[chat_id].pop(0)
             return
+            
         # Notify fallback
         try:
             await message.edit(f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ ⚡ {song_info['title']}...")
@@ -1136,6 +1138,7 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
                 chat_id,
                 f"ғᴀʟʟɪɴɢ ʙᴀᴄᴋ ᴛᴏ ʟᴏᴄᴀʟ ᴘʟᴀʏʙᴀᴄᴋ ғᴏʀ ⚡ {song_info['title']}..."
             )
+            
         # Download & play locally
         media_path = await download_audio(video_url)
         await call_py.play(
@@ -1143,6 +1146,7 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
             MediaStream(media_path, video_flags=MediaStream.Flags.IGNORE)
         )
         playback_tasks[chat_id] = asyncio.current_task()
+        
         # Prepare caption & keyboard
         total_duration = parse_duration_str(song_info.get("duration", "0:00"))
         one_line = _one_line_title(song_info["title"])
@@ -1163,15 +1167,25 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         progress_button = InlineKeyboardButton(text=initial_progress, callback_data="progress")
         playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
         base_keyboard = InlineKeyboardMarkup([control_row, [progress_button], [playlist_button]])
-        # Build frosted thumbnail if available
+        
+        # Try to create frosted card if thumbnail exists
         frosted_buffer = None
         thumb_url = song_info.get("thumbnail")
+        
         if thumb_url:
             try:
-                if os.path.isfile(thumb_url):
-                    raw_thumb = open(thumb_url, "rb").read()
-                else:
+                # Handle both file paths and URLs
+                if thumb_url.startswith(("http://", "https://")):
                     raw_thumb = await download_bytes_from_url(thumb_url)
+                else:
+                    # Check if file exists before opening
+                    if os.path.exists(thumb_url):
+                        with open(thumb_url, "rb") as f:
+                            raw_thumb = f.read()
+                    else:
+                        raise FileNotFoundError(f"Thumbnail file not found: {thumb_url}")
+                
+                # Create frosted card with the thumbnail
                 frosted_buffer = create_frosted_card(
                     raw_thumb,
                     sender_username=song_info["requester"],
@@ -1180,24 +1194,45 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
                     time_text=format_duration_for_card(total_duration)
                 )
             except Exception as e:
-                print(f"Error generating frosted card: {e}")
-        # Send now-playing photo + controls
-        if frosted_buffer:
-            progress_message = await message.reply_photo(
-                photo=frosted_buffer,
-                caption=base_caption,
+                print(f"Thumbnail processing failed: {e}")
+                frosted_buffer = None
+        
+        # Send message with thumbnail if available, otherwise send text
+        try:
+            if frosted_buffer:
+                progress_message = await message.reply_photo(
+                    photo=frosted_buffer,
+                    caption=base_caption,
+                    reply_markup=base_keyboard,
+                    parse_mode=ParseMode.HTML
+                )
+            elif thumb_url and thumb_url.startswith(("http://", "https://")):
+                # Fallback to direct thumbnail URL if frosted card failed
+                progress_message = await message.reply_photo(
+                    photo=thumb_url,
+                    caption=base_caption,
+                    reply_markup=base_keyboard,
+                    parse_mode=ParseMode.HTML
+                )
+            else:
+                # Final fallback to text-only message
+                progress_message = await message.reply_text(
+                    base_caption,
+                    reply_markup=base_keyboard,
+                    parse_mode=ParseMode.HTML
+                )
+        except Exception as e:
+            print(f"Message sending failed: {e}")
+            # Ultimate fallback to text-only message
+            progress_message = await message.reply_text(
+                base_caption,
                 reply_markup=base_keyboard,
                 parse_mode=ParseMode.HTML
             )
-        else:
-            progress_message = await message.reply_photo(
-                photo=thumb_url,
-                caption=base_caption,
-                reply_markup=base_keyboard,
-                parse_mode=ParseMode.HTML
-            )
-        # Remove the “processing” message
+        
+        # Remove the "processing" message
         await message.delete()
+        
         # Kick off progress updates
         asyncio.create_task(
             update_progress_caption(
@@ -1208,7 +1243,8 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
                 base_caption
             )
         )
-        # ——— Log start of local stream in your channel —————————————
+        
+        # Log start of local stream
         asyncio.create_task(
             bot.send_message(
                 LOG_CHAT_ID,
@@ -1220,16 +1256,16 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
             )
         )
     except Exception as e:
-        # 1) Log & notify the user
+        # Log & notify the user
         print(f"Error during fallback local playback in chat {chat_id}: {e}")
         await bot.send_message(
             chat_id,
-            f"❌ Failed to play “{song_info.get('title','Unknown')}” locally: {e}"
+            f"❌ Failed to play \"{song_info.get('title','Unknown')}\" locally: {e}"
         )
-        # 2) Remove the bad track from the queue
+        # Remove the bad track from the queue
         if chat_id in chat_containers and chat_containers[chat_id]:
             chat_containers[chat_id].pop(0)
-        # 3) Advance to the next song
+        # Advance to the next song
         await skip_to_next_song(chat_id, message)
 async def start_playback_task(chat_id: int, message: Message, requester_id: int = None):
     global global_api_index, global_playback_count
