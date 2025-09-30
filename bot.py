@@ -1014,7 +1014,7 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         asyncio.create_task(
             bot.send_message(
                 LOG_CHAT_ID,
-                "#started_streaming\\n"
+                "#started_streaming\n"
                 f"• Title: {song_info.get('title','Unknown')}\\n"
                 f"• Duration: {song_info.get('duration','Unknown')}\\n"
                 f"• Requested by: {song_info.get('requester','Unknown')}\\n"
@@ -1052,12 +1052,12 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     # 1) "Processing…" message
     processing_message = message
     status_text = (
-        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\\n"
+        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\n"
         "<b>ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ᴀ ꜰᴇᴡ ꜱᴇᴄᴏɴᴅꜱ…</b>"
         if is_premium
         else
-        "<b>✨ Hold on…\\n"
-        "Your track is getting tuned, polished, and sent to the stage! 🥀\\n"
+        "<b>✨ Hold on…\n"
+        "Your track is getting tuned, polished, and sent to the stage! 🥀\n"
         "💕 Streaming will start in just a moment…</b>"
     )
     try:
@@ -1105,7 +1105,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     if status == "kicked":
         await bot.send_message(
             chat_id,
-            "❌ The assistant is banned from this group. Please unban it before playing music.\\n\\nAssistant1 username - @xyz92929\\n\\nAssistant2 username - @acekiller_010185",
+            "❌ The assistant is banned from this group. Please unban it before playing music.\n\nAssistant1 username - @xyz92929\n\nAssistant2 username - @acekiller_010185",
             reply_markup=support_buttons
         )
         return
@@ -1298,7 +1298,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     asyncio.create_task(
         bot.send_message(
             LOG_CHAT_ID,
-            "#started_streaming\\n"
+            "#started_streaming\n"
             f"• Title: {song_info.get('title','Unknown')}\n"
             f"• Duration: {song_info.get('duration','Unknown')}\n"
             f"• Requested by: {song_info.get('requester','Unknown')}\n"
