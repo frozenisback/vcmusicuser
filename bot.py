@@ -149,7 +149,7 @@ last_suggestions = {}
 global_playback_count = 0  # Increments on every new playback request
 api_server_counter = 0     # Used to select an API server in round-robin fashion
 api_servers = [
-    "https://py-tgcalls-api-1.onrender.com",
+    "https://tgapi-s5e8.onrender.com",
     "https://py-tgcalls-api-4vju.onrender.com",
     "https://playbackapi-hzy2.onrender.com",  
     "https://py-tgcalls-api-p44l.onrender.com",
