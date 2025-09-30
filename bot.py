@@ -151,7 +151,6 @@ api_server_counter = 0     # Used to select an API server in round-robin fashion
 api_servers = [
     "https://py-tgcalls-api-1.onrender.com",
     "https://py-tgcalls-api-4vju.onrender.com",
-    "http://py-tgcalls-api-yto1.onrender.com",
     "https://py-tgcalls-api-p44l.onrender.com",
     "https://py-tgcalls-api-fzk2.onrender.com",
     "https://py-tgcalls-api-vjd1.onrender.com",
@@ -162,6 +161,7 @@ api_servers = [
     "https://playbackapi-xar2.onrender.com",  # ✅ newly added
     "https://playbackapi-5gv7.onrender.com"   # ✅ newly added
 ]
+
 
 chat_api_server = {}
 global_api_index = 0
