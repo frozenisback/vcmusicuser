@@ -949,8 +949,8 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         one_line = _one_line_title(song_info["title"])
         base_caption = (
             "<blockquote>"
-            "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ</b> (Local Playback)\\n\\n"
-            f"❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\\n"
+            "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ</b> (Local Playback)\n\n"
+            f"❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\n"
             f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}"
             "</blockquote>"
         )
@@ -1226,10 +1226,10 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     one_line = _one_line_title(song_info["title"])
     base_caption = (
         "<blockquote>"
-        "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ ⏤͟͞●</b> (API Playback)</blockquote>\\n\\n"
-        f"<blockquote>❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\\n"
-        f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}\\n"
-        f"❍ <b>ʟᴅs sᴇʀᴠᴇʀ:</b> {display_server}\\n"
+        "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ ⏤͟͞●</b> (API Playback)</blockquote>\n\n"
+        f"<blockquote>❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\n"
+        f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}\n"
+        f"❍ <b>ʟᴅs sᴇʀᴠᴇʀ:</b> {display_server}\n"
         f"❍ <b>ᴍᴏᴅᴇ:</b> {'𝐏𝐫𝐞𝐦𝐢𝐮𝐦⚡' if is_premium else 'sᴛᴀɴᴅᴀʀᴅ'}"
         "</blockquote>"
     )
@@ -1297,9 +1297,9 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
         bot.send_message(
             LOG_CHAT_ID,
             "#started_streaming\\n"
-            f"• Title: {song_info.get('title','Unknown')}\\n"
-            f"• Duration: {song_info.get('duration','Unknown')}\\n"
-            f"• Requested by: {song_info.get('requester','Unknown')}\\n"
+            f"• Title: {song_info.get('title','Unknown')}\n"
+            f"• Duration: {song_info.get('duration','Unknown')}\n"
+            f"• Requested by: {song_info.get('requester','Unknown')}\n"
             f"• LDS Server: {display_server}"
         )
     )
