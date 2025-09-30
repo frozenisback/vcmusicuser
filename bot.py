@@ -77,7 +77,7 @@ def _custom_exception_handler(loop, context):
         "ID not found" in str(exc) or "Peer id invalid" in str(exc)
     ):
         return  # ignore peer‐id errors
-    # ← NEW: ignore the "NoneType has no attribute 'write'"" from get_channel_difference
+    # ← NEW: ignore the "NoneType has no attribute 'write'" from get_channel_difference
     if isinstance(exc, AttributeError) and "has no attribute 'write'" in str(exc):
         return
     # otherwise, let it bubble
@@ -197,7 +197,7 @@ def safe_handler(func):
             except Exception:
                 chat_id = "Unknown"
             error_text = (
-                f"Error in handler `{func.__name__}` (chat id: {chat_id}):\\n\\n{str(e)}"
+                f"Error in handler `{func.__name__}` (chat id: {chat_id}):\n\n{str(e)}"
             )
             print(error_text)
             # Log the error to support
@@ -259,7 +259,6 @@ async def is_api_assistant_in_chat(chat_id):
         print(f"Error checking API assistant in chat: {e}")
         return False
     
-
 def iso8601_to_seconds(iso_duration):
     try:
         duration = isodate.parse_duration(iso_duration)
@@ -313,7 +312,7 @@ async def fetch_youtube_link_backup(query):
                 if resp.status != 200:
                     raise Exception(f"Backup API returned status {resp.status}")
                 data = await resp.json()
-                # Mirror primary API's return:
+                # Mirror primary API’s return:
                 if "playlist" in data:
                     return data
                 return (
@@ -438,14 +437,14 @@ async def start_handler(_, message):
     help_text = to_bold_unicode("Help")
     # Caption with bold Unicode font for headings and feature labels
     caption = (
-        f"👋 нєу {user_link} 💠, 🥀\\n\\n"
-        ">🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\\n"
-        ">🚀 𝗧𝗢𝗣‐𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\\n"
-        ">🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟‐𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\\n"
-        ">🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\\n"
-        ">✨ 𝗔𝗨𝗧𝗢‐𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\\n"
-        ">🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\\n"
-        ">❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡 (pick random pair in group)\\n"
+        f"👋 нєу {user_link} 💠, 🥀\n\n"
+        ">🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\n"
+        ">🚀 𝗧𝗢𝗣‐𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\n"
+        ">🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟‐𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\n"
+        ">🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\n"
+        ">✨ 𝗔𝗨𝗧𝗢‐𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\n"
+        ">🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\n"
+        ">❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡 (pick random pair in group)\n"
         f"๏ ᴄʟɪᴄᴋ {help_text} ʙᴇʟᴏᴡ ғᴏʀ ᴄᴏᴍᴍᴀɴᴅ ʟɪsᴛ."
     )
     buttons = [
@@ -486,14 +485,14 @@ async def go_back_callback(_, callback_query):
     support_text = to_bold_unicode("Support")
     help_text = to_bold_unicode("Help")
     caption = (
-        f"👋 нєу {user_link} 💠, 🥀\\n\\n"
-        ">🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\\n"
-        ">🚀 𝗧𝗢𝗣‐𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\\n"
-        ">🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟‐𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\\n"
-        ">🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\\n"
-        ">✨ 𝗔𝗨𝗧𝗢‐𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\\n"
-        ">🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\\n"
-        ">❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 (pick random pair in group)\\n"
+        f"👋 нєу {user_link} 💠, 🥀\n\n"
+        ">🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\n"
+        ">🚀 𝗧𝗢𝗣‐𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\n"
+        ">🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟‐𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\n"
+        ">🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\n"
+        ">✨ 𝗔𝗨𝗧𝗢‐𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\n"
+        ">🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\n"
+        ">❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 (pick random pair in group)\n"
         f"๏ ᴄʟɪᴄᴋ {help_text} ʙᴇʟᴏᴡ ғᴏʀ ᴄᴏᴍᴍᴀɴᴅ ʟɪsᴛ."
     )
     buttons = [
@@ -534,19 +533,19 @@ async def show_help_callback(_, callback_query):
 @bot.on_callback_query(filters.regex("^help_music$"))
 async def help_music_callback(_, callback_query):
     text = (
-        ">🎵 *Music & Playback Commands*\\n\\n"
-        ">➜ `/play <song name or URL>`\\n"
-        "   • Play a song (YouTube/Spotify/Resso/Apple Music/SoundCloud).\\n"
-        "   • If replied to an audio/video, plays it directly.\\n\\n"
-        ">➜ `/playlist`\\n"
-        "   • View or manage your saved playlist.\\n\\n"
-        ">➜ `/skip`\\n"
-        "   • Skip the currently playing song. (Admins only)\\n\\n"
-        ">➜ `/pause`\\n"
-        "   • Pause the current stream. (Admins only)\\n\\n"
-        ">➜ `/resume`\\n"
-        "   • Resume a paused stream. (Admins only)\\n\\n"
-        ">➜ `/stop` or `/end`\\n"
+        ">🎵 *Music & Playback Commands*\n\n"
+        ">➜ `/play <song name or URL>`\n"
+        "   • Play a song (YouTube/Spotify/Resso/Apple Music/SoundCloud).\n"
+        "   • If replied to an audio/video, plays it directly.\n\n"
+        ">➜ `/playlist`\n"
+        "   • View or manage your saved playlist.\n\n"
+        ">➜ `/skip`\n"
+        "   • Skip the currently playing song. (Admins only)\n\n"
+        ">➜ `/pause`\n"
+        "   • Pause the current stream. (Admins only)\n\n"
+        ">➜ `/resume`\n"
+        "   • Resume a paused stream. (Admins only)\n\n"
+        ">➜ `/stop` or `/end`\n"
         "   • Stop playback and clear the queue. (Admins only)"
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
@@ -554,18 +553,18 @@ async def help_music_callback(_, callback_query):
 @bot.on_callback_query(filters.regex("^help_admin$"))
 async def help_admin_callback(_, callback_query):
     text = (
-        "🛡️ *Admin & Moderation Commands*\\n\\n"
-        ">➜ `/mute @user`\\n"
-        "   • Mute a user indefinitely. (Admins only)\\n\\n"
-        ">➜ `/unmute @user`\\n"
-        "   • Unmute a previously muted user. (Admins only)\\n\\n"
-        ">➜ `/tmute @user <minutes>`\\n"
-        "   • Temporarily mute for a set duration. (Admins only)\\n\\n"
-        ">➜ `/kick @user`\\n"
-        "   • Kick (ban + unban) a user immediately. (Admins only)\\n\\n"
-        ">➜ `/ban @user`\\n"
-        "   • Ban a user. (Admins only)\\n\\n"
-        ">➜ `/unban @user`\\n"
+        "🛡️ *Admin & Moderation Commands*\n\n"
+        ">➜ `/mute @user`\n"
+        "   • Mute a user indefinitely. (Admins only)\n\n"
+        ">➜ `/unmute @user`\n"
+        "   • Unmute a previously muted user. (Admins only)\n\n"
+        ">➜ `/tmute @user <minutes>`\n"
+        "   • Temporarily mute for a set duration. (Admins only)\n\n"
+        ">➜ `/kick @user`\n"
+        "   • Kick (ban + unban) a user immediately. (Admins only)\n\n"
+        ">➜ `/ban @user`\n"
+        "   • Ban a user. (Admins only)\n\n"
+        ">➜ `/unban @user`\n"
         "   • Unban a previously banned user. (Admins only)"
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
@@ -573,10 +572,10 @@ async def help_admin_callback(_, callback_query):
 @bot.on_callback_query(filters.regex("^help_couple$"))
 async def help_couple_callback(_, callback_query):
     text = (
-        "❤️ *Couple Suggestion Command*\\n\\n"
-        ">➜ `/couple`\\n"
-        "   • Picks two random non-bot members and posts a 'couple' image with their names.\\n"
-        "   • Caches daily so the same pair appears until midnight UTC.\\n"
+        "❤️ *Couple Suggestion Command*\n\n"
+        ">➜ `/couple`\n"
+        "   • Picks two random non-bot members and posts a “couple” image with their names.\n"
+        "   • Caches daily so the same pair appears until midnight UTC.\n"
         "   • Uses per-group member cache for speed."
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
@@ -584,15 +583,15 @@ async def help_couple_callback(_, callback_query):
 @bot.on_callback_query(filters.regex("^help_util$"))
 async def help_util_callback(_, callback_query):
     text = (
-        "🔍 *Utility & Extra Commands*\\n\\n"
-        ">➜ `/ping`\\n"
-        "   • Check bot's response time and uptime.\\n\\n"
-        ">➜ `/clear`\\n"
-        "   • Clear the entire queue. (Admins only)\\n\\n"
-        ">➜ Auto-Suggestions:\\n"
-        "   • When the queue ends, the bot automatically suggests new songs via inline buttons.\\n\\n"
-        ">➜ *Audio Quality & Limits*\\n"
-        "   • Streams up to 2 hours 10 minutes, but auto-fallback for longer. (See `MAX_DURATION_SECONDS`)\\n"
+        "🔍 *Utility & Extra Commands*\n\n"
+        ">➜ `/ping`\n"
+        "   • Check bot’s response time and uptime.\n\n"
+        ">➜ `/clear`\n"
+        "   • Clear the entire queue. (Admins only)\n\n"
+        ">➜ Auto-Suggestions:\n"
+        "   • When the queue ends, the bot automatically suggests new songs via inline buttons.\n\n"
+        ">➜ *Audio Quality & Limits*\n"
+        "   • Streams up to 2 hours 10 minutes, but auto-fallback for longer. (See `MAX_DURATION_SECONDS`)\n"
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
     await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
