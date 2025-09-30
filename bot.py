@@ -77,7 +77,7 @@ def _custom_exception_handler(loop, context):
         "ID not found" in str(exc) or "Peer id invalid" in str(exc)
     ):
         return  # ignore peer‐id errors
-    # ← NEW: ignore the "NoneType has no attribute 'write'" from get_channel_difference
+    # ← NEW: ignore the "NoneType has no attribute 'write'"" from get_channel_difference
     if isinstance(exc, AttributeError) and "has no attribute 'write'" in str(exc):
         return
     # otherwise, let it bubble
@@ -197,7 +197,7 @@ def safe_handler(func):
             except Exception:
                 chat_id = "Unknown"
             error_text = (
-                f"Error in handler `{func.__name__}` (chat id: {chat_id}):\n\n{str(e)}"
+                f"Error in handler `{func.__name__}` (chat id: {chat_id}):\\n\\n{str(e)}"
             )
             print(error_text)
             # Log the error to support
@@ -259,6 +259,7 @@ async def is_api_assistant_in_chat(chat_id):
         print(f"Error checking API assistant in chat: {e}")
         return False
     
+
 def iso8601_to_seconds(iso_duration):
     try:
         duration = isodate.parse_duration(iso_duration)
@@ -312,7 +313,7 @@ async def fetch_youtube_link_backup(query):
                 if resp.status != 200:
                     raise Exception(f"Backup API returned status {resp.status}")
                 data = await resp.json()
-                # Mirror primary API’s return:
+                # Mirror primary API's return:
                 if "playlist" in data:
                     return data
                 return (
@@ -437,14 +438,14 @@ async def start_handler(_, message):
     help_text = to_bold_unicode("Help")
     # Caption with bold Unicode font for headings and feature labels
     caption = (
-        f"👋 нєу {user_link} 💠, 🥀\n\n"
-        ">🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\n"
-        ">🚀 𝗧𝗢𝗣‐𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\n"
-        ">🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟‐𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\n"
-        ">🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\n"
-        ">✨ 𝗔𝗨𝗧𝗢‐𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\n"
-        ">🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\n"
-        ">❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡 (pick random pair in group)\n"
+        f"👋 нєу {user_link} 💠, 🥀\\n\\n"
+        ">🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\\n"
+        ">🚀 𝗧𝗢𝗣‐𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\\n"
+        ">🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟‐𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\\n"
+        ">🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\\n"
+        ">✨ 𝗔𝗨𝗧𝗢‐𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\\n"
+        ">🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\\n"
+        ">❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡 (pick random pair in group)\\n"
         f"๏ ᴄʟɪᴄᴋ {help_text} ʙᴇʟᴏᴡ ғᴏʀ ᴄᴏᴍᴍᴀɴᴅ ʟɪsᴛ."
     )
     buttons = [
@@ -485,14 +486,14 @@ async def go_back_callback(_, callback_query):
     support_text = to_bold_unicode("Support")
     help_text = to_bold_unicode("Help")
     caption = (
-        f"👋 нєу {user_link} 💠, 🥀\n\n"
-        ">🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\n"
-        ">🚀 𝗧𝗢𝗣‐𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\n"
-        ">🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟‐𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\n"
-        ">🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\n"
-        ">✨ 𝗔𝗨𝗧𝗢‐𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\n"
-        ">🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\n"
-        ">❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 (pick random pair in group)\n"
+        f"👋 нєу {user_link} 💠, 🥀\\n\\n"
+        ">🎶 𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗙𝗥𝗢𝗭𝗘𝗡 𝗠𝗨𝗦𝗜𝗖! 🎵\\n"
+        ">🚀 𝗧𝗢𝗣‐𝗡𝗢𝗧𝗖𝗛 24×7 𝗨𝗣𝗧𝗜𝗠𝗘 & 𝗦𝗨𝗣𝗣𝗢𝗥𝗧\\n"
+        ">🔊 𝗖𝗥𝗬𝗦𝗧𝗔𝗟‐𝗖𝗟𝗘𝗔𝗥 𝗔𝗨𝗗𝗜𝗢\\n"
+        ">🎧 𝗦𝗨𝗣𝗣𝗢𝗥𝗧𝗘𝗗 𝗣𝗟𝗔𝗧𝗙𝗢𝗥𝗠𝗦: YouTube | Spotify | Resso | Apple Music | SoundCloud\\n"
+        ">✨ 𝗔𝗨𝗧𝗢‐𝗦𝗨𝗚𝗚𝗘𝗦𝗧𝗜𝗢𝗡𝗦 when queue ends\\n"
+        ">🛠️ 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦: Pause, Resume, Skip, Stop, Mute, Unmute, Tmute, Kick, Ban, Unban, Couple\\n"
+        ">❤️ 𝗖𝗢𝗨𝗣𝗟𝗘 (pick random pair in group)\\n"
         f"๏ ᴄʟɪᴄᴋ {help_text} ʙᴇʟᴏᴡ ғᴏʀ ᴄᴏᴍᴍᴀɴᴅ ʟɪsᴛ."
     )
     buttons = [
@@ -533,19 +534,19 @@ async def show_help_callback(_, callback_query):
 @bot.on_callback_query(filters.regex("^help_music$"))
 async def help_music_callback(_, callback_query):
     text = (
-        ">🎵 *Music & Playback Commands*\n\n"
-        ">➜ `/play <song name or URL>`\n"
-        "   • Play a song (YouTube/Spotify/Resso/Apple Music/SoundCloud).\n"
-        "   • If replied to an audio/video, plays it directly.\n\n"
-        ">➜ `/playlist`\n"
-        "   • View or manage your saved playlist.\n\n"
-        ">➜ `/skip`\n"
-        "   • Skip the currently playing song. (Admins only)\n\n"
-        ">➜ `/pause`\n"
-        "   • Pause the current stream. (Admins only)\n\n"
-        ">➜ `/resume`\n"
-        "   • Resume a paused stream. (Admins only)\n\n"
-        ">➜ `/stop` or `/end`\n"
+        ">🎵 *Music & Playback Commands*\\n\\n"
+        ">➜ `/play <song name or URL>`\\n"
+        "   • Play a song (YouTube/Spotify/Resso/Apple Music/SoundCloud).\\n"
+        "   • If replied to an audio/video, plays it directly.\\n\\n"
+        ">➜ `/playlist`\\n"
+        "   • View or manage your saved playlist.\\n\\n"
+        ">➜ `/skip`\\n"
+        "   • Skip the currently playing song. (Admins only)\\n\\n"
+        ">➜ `/pause`\\n"
+        "   • Pause the current stream. (Admins only)\\n\\n"
+        ">➜ `/resume`\\n"
+        "   • Resume a paused stream. (Admins only)\\n\\n"
+        ">➜ `/stop` or `/end`\\n"
         "   • Stop playback and clear the queue. (Admins only)"
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
@@ -553,18 +554,18 @@ async def help_music_callback(_, callback_query):
 @bot.on_callback_query(filters.regex("^help_admin$"))
 async def help_admin_callback(_, callback_query):
     text = (
-        "🛡️ *Admin & Moderation Commands*\n\n"
-        ">➜ `/mute @user`\n"
-        "   • Mute a user indefinitely. (Admins only)\n\n"
-        ">➜ `/unmute @user`\n"
-        "   • Unmute a previously muted user. (Admins only)\n\n"
-        ">➜ `/tmute @user <minutes>`\n"
-        "   • Temporarily mute for a set duration. (Admins only)\n\n"
-        ">➜ `/kick @user`\n"
-        "   • Kick (ban + unban) a user immediately. (Admins only)\n\n"
-        ">➜ `/ban @user`\n"
-        "   • Ban a user. (Admins only)\n\n"
-        ">➜ `/unban @user`\n"
+        "🛡️ *Admin & Moderation Commands*\\n\\n"
+        ">➜ `/mute @user`\\n"
+        "   • Mute a user indefinitely. (Admins only)\\n\\n"
+        ">➜ `/unmute @user`\\n"
+        "   • Unmute a previously muted user. (Admins only)\\n\\n"
+        ">➜ `/tmute @user <minutes>`\\n"
+        "   • Temporarily mute for a set duration. (Admins only)\\n\\n"
+        ">➜ `/kick @user`\\n"
+        "   • Kick (ban + unban) a user immediately. (Admins only)\\n\\n"
+        ">➜ `/ban @user`\\n"
+        "   • Ban a user. (Admins only)\\n\\n"
+        ">➜ `/unban @user`\\n"
         "   • Unban a previously banned user. (Admins only)"
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
@@ -572,10 +573,10 @@ async def help_admin_callback(_, callback_query):
 @bot.on_callback_query(filters.regex("^help_couple$"))
 async def help_couple_callback(_, callback_query):
     text = (
-        "❤️ *Couple Suggestion Command*\n\n"
-        ">➜ `/couple`\n"
-        "   • Picks two random non-bot members and posts a “couple” image with their names.\n"
-        "   • Caches daily so the same pair appears until midnight UTC.\n"
+        "❤️ *Couple Suggestion Command*\\n\\n"
+        ">➜ `/couple`\\n"
+        "   • Picks two random non-bot members and posts a "couple" image with their names.\\n"
+        "   • Caches daily so the same pair appears until midnight UTC.\\n"
         "   • Uses per-group member cache for speed."
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
@@ -583,222 +584,19 @@ async def help_couple_callback(_, callback_query):
 @bot.on_callback_query(filters.regex("^help_util$"))
 async def help_util_callback(_, callback_query):
     text = (
-        "🔍 *Utility & Extra Commands*\n\n"
-        ">➜ `/ping`\n"
-        "   • Check bot’s response time and uptime.\n\n"
-        ">➜ `/clear`\n"
-        "   • Clear the entire queue. (Admins only)\n\n"
-        ">➜ Auto-Suggestions:\n"
-        "   • When the queue ends, the bot automatically suggests new songs via inline buttons.\n\n"
-        ">➜ *Audio Quality & Limits*\n"
-        "   • Streams up to 2 hours 10 minutes, but auto-fallback for longer. (See `MAX_DURATION_SECONDS`)\n"
+        "🔍 *Utility & Extra Commands*\\n\\n"
+        ">➜ `/ping`\\n"
+        "   • Check bot's response time and uptime.\\n\\n"
+        ">➜ `/clear`\\n"
+        "   • Clear the entire queue. (Admins only)\\n\\n"
+        ">➜ Auto-Suggestions:\\n"
+        "   • When the queue ends, the bot automatically suggests new songs via inline buttons.\\n\\n"
+        ">➜ *Audio Quality & Limits*\\n"
+        "   • Streams up to 2 hours 10 minutes, but auto-fallback for longer. (See `MAX_DURATION_SECONDS`)\\n"
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
     await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 MAX_TITLE_LEN = 20
-
-async def download_bytes_from_url(url: str) -> bytes:
-    """
-    Given a URL, perform an HTTP GET and return the raw bytes.
-    Uses aiohttp so that it’s async.
-    """
-    async with aiohttp.ClientSession() as sess:
-        async with sess.get(url) as resp:
-            resp.raise_for_status()
-            return await resp.read()
-
-def format_duration_for_card(seconds: int) -> str:
-    # Converts seconds to M:SS format (for display on card)
-    if seconds <= 0:
-        return "0:00"
-    m, s = divmod(seconds, 60)
-    return f"{m}:{s:02d}"
-
-def create_frosted_card(
-    image_bytes: bytes,
-    sender_username: str = "@username",
-    title_text: str = "Title",
-    artist_text: str = "Artist Name",
-    time_text: str = "0:00"   # <─ accept dynamic time text
-) -> BytesIO:
-    """
-    1. Blurs the background.
-    2. Creates a centered glass card with rounded edges.
-    3. Pastes a 300×300 thumbnail in the top-left of the card.
-    4. Draws title, artist name, and a progress bar to the right of the thumbnail.
-    5. Adds “Requested by” on the right, and “Powered by VibeshiftBots” on the left.
-    6. Adds a LIVE badge at the top.
-    Plus: Adds a royal white-golden glow behind all text and makes text very bright.
-    """
-    import re
-    # --- FIX: Strip HTML tags from sender_username if any ---
-    sender_username = re.sub(r"<.*?>", "", str(sender_username)).strip()
-    
-    # 0) Enforce title character limit (truncate if necessary)
-    if len(title_text) > MAX_TITLE_LEN:
-        title_text = title_text[: (MAX_TITLE_LEN - 1) ] + "…"
-    # 1) Load original
-    orig = Image.open(BytesIO(image_bytes)).convert("RGB")
-    # 1a) Trim black stripes from top/bottom
-    gray = orig.convert("L")
-    w, h = gray.size
-    top = 0
-    for y in range(h):
-        if max(gray.crop((0, y, w, y+1)).getdata()) > 16:
-            top = y
-            break
-    bottom = h
-    for y in range(h-1, -1, -1):
-        if max(gray.crop((0, y, w, y+1)).getdata()) > 16:
-            bottom = y + 1
-            break
-    orig = orig.crop((0, top, w, bottom))
-    # 1b) Resize to 1280×720
-    orig = orig.resize((1280, 720), Image.Resampling.LANCZOS)
-    # 2) Blur background (heavier so only colours remain)
-    blurred_bg = orig.filter(ImageFilter.GaussianBlur(radius=100))
-    # 3) Convert to RGBA canvas
-    canvas = blurred_bg.convert("RGBA")
-    # 4) Define card dimensions & position (centered)
-    card_w, card_h = 1000, 400
-    card_x = (1280 - card_w) // 2
-    card_y = (720 - card_h) // 2
-    radius = 40
-    # 5) Create a “frosted glass” region by taking a cropped blur of the background
-    card_region = blurred_bg.crop((card_x, card_y, card_x + card_w, card_y + card_h))
-    card_region = card_region.filter(ImageFilter.GaussianBlur(radius=10)).convert("RGBA")
-    # 6) Rounded‐rectangle mask
-    mask = Image.new("L", (card_w, card_h), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    mask_draw.rounded_rectangle([0, 0, card_w, card_h], radius=radius, fill=255)
-    # 7) Apply a semi‐transparent dark overlay (“glass”)
-    glass = Image.new("RGBA", (card_w, card_h), (20, 20, 20, 150))
-    card_frosted = Image.alpha_composite(card_region, glass)
-    # 8) Paste the frosted card onto the canvas with its rounded mask
-    canvas.paste(card_frosted, (card_x, card_y), mask)
-    draw = ImageDraw.Draw(canvas)
-    # Glow helper: draws a golden blurred glow under text
-    def add_glow(text, position, font):
-        glow_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-        glow_draw = ImageDraw.Draw(glow_layer)
-        glow_color = (255, 215, 0, 180)  # soft golden
-        glow_draw.text(position, text, font=font, fill=glow_color)
-        glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=8))
-        canvas.alpha_composite(glow_layer)
-    # 9) Subtle border around the card
-    draw.rounded_rectangle(
-        [card_x, card_y, card_x + card_w, card_y + card_h],
-        radius=radius,
-        outline=(30, 30, 30, 200),
-        width=2
-    )
-    # ─────── New: LIVE badge only ───────
-    badge_text = "LIVE"
-    badge_w, badge_h = 80, 30
-    badge_x = card_x + card_w - badge_w - 20
-    badge_y = card_y + 20
-    # Red rounded rectangle for badge
-    draw.rounded_rectangle(
-        [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
-        radius=5,
-        fill=(255, 0, 0, 255)
-    )
-    # Golden glow behind badge text
-    font_live = ImageFont.truetype("arial.ttf", size=20) if True else ImageFont.load_default()
-    add_glow(badge_text, (badge_x + 50, badge_y + 25), font_live)
-    # Bright white LIVE text centered
-    text_bbox = draw.textbbox((0, 0), badge_text, font=font_live)
-    text_w = text_bbox[2] - text_bbox[0]
-    text_h = text_bbox[3] - text_bbox[1]
-    text_x = badge_x + (badge_w - text_w) // 2
-    text_y = badge_y + (badge_h - text_h) // 2
-    draw.text((text_x, text_y), badge_text, font=font_live, fill=(255, 255, 255, 255))
-    # 10) Prepare thumbnail: center‐crop then resize to 300×300
-    W, H = orig.size
-    crop_size = min(W, H)
-    left = (W - crop_size) // 2
-    upper = (H - crop_size) // 2
-    right = left + crop_size
-    lower = upper + crop_size
-    cropped_square = orig.crop((left, upper, right, lower))
-    album_thumb = cropped_square.resize((300, 300), Image.Resampling.LANCZOS)
-    thumb_x = card_x + 30
-    thumb_y = card_y + 30
-    canvas.paste(album_thumb.convert("RGBA"), (thumb_x, thumb_y))
-    # 11) White border around thumbnail
-    draw.rectangle(
-        [thumb_x, thumb_y, thumb_x + 300, thumb_y + 300],
-        outline=(255, 255, 255, 200),
-        width=2
-    )
-    # 12) Load fonts (fallback to default if Arial is missing)
-    font_title = ImageFont.load_default()
-    font_artist = ImageFont.load_default()
-    font_time = ImageFont.load_default()
-    font_footer = ImageFont.load_default()
-    font_watermark = ImageFont.load_default()
-    try:
-        font_title = ImageFont.truetype("arial.ttf", size=48)
-        font_artist = ImageFont.truetype("arial.ttf", size=36)
-        font_time = ImageFont.truetype("arial.ttf", size=28)
-        font_footer = ImageFont.truetype("arial.ttf", size=24)
-        font_watermark = ImageFont.truetype("arial.ttf", size=18)
-    except:
-        pass
-    # 13) Draw title with glow
-    text_x = card_x + 350
-    text_y = card_y + 60
-    add_glow(title_text, (text_x, text_y), font_title)
-    draw.text((text_x, text_y), title_text, font=font_title, fill=(255, 255, 255, 255))
-    # 14) Draw progress bar
-    bar_x0 = card_x + 370
-    bar_y0 = card_y + 240
-    bar_length = 400
-    bar_height = 6
-    bar_x1 = bar_x0 + bar_length
-    bar_y1 = bar_y0 + bar_height
-    draw.rounded_rectangle(
-        [bar_x0, bar_y0, bar_x1, bar_y1],
-        radius=3,
-        fill=(180, 180, 180, 120)
-    )
-    fill_pct = 0.35
-    filled_length = int(bar_length * fill_pct)
-    draw.rounded_rectangle(
-        [bar_x0, bar_y0, bar_x0 + filled_length, bar_y1],
-        radius=3,
-        fill=(255, 255, 255, 200)
-    )
-    thumb_radius = 10
-    cx = bar_x0 + filled_length
-    cy = bar_y0 + bar_height // 2
-    draw.ellipse(
-        [cx - thumb_radius, cy - thumb_radius, cx + thumb_radius, cy + thumb_radius],
-        fill=(255, 255, 255, 255)
-    )
-    # Glow behind time text (now uses passed-in time_text)
-    time_pos = (bar_x1 + 10, bar_y0 - 8)
-    add_glow(time_text, time_pos, font_time)
-    draw.text(time_pos, time_text, font=font_time, fill=(255, 255, 255, 255))
-    # 16) “Requested by @username” with glow
-    footer_text = f"Requested by {sender_username}"
-    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
-    footer_w = footer_bbox[2] - footer_bbox[0]
-    footer_x = card_x + card_w - 20 - footer_w
-    footer_y = card_y + card_h - 40
-    add_glow(footer_text, (footer_x, footer_y), font_footer)
-    draw.text((footer_x, footer_y), footer_text, font=font_footer, fill=(255, 255, 255, 230))
-    # 17) “Powered by VibeshiftBots” with glow
-    watermark_text = "Powered by KustBots"
-    wm_x = card_x + 30
-    wm_y = card_y + card_h - 30
-    add_glow(watermark_text, (wm_x, wm_y), font_watermark)
-    draw.text((wm_x, wm_y), watermark_text, font=font_watermark, fill=(255, 255, 255, 200))
-    # 18) Return as BytesIO (PNG)
-    output = BytesIO()
-    canvas.convert("RGB").save(output, format="PNG")
-    output.seek(0)
-    return output
 
 @bot.on_message(
     filters.group & filters.regex(
@@ -870,8 +668,8 @@ async def play_handler(_, message: Message):
         ])
         await bot.send_message(
             chat_id,
-            "You did not specify a song. Would you like to play your playlist or trending songs instead?\n\n"
-            "Correct usage: /play <song name>\nExample: /play shape of you",
+            "You did not specify a song. Would you like to play your playlist or trending songs instead?\\n\\n"
+            "Correct usage: /play <song name>\\nExample: /play shape of you",
             reply_markup=keyboard
         )
         return
@@ -901,8 +699,8 @@ async def process_play_command(
             result = await fetch_youtube_link_backup(query)
         except Exception as backup_err:
             await processing_message.edit(
-                f"❌ Both search APIs failed:\n"
-                f"Primary: {primary_err}\n"
+                f"❌ Both search APIs failed:\\n"
+                f"Primary: {primary_err}\\n"
                 f"Backup:  {backup_err}"
             )
             return
@@ -938,12 +736,12 @@ async def process_play_command(
             asyncio.create_task(preload_playlist_cache(item["link"], secs))
         total = len(playlist_items)
         reply_text = (
-            f"✨ᴀᴅᴅᴇᴅ ᴛᴏ playlist\n"
-            f"Total songs added to queue: {total}\n"
+            f"✨ᴀᴅᴅᴇᴅ ᴛᴏ playlist\\n"
+            f"Total songs added to queue: {total}\\n"
             f"#1 - {playlist_items[0]['title']}"
         )
         if total > 1:
-            reply_text += f"\n#2 - {playlist_items[1]['title']}"
+            reply_text += f"\\n#2 - {playlist_items[1]['title']}"
         await message.reply(reply_text)
         if len(chat_containers[chat_id]) == total:
             # Pass requester_id to start_playback_task
@@ -955,7 +753,7 @@ async def process_play_command(
         video_url, title, duration_iso, thumb = result
         if not video_url:
             await processing_message.edit(
-                "❌ Could not find the song. Try another query.\nSupport: @kustbotschat"
+                "❌ Could not find the song. Try another query.\\nSupport: @kustbotschat"
             )
             return
         secs = isodate.parse_duration(duration_iso).total_seconds()
@@ -996,10 +794,10 @@ async def process_play_command(
                  InlineKeyboardButton("🗑 Clear", callback_data="clear")]
             ])
             await message.reply(
-                f"<b>✨ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:</b>\n\n"
-                f"<b>❍ ᴛɪᴛʟє ➥</b> {title}\n"
-                f"<b>❍ ᴛɪϻє ➥</b>{readable}\n"
-                f"<b>❍ ʙʏ ➥</b>{requester_html}\n"
+                f"<b>✨ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:</b>\\n\\n"
+                f"<b>❍ ᴛɪᴛʟє ➥</b> {title}\\n"
+                f"<b>❍ ᴛɪϻє ➥</b>{readable}\\n"
+                f"<b>❍ ʙʏ ➥</b>{requester_html}\\n"
                 f"<b>Queue number:</b>{len(chat_containers[chat_id]) - 1}",
                 reply_markup=queue_buttons,
                 parse_mode=ParseMode.HTML
@@ -1010,7 +808,7 @@ MAX_TITLE_LEN = 20
 def _one_line_title(full_title: str) -> str:
     """
     Truncate `full_title` to at most MAX_TITLE_LEN chars.
-    If truncated, append “…” so it still reads cleanly in one line.
+    If truncated, append "…" so it still reads cleanly in one line.
     """
     if len(full_title) <= MAX_TITLE_LEN:
         return full_title
@@ -1152,8 +950,8 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         one_line = _one_line_title(song_info["title"])
         base_caption = (
             "<blockquote>"
-            "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ</b> (Local Playback)\n\n"
-            f"❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\n"
+            "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ</b> (Local Playback)\\n\\n"
+            f"❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\\n"
             f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}"
             "</blockquote>"
         )
@@ -1168,46 +966,13 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
         base_keyboard = InlineKeyboardMarkup([control_row, [progress_button], [playlist_button]])
         
-        # Try to create frosted card if thumbnail exists
-        frosted_buffer = None
+        # Get thumbnail URL
         thumb_url = song_info.get("thumbnail")
-        
-        if thumb_url:
-            try:
-                # Handle both file paths and URLs
-                if thumb_url.startswith(("http://", "https://")):
-                    raw_thumb = await download_bytes_from_url(thumb_url)
-                else:
-                    # Check if file exists before opening
-                    if os.path.exists(thumb_url):
-                        with open(thumb_url, "rb") as f:
-                            raw_thumb = f.read()
-                    else:
-                        raise FileNotFoundError(f"Thumbnail file not found: {thumb_url}")
-                
-                # Create frosted card with the thumbnail
-                frosted_buffer = create_frosted_card(
-                    raw_thumb,
-                    sender_username=song_info["requester"],
-                    title_text=song_info['title'],
-                    artist_text=song_info['requester'],
-                    time_text=format_duration_for_card(total_duration)
-                )
-            except Exception as e:
-                print(f"Thumbnail processing failed: {e}")
-                frosted_buffer = None
         
         # Send message with thumbnail if available, otherwise send text
         try:
-            if frosted_buffer:
-                progress_message = await message.reply_photo(
-                    photo=frosted_buffer,
-                    caption=base_caption,
-                    reply_markup=base_keyboard,
-                    parse_mode=ParseMode.HTML
-                )
-            elif thumb_url and thumb_url.startswith(("http://", "https://")):
-                # Fallback to direct thumbnail URL if frosted card failed
+            if thumb_url and thumb_url.startswith(("http://", "https://")):
+                # Use thumbnail URL directly
                 progress_message = await message.reply_photo(
                     photo=thumb_url,
                     caption=base_caption,
@@ -1215,7 +980,7 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
                     parse_mode=ParseMode.HTML
                 )
             else:
-                # Final fallback to text-only message
+                # Fallback to text-only message
                 progress_message = await message.reply_text(
                     base_caption,
                     reply_markup=base_keyboard,
@@ -1248,10 +1013,10 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         asyncio.create_task(
             bot.send_message(
                 LOG_CHAT_ID,
-                "#started_streaming\n"
-                f"• Title: {song_info.get('title','Unknown')}\n"
-                f"• Duration: {song_info.get('duration','Unknown')}\n"
-                f"• Requested by: {song_info.get('requester','Unknown')}\n"
+                "#started_streaming\\n"
+                f"• Title: {song_info.get('title','Unknown')}\\n"
+                f"• Duration: {song_info.get('duration','Unknown')}\\n"
+                f"• Requested by: {song_info.get('requester','Unknown')}\\n"
                 f"• Mode: local"
             )
         )
@@ -1283,15 +1048,15 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
             ]
         ]
     )
-    # 1) “Processing…” message
+    # 1) "Processing…" message
     processing_message = message
     status_text = (
-        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\n"
+        "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\\n"
         "<b>ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ᴀ ꜰᴇᴡ ꜱᴇᴄᴏɴᴅꜱ…</b>"
         if is_premium
         else
-        "<b>✨ Hold on…\n"
-        "Your track is getting tuned, polished, and sent to the stage! 🥀\n"
+        "<b>✨ Hold on…\\n"
+        "Your track is getting tuned, polished, and sent to the stage! 🥀\\n"
         "💕 Streaming will start in just a moment…</b>"
     )
     try:
@@ -1321,7 +1086,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     else:
         assistant_chat_id = ASSISTANT_CHAT_ID
         assistant_username = None
-    # 3) Check assistant’s chat‐member status via Bot API
+    # 3) Check assistant's chat‐member status via Bot API
     get_member_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
     params = {"chat_id": chat_id, "user_id": assistant_chat_id}
     async with aiohttp.ClientSession() as session:
@@ -1339,7 +1104,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     if status == "kicked":
         await bot.send_message(
             chat_id,
-            "❌ The assistant is banned from this group. Please unban it before playing music.\n\nAssistant1 username - @xyz92929\n\nAssistant2 username - @acekiller_010185",
+            "❌ The assistant is banned from this group. Please unban it before playing music.\\n\\nAssistant1 username - @xyz92929\\n\\nAssistant2 username - @acekiller_010185",
             reply_markup=support_buttons
         )
         return
@@ -1442,7 +1207,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
         except Exception:
             pass
         await asyncio.sleep(1)
-        fallback_error = f"❌ Frozen Play API Error: {e}\nFalling back to local playback..."
+        fallback_error = f"❌ Frozen Play API Error: {e}\\nFalling back to local playback..."
         try:
             await processing_message.edit_text(fallback_error, parse_mode=ParseMode.HTML)
         except Exception:
@@ -1462,10 +1227,10 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     one_line = _one_line_title(song_info["title"])
     base_caption = (
         "<blockquote>"
-        "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ ⏤͟͞●</b> (API Playback)</blockquote>\n\n"
-        f"<blockquote>❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\n"
-        f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}\n"
-        f"❍ <b>ʟᴅs sᴇʀᴠᴇʀ:</b> {display_server}\n"
+        "<b>🎧 ғʀᴏᴢᴇɴ ✘ ᴍᴜsɪᴄ sᴛʀєᴀᴍɪɴɢ ⏤͟͞●</b> (API Playback)</blockquote>\\n\\n"
+        f"<blockquote>❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\\n"
+        f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}\\n"
+        f"❍ <b>ʟᴅs sᴇʀᴠᴇʀ:</b> {display_server}\\n"
         f"❍ <b>ᴍᴏᴅᴇ:</b> {'𝐏𝐫𝐞𝐦𝐢𝐮𝐦⚡' if is_premium else 'sᴛᴀɴᴅᴀʀᴅ'}"
         "</blockquote>"
     )
@@ -1486,39 +1251,39 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
         await processing_message.delete()
     except Exception:
         pass
-    frosted_buffer = None
-    if song_info.get("thumbnail"):
-        try:
-            raw_thumb = None
-            if os.path.isfile(song_info["thumbnail"]):
-                with open(song_info["thumbnail"], "rb") as img_f:
-                    raw_thumb = img_f.read()
-            else:
-                raw_thumb = await download_bytes_from_url(song_info["thumbnail"])
-            frosted_buffer = create_frosted_card(
-                raw_thumb,
-                sender_username=f"{song_info['requester']}",
-                title_text=song_info['title'],
-                artist_text=song_info['requester'],
+    
+    # Get thumbnail URL
+    thumb_url = song_info.get("thumbnail")
+    
+    # Send message with thumbnail if available, otherwise send text
+    try:
+        if thumb_url and thumb_url.startswith(("http://", "https://")):
+            # Use thumbnail URL directly
+            new_progress_message = await bot.send_photo(
+                chat_id,
+                photo=thumb_url,
+                caption=base_caption,
+                reply_markup=base_keyboard,
+                parse_mode=ParseMode.HTML
             )
-        except Exception:
-            frosted_buffer = None
-    if frosted_buffer:
-        new_progress_message = await bot.send_photo(
+        else:
+            # Fallback to text-only message
+            new_progress_message = await bot.send_message(
+                chat_id,
+                base_caption,
+                reply_markup=base_keyboard,
+                parse_mode=ParseMode.HTML
+            )
+    except Exception as e:
+        print(f"Message sending failed: {e}")
+        # Ultimate fallback to text-only message
+        new_progress_message = await bot.send_message(
             chat_id,
-            photo=frosted_buffer,
-            caption=base_caption,
+            base_caption,
             reply_markup=base_keyboard,
             parse_mode=ParseMode.HTML
         )
-    else:
-        new_progress_message = await bot.send_photo(
-            chat_id,
-            photo=song_info["thumbnail"],
-            caption=base_caption,
-            reply_markup=base_keyboard,
-            parse_mode=ParseMode.HTML
-        )
+    
     global_playback_count += 1
     asyncio.create_task(
         update_progress_caption(
@@ -1532,10 +1297,10 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     asyncio.create_task(
         bot.send_message(
             LOG_CHAT_ID,
-            "#started_streaming\n"
-            f"• Title: {song_info.get('title','Unknown')}\n"
-            f"• Duration: {song_info.get('duration','Unknown')}\n"
-            f"• Requested by: {song_info.get('requester','Unknown')}\n"
+            "#started_streaming\\n"
+            f"• Title: {song_info.get('title','Unknown')}\\n"
+            f"• Duration: {song_info.get('duration','Unknown')}\\n"
+            f"• Requested by: {song_info.get('requester','Unknown')}\\n"
             f"• LDS Server: {display_server}"
         )
     )
