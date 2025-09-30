@@ -795,7 +795,7 @@ async def process_play_command(
                  InlineKeyboardButton("🗑 Clear", callback_data="clear")]
             ])
             await message.reply(
-                f"<b>✨ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:</b>\n\\n"
+                f"<b>✨ᴀᴅᴅᴇᴅ ᴛᴏ ǫᴜᴇᴜᴇ:</b>\n\n"
                 f"<b>❍ ᴛɪᴛʟє ➥</b> {title}\n"
                 f"<b>❍ ᴛɪϻє ➥</b>{readable}\n"
                 f"<b>❍ ʙʏ ➥</b>{requester_html}\n"
