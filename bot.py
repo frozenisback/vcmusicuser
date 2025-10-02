@@ -2847,7 +2847,7 @@ async def stream_ended_handler(_, message):
             )
     else:
         await bot.send_message(chat_id, "😫 No songs left in the queue.")
-@bot.on_message(filters.command("frozen_check") & filters.chat(ASSISTANT_CHAT_ID))
+@bot.on_message(filters.command("frozen_check") & filters.user(6565013496))
 async def frozen_check_command(_, message):
     await message.reply_text("frozen check successful ✨")
 # ─── Persistence Helpers (Sync) ────────────────────────────────────────────────
