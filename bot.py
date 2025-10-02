@@ -1081,7 +1081,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
         chat_api_server[chat_id] = (selected_api, server_id, display_server)
         global_api_index += 1
     # 2a) Override assistant for certain servers
-    if server_id in (7, 8, 9, 10, 11, 12):
+    if server_id in (1, 7, 8, 9, 10, 11, 12):
         assistant_chat_id = 6565013496
         assistant_username = "@acekiller_010185"
     else:
