@@ -2955,7 +2955,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"Bot status: Running")
-        elif self.path == "/restart":
+        elif self.path == "/reestart":
             # Persist entire in-memory state, then exec to restart
             save_state_to_db()
             os.execl(sys.executable, sys.executable, *sys.argv)
