@@ -2740,11 +2740,14 @@ async def broadcast_handler(_, message):
     if not message.reply_to_message:
         await message.reply("❌ Please reply to the message you want to broadcast.")
         return
+
     broadcast_message = message.reply_to_message
+
     # Retrieve all broadcast chat IDs from the collection
     all_chats = list(broadcast_collection.find({}))
     success = 0
     failed = 0
+
     # Loop through each chat ID and forward the message
     for chat in all_chats:
         try:
@@ -2754,6 +2757,7 @@ async def broadcast_handler(_, message):
             print(f"Error casting chat_id: {chat.get('chat_id')} - {e}")
             failed += 1
             continue
+
         try:
             await bot.forward_messages(
                 chat_id=target_chat_id,
@@ -2764,8 +2768,12 @@ async def broadcast_handler(_, message):
         except Exception as e:
             print(f"Failed to broadcast to {target_chat_id}: {e}")
             failed += 1
+            # remove failed chat id from database
+            broadcast_collection.delete_one({"chat_id": chat.get("chat_id")})
+
         # Wait for 1 second to avoid flooding the server and Telegram
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.2)
+
     await message.reply(f"Broadcast complete!\n✅ Success: {success}\n❌ Failed: {failed}")
 @bot.on_message(filters.video_chat_ended)
 async def clear_queue_on_vc_end(_, message: Message):
