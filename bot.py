@@ -83,9 +83,9 @@ def _custom_exception_handler(loop, context):
     # otherwise, let it bubble
     loop.default_exception_handler(context)
 asyncio.get_event_loop().set_exception_handler(_custom_exception_handler)
-session_name = os.environ.get("SESSION_NAME", "music_bot1")
+session_name = os.environ.get("SESSION_NAME", "music_11bot1")
 bot = Client(session_name, bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
-assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
+assistant = Client("assi2stant_acc2ount", session_string=ASSISTANT_SESSION)
 call_py = PyTgCalls(assistant)
 ASSISTANT_USERNAME = "@xyz92929"
 ASSISTANT_CHAT_ID = 7634862283
