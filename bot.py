@@ -2487,13 +2487,14 @@ async def debug_handler(_, message):
     except Exception as e:
         out_lines.append(f"System info: Error ({_escape(str(e))})")
 
-    # short snapshot of api_servers if available
+    # API servers summary (privacy-safe)
     try:
+        total_servers = len(api_servers)
         out_lines.append("")
-        out_lines.append("API servers (first 8):")
-        out_lines.append(", ".join(api_servers[:8]))
+        out_lines.append(f"API servers: {total_servers} configured")
     except Exception:
-        pass
+        out_lines.append("")
+        out_lines.append("API servers: unavailable")
 
     full_text = "\n".join(out_lines)
 
