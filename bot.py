@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import math
 import time
 import uuid
 import json
@@ -2103,7 +2104,14 @@ async def _send_couple(
 # /couple command
 # -------------------
 processing_chats = set()
-@bot.on_message(filters.group & filters.command("coup75le", prefixes="/"))
+variants = [
+    "couple", "cuople", "cople", "c0uple", "coupl"  # add more common typos
+]
+
+# Build a regex pattern to match any variant, case-insensitive
+pattern = r"^/(?:{})\b".format("|".join(variants))
+
+@bot.on_message(filters.group & filters.regex(pattern, flags=re.IGNORECASE))
 async def make_couple(client: Client, message):
     chat_id     = message.chat.id
     group_title = message.chat.title or ""
@@ -2329,6 +2337,201 @@ async def unban_handler(_, message: Message):
         return
     await bot.unban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been unbanned.")
+
+@bot.on_message(filters.command("debug") & filters.user(OWNER_ID))
+@safe_handler
+async def debug_handler(_, message):
+    """
+    /debug [chat_id] [--file|-f] [--code]
+    - default: inline code if short, else send .txt file to OWNER
+    - --file / -f: force .txt file
+    - --code: force inline code block
+    """
+    parts = message.command or []
+    flags = set(p.lower() for p in parts[2:]) if len(parts) > 2 else set()
+    # support when only flags passed after command, and when only chat id provided
+    # find chat id and flags robustly
+    target_chat_id = None
+    want_file = False
+    want_code = False
+
+    # parse parts (parts[0] == "debug")
+    for p in parts[1:]:
+        if p in ("--file", "-f"):
+            want_file = True
+        elif p == "--code":
+            want_code = True
+        else:
+            # try parse as int id or username
+            if target_chat_id is None:
+                try:
+                    target_chat_id = int(p)
+                except Exception:
+                    # keep string (username) — we'll try to resolve
+                    target_chat_id = p
+
+    if target_chat_id is None:
+        target_chat_id = message.chat.id
+
+    # if username was given, try resolve
+    if isinstance(target_chat_id, str) and not str(target_chat_id).startswith("-"):
+        try:
+            u = await bot.get_users(target_chat_id)
+            target_chat_id = u.id
+        except Exception:
+            # fallback: keep as string
+            pass
+
+    # Build debug lines (similar to earlier implementation)
+    out_lines = []
+    out_lines.append(f"DEBUG — Chat {target_chat_id}")
+    out_lines.append("")
+    try:
+        chat = await bot.get_chat(target_chat_id)
+        title = getattr(chat, "title", None) or getattr(chat, "first_name", None) or "—"
+        out_lines.append(f"Title: { _escape(str(title)) }")
+        out_lines.append(f"Type: { _escape(str(chat.type)) }")
+        out_lines.append(f"Username: @{_escape(chat.username)}" if getattr(chat, "username", None) else "Username: —")
+    except Exception as e:
+        out_lines.append(f"get_chat: Failed — {_escape(str(e))}")
+
+    # member count
+    try:
+        members_count = await bot.get_chat_members_count(target_chat_id)
+        out_lines.append(f"Members: {members_count}")
+    except Exception as e:
+        out_lines.append(f"Members: N/A ({_escape(str(e))})")
+
+    # assistant presence checks (best-effort)
+    try:
+        assistant_status = await is_assistant_in_chat(target_chat_id)
+        out_lines.append(f"Assistant client in chat: {assistant_status}")
+    except Exception as e:
+        out_lines.append(f"Assistant check: Error ({_escape(str(e))})")
+    try:
+        api_assistant_status = await is_api_assistant_in_chat(target_chat_id)
+        out_lines.append(f"API Assistant (bot) in chat: {api_assistant_status}")
+    except Exception as e:
+        out_lines.append(f"API Assistant check: Error ({_escape(str(e))})")
+
+    # mapping & queue state
+    try:
+        api_map = chat_api_server.get(target_chat_id)
+        out_lines.append(f"Assigned API/LDS server: {api_map}")
+    except Exception:
+        out_lines.append("Assigned API/LDS server: N/A")
+    q = chat_containers.get(target_chat_id, [])
+    out_lines.append(f"Queue length: {len(q)}")
+    out_lines.append(f"Playback mode: {playback_mode.get(target_chat_id, 'unknown')}")
+
+    # last played, suggestions
+    last_song = last_played_song.get(target_chat_id)
+    if last_song:
+        out_lines.append(f"Last played: { _escape(str(last_song.get('title','—'))) } ({last_song.get('duration','—')})")
+    else:
+        out_lines.append("Last played: None")
+    sugg = last_suggestions.get(target_chat_id, [])
+    out_lines.append(f"Last suggestions cached: {len(sugg)}")
+
+    # members_cache (db) — best-effort
+    try:
+        cache_doc = members_cache.find_one({"chat_id": target_chat_id})
+        if cache_doc:
+            out_lines.append(f"members_cache: {len(cache_doc.get('members',[]))} ids (last_synced: {cache_doc.get('last_synced')})")
+        else:
+            out_lines.append("members_cache: None")
+    except Exception as e:
+        out_lines.append(f"members_cache: Error ({_escape(str(e))})")
+
+    # DB / broadcast / couples checks
+    try:
+        out_lines.append(f"broadcast DB entry: { bool(broadcast_collection.find_one({'chat_id': target_chat_id})) }")
+        out_lines.append(f"couple cached: { bool(couples_collection.find_one({'chat_id': target_chat_id})) }")
+    except Exception as e:
+        out_lines.append(f"DB checks: Error ({_escape(str(e))})")
+
+    # API playback records count
+    try:
+        rec_count = sum(1 for r in api_playback_records if r.get("chat_id") == target_chat_id)
+        out_lines.append(f"API playback records for chat: {rec_count}")
+    except Exception:
+        out_lines.append("API playback records: Error")
+
+    # system stats
+    try:
+        now_ts = time.time()
+        uptime_s = int(now_ts - bot_start_time) if 'bot_start_time' in globals() else 0
+        def _fmt_uptime(s):
+            if s <= 0: return "0s"
+            m, sec = divmod(s, 60); h, m = divmod(m, 60); d, h = divmod(h, 24)
+            parts = []
+            if d: parts.append(f"{d}d")
+            if h: parts.append(f"{h}h")
+            if m: parts.append(f"{m}m")
+            if sec: parts.append(f"{sec}s")
+            return " ".join(parts)
+        out_lines.append("")
+        out_lines.append("— System / Bot —")
+        out_lines.append(f"Bot uptime: {_fmt_uptime(uptime_s)}")
+        try:
+            cpu = psutil.cpu_percent(interval=0.5)
+            vm = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            out_lines.append(f"CPU %: {cpu}%")
+            out_lines.append(f"RAM: {vm.percent}% ({math.floor(vm.used/1024/1024)}MB used)")
+            out_lines.append(f"Disk: {disk.percent}% ({math.floor(disk.used/1024/1024/1024)} GB used)")
+        except Exception as e:
+            out_lines.append(f"psutil: Error ({_escape(str(e))})")
+    except Exception as e:
+        out_lines.append(f"System info: Error ({_escape(str(e))})")
+
+    # short snapshot of api_servers if available
+    try:
+        out_lines.append("")
+        out_lines.append("API servers (first 8):")
+        out_lines.append(", ".join(api_servers[:8]))
+    except Exception:
+        pass
+
+    full_text = "\n".join(out_lines)
+
+    # decide output method
+    MAX_INLINE = 3500
+    use_file = want_file or (len(full_text) > MAX_INLINE and not want_code)
+
+    if not use_file:
+        # send inline as HTML preformatted block (monospace)
+        safe_text = _escape(full_text)
+        # Telegram HTML <pre> preserves formatting; send in parts if too long
+        if len(safe_text) <= 4000:
+            await message.reply(f"<pre>{safe_text}</pre>", parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        else:
+            # split into chunks of ~3900
+            chunk_size = 3900
+            for i in range(0, len(safe_text), chunk_size):
+                await message.reply(f"<pre>{safe_text[i:i+chunk_size]}</pre>", parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        return
+
+    # create .txt file and send to OWNER (private)
+    buf = io.BytesIO()
+    buf.write(full_text.encode("utf-8"))
+    buf.seek(0)
+    filename = f"debug_{target_chat_id}_{int(time.time())}.txt"
+
+    try:
+        await bot.send_document(OWNER_ID, document=buf, file_name=filename)
+        # reply in the invoking chat to confirm (avoid leaking full content)
+        if message.chat.id == OWNER_ID:
+            # if invoked in private with owner, just confirm
+            await message.reply_text(f"Sent debug file: {filename}")
+        else:
+            await message.reply_text("Debug is large — sent a .txt file to the owner (private).")
+    except Exception as e:
+        # fallback: try to reply with a short snippet and include error
+        await message.reply_text(f"Failed to send file to owner: {_escape(str(e))}\nSending inline snippet instead.")
+        safe_text = _escape(full_text[:3900])
+        await message.reply(f"<pre>{safe_text}</pre>", parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        
 @bot.on_message(filters.group & filters.command("mute"))
 @safe_handler
 async def mute_handler(_, message: Message):
