@@ -53,6 +53,8 @@ from typing import Union
 import urllib
 import html
 from typing import List
+from html import escape as _escape
+
 
 
 API_ID = int(os.environ.get("API_ID"))
