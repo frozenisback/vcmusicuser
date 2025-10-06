@@ -1978,23 +1978,45 @@ async def welcome_new_member(client: Client, message: Message):
             os.remove(img_path)
         except OSError:
             pass
+
+DOWNLOAD_API_URL_SPOTIFY = "http://104.168.62.69:5000/spotify-down?url="
+
 download_cache = {}  # Global cache dictionary
-async def download_audio(url):
-    # If url is already a local file, return it directly (for replied audio/video files)
+
+def is_spotify_episode(url: str) -> bool:
+    return "open.spotify.com/episode" in url
+
+async def download_audio(url: str) -> str:
+    """
+    Downloads audio from YouTube or Spotify and caches it.
+    Returns local file path.
+    """
+    # If URL is already a local file, return it directly
     if os.path.exists(url) and os.path.isfile(url):
         return url
+
+    # Return cached file if available
     if url in download_cache:
-        return download_cache[url]  # Return cached file path if available
+        return download_cache[url]
+
     try:
-        # Lower the priority of the process
+        # Lower process priority
         proc = psutil.Process(os.getpid())
-        proc.nice(psutil.IDLE_PRIORITY_CLASS if os.name == "nt" else 19)  # Windows/Linux
+        proc.nice(psutil.IDLE_PRIORITY_CLASS if os.name == "nt" else 19)
+
+        # Prepare temp file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
         file_name = temp_file.name
         temp_file.close()
-        download_url = f"{DOWNLOAD_API_URL}{url}"
+
+        # Select correct API
+        if is_spotify_episode(url):
+            download_url = f"{DOWNLOAD_API_URL_SPOTIFY}{url}"
+        else:
+            download_url = f"{DOWNLOAD_API_URL}{url}"
+
         async with aiohttp.ClientSession() as session:
-            async with session.get(download_url, timeout=35) as response:
+            async with session.get(download_url, timeout=150) as response:
                 if response.status == 200:
                     async with aiofiles.open(file_name, 'wb') as f:
                         while True:
@@ -2003,10 +2025,13 @@ async def download_audio(url):
                                 break
                             await f.write(chunk)
                             await asyncio.sleep(0.01)
+
+                    # Cache and return
                     download_cache[url] = file_name
                     return file_name
                 else:
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
+
     except asyncio.TimeoutError:
         raise Exception("❌ Download API took too long to respond. Please try again.")
     except Exception as e:
