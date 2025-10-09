@@ -2373,6 +2373,29 @@ async def unban_handler(_, message: Message):
     await bot.unban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been unbanned.")
 
+@bot.on(filters.command("prime") & filters.user([7618467489]))  # your admin ID(s)
+async def add_premium_user(bot, message):
+    if len(message.command) < 2:
+        return await message.reply_text("❌ Usage: `/prime <userid or @username>`", quote=True)
+
+    target = message.command[1]
+    try:
+        if target.startswith("@"):
+            user = await bot.get_users(target)
+        else:
+            user = await bot.get_users(int(target))
+    except Exception as e:
+        return await message.reply_text(f"⚠️ Couldn't find user: {e}", quote=True)
+
+    premium_users.add(user.id)
+    save_premium()
+
+    await message.reply_text(
+        f"✅ **{user.first_name}** (`{user.id}`) has been added to Premium Users.",
+        quote=True,
+    )
+    print(f"[+] Added {user.first_name} ({user.id}) to premium list.")
+
 @bot.on_message(filters.command("debug") & filters.user(OWNER_ID))
 @safe_handler
 async def debug_handler(_, message):
