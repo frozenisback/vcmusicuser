@@ -2373,7 +2373,7 @@ async def unban_handler(_, message: Message):
     await bot.unban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been unbanned.")
 
-@bot.on_message(filters.command("prime") & filters.user([7618467489]))  # replace with your admin ID(s)
+@bot.on_message(filters.command("prime") & filters.user([7618467489]))  # admin IDs
 async def add_premium_user(client, message):
     if len(message.command) < 2:
         await message.reply_text("⚠️ Usage: /prime <user_id or @username>")
@@ -2381,7 +2381,7 @@ async def add_premium_user(client, message):
 
     target = message.command[1]
 
-    # Try to resolve user
+    # Resolve user
     try:
         user = await client.get_users(target)
         user_id = user.id
@@ -2389,14 +2389,24 @@ async def add_premium_user(client, message):
         await message.reply_text("❌ Invalid user or username.")
         return
 
-    premium_users.add(user_id)
-    await message.reply_text(f"✅ Added user <code>{user_id}</code> to premium list.", parse_mode="html")
+    # Add to dict instead of .add()
+    premium_users[user_id] = {"added_by": message.from_user.id, "timestamp": int(time.time())}
 
-    # Optional: Persist to DB immediately (if using Mongo)
+    await message.reply_text(
+        f"✅ Added user <code>{user_id}</code> to premium list.",
+        parse_mode="html"
+    )
+
+    # Optional: persist to MongoDB immediately
     try:
-        state_backup.update_one({"_id": "singleton"}, {"$set": {"state.premium_users": list(premium_users)}}, upsert=True)
+        state_backup.update_one(
+            {"_id": "singleton"},
+            {"$set": {"state.premium_users": premium_users}},
+            upsert=True
+        )
     except Exception as e:
         print(f"[WARN] Failed to save premium list: {e}")
+
 
 @bot.on_message(filters.command("debug") & filters.user(OWNER_ID))
 @safe_handler
