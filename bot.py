@@ -3175,43 +3175,29 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ─── Scheduled Heartbeat Restart ───────────────────────────────────────────────
-RESTART_CHANNEL_ID = -1002056355467  # Replace with your channel/chat ID
+RESTART_CHANNEL_ID = -1001234567890  # Replace with your channel/chat ID
 
 async def heartbeat():
     while True:
-        await asyncio.sleep(60)  # every 2.5 hours
+        await asyncio.sleep(10 * 3600)  # every 10 hours
         try:
-            logger.info("💤 Heartbeat: restarting bot to prevent MTProto freeze...")
-
-            pre_msg = None
-            post_msg = None
+            logger.info("💤 Heartbeat: saving state and restarting bot to prevent freeze...")
 
             # Notify channel before restart
             try:
-                pre_msg = await bot.send_message(RESTART_CHANNEL_ID, "⚡ Bot is restarting (scheduled heartbeat)")
+                await bot.send_message(RESTART_CHANNEL_ID, "⚡ Bot is restarting (scheduled heartbeat)")
             except Exception as e:
                 logger.warning(f"Failed to notify channel about restart: {e}")
 
-            # Restart the MTProto client
-            await bot.restart()
-            logger.info("✅ Bot restarted successfully via heartbeat")
+            # Persist state to DB
+            save_state_to_db()
 
-            # Notify channel after restart
-            try:
-                post_msg = await bot.send_message(RESTART_CHANNEL_ID, "✅ Bot restarted successfully!")
-            except Exception as e:
-                logger.warning(f"Failed to notify channel after restart: {e}")
-
-            # Delete the messages if sent
-            for msg in [pre_msg, post_msg]:
-                if msg:
-                    try:
-                        await msg.delete()
-                    except Exception as e:
-                        logger.warning(f"Failed to delete heartbeat message: {e}")
+            # Restart the bot process (like /restart endpoint)
+            os.execl(sys.executable, sys.executable, *sys.argv)
 
         except Exception as e:
             logger.error(f"❌ Heartbeat restart failed: {e}")
+
 
 # ─── Main Entry ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -3239,9 +3225,10 @@ if __name__ == "__main__":
         logger.info("Assistant client connected.")
 
     # Start the heartbeat task
-    logger.info("→ Starting heartbeat task (auto-restart every 2.5 hours)")
+    logger.info("→ Starting heartbeat task (auto-restart every 10 hours)")
     asyncio.get_event_loop().create_task(heartbeat())
 
     logger.info("All services are up and running. Bot started successfully.")
     idle()
+
 
