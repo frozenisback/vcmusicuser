@@ -3166,61 +3166,43 @@ def load_state_from_db():
     global_playback_count = data.get("global_playback_count", 0)
     api_server_counter    = data.get("api_server_counter", 0)
     global_api_index      = data.get("global_api_index", 0)
-# ─── HTTP & Restart Handler ────────────────────────────────────────────────────
-class WebhookHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/":
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is running!")
-        elif self.path == "/status":
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot status: Running")
-        elif self.path == "/restart":
-            # Persist entire in-memory state, then exec to restart
-            save_state_to_db()
-            os.execl(sys.executable, sys.executable, *sys.argv)
-        else:
-            self.send_response(404)
-            self.end_headers()
-    def do_POST(self):
-        if self.path == "/webhook":
-            try:
-                length = int(self.headers.get("Content-Length", 0))
-                body = self.rfile.read(length)
-                update = json.loads(body)
-                bot._process_update(update)
-            except Exception as e:
-                print("Error processing update:", e)
-            self.send_response(200)
-            self.end_headers()
-        else:
-            self.send_response(404)
-            self.end_headers()
-# ─── Server Bootstrap ─────────────────────────────────────────────────────────
-def run_http_server():
-    port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(("", port), WebhookHandler)
-    print(f"HTTP server running on port {port}")
-    server.serve_forever()
-threading.Thread(target=run_http_server, daemon=True).start()
-# ─── Configure Logging ─────────────────────────────────────────────────────────
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger(__name__)
+
+# ─── Watchdog for self-healing ────────────────────────────────────────────────
+async def watchdog():
+    while True:
+        try:
+            await bot.get_me()  # ping Telegram
+        except Exception as e:
+            logger.warning(f"[WATCHDOG] Connection lost: {e}")
+            try:
+                await bot.stop()
+            except Exception as inner_e:
+                logger.warning(f"[WATCHDOG] bot.stop() failed or already stopped: {inner_e}")
+            try:
+                await bot.start()
+                logger.info("[WATCHDOG] Bot restarted successfully.")
+            except Exception as start_e:
+                logger.error(f"[WATCHDOG] Restart failed: {start_e}")
+        await asyncio.sleep(300)  # check every 5 minutes
+
 # ─── Main Entry ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logger.info("Loading persisted state from MongoDB...")
     load_state_from_db()
     logger.info("State loaded successfully.")
+
     logger.info("Starting Frozen Music Bot services...")
     logger.info("→ Starting PyTgCalls client...")
     call_py.start()
     logger.info("PyTgCalls client started.")
+
     logger.info("→ Starting Telegram bot (bot.run)...")
     try:
         bot.run()
@@ -3228,10 +3210,15 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Error starting Telegram bot: {e}")
         sys.exit(1)
+
     # If assistant is used for voice or other tasks
     if not assistant.is_connected:
         logger.info("Assistant not connected; starting assistant client...")
         assistant.run()
         logger.info("Assistant client connected.")
+
+    logger.info("→ Starting watchdog task")
+    asyncio.get_event_loop().create_task(watchdog())  # start self-healing watchdog
+
     logger.info("All services are up and running. Bot started successfully.")
     idle()
