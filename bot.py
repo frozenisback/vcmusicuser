@@ -1082,8 +1082,19 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
         display_server = server_id
         chat_api_server[chat_id] = (selected_api, server_id, display_server)
         global_api_index += 1
-    # 2a) Override assistant for certain servers
-    if server_id in (7, 8, 9, 10, 11, 12):
+
+    # PREMIUM: force premium users to use the dedicated premium API endpoint
+    PREMIUM_API_URL = "https://kb-prime-faa0c72fb53e.herokuapp.com"
+    if is_premium:
+        selected_api = PREMIUM_API_URL
+        # update mapping so subsequent operations for this chat use premium API
+        chat_api_server[chat_id] = (selected_api, server_id, display_server)
+
+    # 2a) Override assistant for certain servers or for premium users (premium forces @acekiller_010185)
+    if is_premium:
+        assistant_chat_id = 6565013496
+        assistant_username = "@acekiller_010185"
+    elif server_id in (7, 8, 9, 10, 11, 12):
         assistant_chat_id = 6565013496
         assistant_username = "@acekiller_010185"
     else:
@@ -1234,7 +1245,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
         f"<blockquote>❍ <b>ᴛɪᴛʟᴇ:</b> {one_line}\n"
         f"❍ <b>ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ:</b> {song_info['requester']}\n"
         f"❍ <b>ʟᴅs sᴇʀᴠᴇʀ:</b> {display_server}\n"
-        f"❍ <b>ᴍᴏᴅᴇ:</b> {'𝐏𝐫𝐞𝐦𝐢𝐮𝐦⚡' if is_premium else 'sᴛᴀɴᴅᴀʀᴅ'}"
+        f"❍ <b>ᴍᴏᴅᴇ:</b> {'𝐏𝐫𝐞ᴍɪᴜᴍ⚡' if is_premium else 'sᴛᴀɴᴅᴀʀᴅ'}"
         "</blockquote>"
     )
     control_row = [
@@ -1244,7 +1255,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
         InlineKeyboardButton(text="▢", callback_data="stop"),
     ]
     progress_button = InlineKeyboardButton(text=get_progress_bar_styled(0, total_duration), callback_data="progress")
-    playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
+    playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕt ✨", callback_data="add_to_playlist")
     base_keyboard = InlineKeyboardMarkup([
         control_row,
         [progress_button],
@@ -1307,6 +1318,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
             f"• LDS Server: {display_server}"
         )
     )
+
 @bot.on_callback_query()
 async def callback_query_handler(client, callback_query):
     chat_id = callback_query.message.chat.id
