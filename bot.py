@@ -2373,28 +2373,30 @@ async def unban_handler(_, message: Message):
     await bot.unban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been unbanned.")
 
-@bot.on(filters.command("prime") & filters.user([7618467489]))  # your admin ID(s)
-async def add_premium_user(bot, message):
+@bot.on_message(filters.command("prime") & filters.user([7618467489]))  # replace with your admin ID(s)
+async def add_premium_user(client, message):
     if len(message.command) < 2:
-        return await message.reply_text("❌ Usage: `/prime <userid or @username>`", quote=True)
+        await message.reply_text("⚠️ Usage: /prime <user_id or @username>")
+        return
 
     target = message.command[1]
+
+    # Try to resolve user
     try:
-        if target.startswith("@"):
-            user = await bot.get_users(target)
-        else:
-            user = await bot.get_users(int(target))
+        user = await client.get_users(target)
+        user_id = user.id
+    except Exception:
+        await message.reply_text("❌ Invalid user or username.")
+        return
+
+    premium_users.add(user_id)
+    await message.reply_text(f"✅ Added user <code>{user_id}</code> to premium list.", parse_mode="html")
+
+    # Optional: Persist to DB immediately (if using Mongo)
+    try:
+        state_backup.update_one({"_id": "singleton"}, {"$set": {"state.premium_users": list(premium_users)}}, upsert=True)
     except Exception as e:
-        return await message.reply_text(f"⚠️ Couldn't find user: {e}", quote=True)
-
-    premium_users.add(user.id)
-    save_premium()
-
-    await message.reply_text(
-        f"✅ **{user.first_name}** (`{user.id}`) has been added to Premium Users.",
-        quote=True,
-    )
-    print(f"[+] Added {user.first_name} ({user.id}) to premium list.")
+        print(f"[WARN] Failed to save premium list: {e}")
 
 @bot.on_message(filters.command("debug") & filters.user(OWNER_ID))
 @safe_handler
