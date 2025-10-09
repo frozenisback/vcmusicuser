@@ -3226,7 +3226,7 @@ if __name__ == "__main__":
 
     logger.info("→ Starting Telegram bot (bot.run)...")
     try:
-        bot.run()
+        bot.start()
         logger.info("Telegram bot has started.")
     except Exception as e:
         logger.error(f"Error starting Telegram bot: {e}")
@@ -3235,7 +3235,7 @@ if __name__ == "__main__":
     # If assistant is used for voice or other tasks
     if not assistant.is_connected:
         logger.info("Assistant not connected; starting assistant client...")
-        assistant.run()
+        assistant.start()
         logger.info("Assistant client connected.")
 
     # Start the heartbeat task
