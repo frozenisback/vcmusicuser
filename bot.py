@@ -3179,7 +3179,7 @@ RESTART_CHANNEL_ID = -1002056355467  # Replace with your channel/chat ID
 
 async def heartbeat():
     while True:
-        await asyncio.sleep(2.5 * 3600)  # every 2.5 hours
+        await asyncio.sleep(60)  # every 2.5 hours
         try:
             logger.info("💤 Heartbeat: restarting bot to prevent MTProto freeze...")
 
