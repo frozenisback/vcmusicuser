@@ -2394,7 +2394,7 @@ async def add_premium_user(client, message):
 
     await message.reply_text(
         f"✅ Added user <code>{user_id}</code> to premium list.",
-        parse_mode="html"
+        parse_mode=ParseMode.MARKDOWN
     )
 
     # Optional: persist to MongoDB immediately
