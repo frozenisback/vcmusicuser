@@ -5,41 +5,29 @@
   "logo": "https://telegra.ph/file/d02b81736a7e9519c6386.jpg",
   "keywords": ["telegram", "music", "bot", "vc", "python"],
   "env": {
-    "API_HASH": {
-      "description": "Your Telegram API_HASH from https://my.telegram.org",
-      "required": true
-    },
     "API_ID": {
       "description": "Your Telegram API_ID from https://my.telegram.org",
       "required": true
     },
-    "ASSISTANT_SESSION": {
-      "description": "Pyrogram string session for assistant account",
+    "API_HASH": {
+      "description": "Your Telegram API_HASH from https://my.telegram.org",
       "required": true
     },
     "BOT_TOKEN": {
       "description": "Your Telegram bot token from @BotFather",
       "required": true
     },
-    "OWNER_ID": {
-      "description": "Your Telegram user ID (integer, e.g. 123456789)",
+    "ASSISTANT_SESSION": {
+      "description": "Pyrogram string session for assistant account",
       "required": true
     },
-    "MongoDB_url": {
-      "description": "MongoDB URL (can use Atlas or local Mongo)",
+    "API_URL": {
+      "description": "Base API URL used for bot communication",
       "required": true
     },
-    "UPDATES_CHANNEL": {
-      "description": "Telegram channel link for bot updates (default: vibeshiftbots)",
-      "required": false
-    },
-    "SUPPORT_GROUP": {
-      "description": "Telegram support group link (default: Frozensupport1)",
-      "required": false
-    },
-    "START_ANIMATION": {
-      "description": "URL of the animation/video to show on /start command",
-      "required": false
+    "DOWNLOAD_API_URL": {
+      "description": "API endpoint for downloading audio/video",
+      "required": true
     }
   },
   "buildpacks": [
