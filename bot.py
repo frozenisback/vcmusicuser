@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import math
 import time
 import uuid
 import json
@@ -52,6 +53,8 @@ from typing import Union
 import urllib
 import html
 from typing import List
+from html import escape as _escape
+
 
 
 API_ID = int(os.environ.get("API_ID"))
@@ -77,13 +80,13 @@ def _custom_exception_handler(loop, context):
         "ID not found" in str(exc) or "Peer id invalid" in str(exc)
     ):
         return  # ignore peer‐id errors
-    # ← NEW: ignore the "NoneType has no attribute 'write'" from get_channel_difference
+    # ← NEW: ignore the "NoneType has no attribute 'write'"" from get_channel_difference
     if isinstance(exc, AttributeError) and "has no attribute 'write'" in str(exc):
         return
     # otherwise, let it bubble
     loop.default_exception_handler(context)
 asyncio.get_event_loop().set_exception_handler(_custom_exception_handler)
-session_name = os.environ.get("SESSION_NAME", "music_bot1")
+session_name = os.environ.get("SESSION_NAME", "mus1ic_bo1t1")
 bot = Client(session_name, bot_token=BOT_TOKEN, api_id=API_ID, api_hash=API_HASH)
 assistant = Client("assistant_account", session_string=ASSISTANT_SESSION)
 call_py = PyTgCalls(assistant)
@@ -149,19 +152,19 @@ last_suggestions = {}
 global_playback_count = 0  # Increments on every new playback request
 api_server_counter = 0     # Used to select an API server in round-robin fashion
 api_servers = [
-    "https://py-tgcalls-api-1.onrender.com",
+    "https://tgapi-s5e8.onrender.com",
     "https://py-tgcalls-api-4vju.onrender.com",
+    "https://playbackapi-hzy2.onrender.com",  
     "https://py-tgcalls-api-p44l.onrender.com",
-    "https://py-tgcalls-api-fzk2.onrender.com",
-    "https://py-tgcalls-api-vjd1.onrender.com",
+    "https://tgapi-456u.onrender.com",
+    "https://tgapi-1c3h.onrender.com",
     "https://playbackapi-ghdr.onrender.com",
     "https://py-tgcalls-api-y1gs.onrender.com",
     "https://playbackapi.onrender.com",
     "https://playbackapi-k0ah.onrender.com",
-    "https://playbackapi-xar2.onrender.com",  # ✅ newly added
-    "https://playbackapi-5gv7.onrender.com"   # ✅ newly added
+    "https://playbackapi-xar2.onrender.com",   
+    "https://playbackapi-5gv7.onrender.com"    
 ]
-
 
 chat_api_server = {}
 global_api_index = 0
@@ -197,7 +200,7 @@ def safe_handler(func):
             except Exception:
                 chat_id = "Unknown"
             error_text = (
-                f"Error in handler `{func.__name__}` (chat id: {chat_id}):\n\n{str(e)}"
+                f"Error in handler `{func.__name__}` (chat id: {chat_id}):\\n\\n{str(e)}"
             )
             print(error_text)
             # Log the error to support
@@ -259,6 +262,7 @@ async def is_api_assistant_in_chat(chat_id):
         print(f"Error checking API assistant in chat: {e}")
         return False
     
+
 def iso8601_to_seconds(iso_duration):
     try:
         duration = isodate.parse_duration(iso_duration)
@@ -312,7 +316,7 @@ async def fetch_youtube_link_backup(query):
                 if resp.status != 200:
                     raise Exception(f"Backup API returned status {resp.status}")
                 data = await resp.json()
-                # Mirror primary API’s return:
+                # Mirror primary API's return:
                 if "playlist" in data:
                     return data
                 return (
@@ -585,7 +589,7 @@ async def help_util_callback(_, callback_query):
     text = (
         "🔍 *Utility & Extra Commands*\n\n"
         ">➜ `/ping`\n"
-        "   • Check bot’s response time and uptime.\n\n"
+        "   • Check bot's response time and uptime.\n\n"
         ">➜ `/clear`\n"
         "   • Clear the entire queue. (Admins only)\n\n"
         ">➜ Auto-Suggestions:\n"
@@ -596,209 +600,6 @@ async def help_util_callback(_, callback_query):
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="show_help")]]
     await callback_query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(buttons))
 MAX_TITLE_LEN = 20
-
-async def download_bytes_from_url(url: str) -> bytes:
-    """
-    Given a URL, perform an HTTP GET and return the raw bytes.
-    Uses aiohttp so that it’s async.
-    """
-    async with aiohttp.ClientSession() as sess:
-        async with sess.get(url) as resp:
-            resp.raise_for_status()
-            return await resp.read()
-
-def format_duration_for_card(seconds: int) -> str:
-    # Converts seconds to M:SS format (for display on card)
-    if seconds <= 0:
-        return "0:00"
-    m, s = divmod(seconds, 60)
-    return f"{m}:{s:02d}"
-
-def create_frosted_card(
-    image_bytes: bytes,
-    sender_username: str = "@username",
-    title_text: str = "Title",
-    artist_text: str = "Artist Name",
-    time_text: str = "0:00"   # <─ accept dynamic time text
-) -> BytesIO:
-    """
-    1. Blurs the background.
-    2. Creates a centered glass card with rounded edges.
-    3. Pastes a 300×300 thumbnail in the top-left of the card.
-    4. Draws title, artist name, and a progress bar to the right of the thumbnail.
-    5. Adds “Requested by” on the right, and “Powered by VibeshiftBots” on the left.
-    6. Adds a LIVE badge at the top.
-    Plus: Adds a royal white-golden glow behind all text and makes text very bright.
-    """
-    import re
-    # --- FIX: Strip HTML tags from sender_username if any ---
-    sender_username = re.sub(r"<.*?>", "", str(sender_username)).strip()
-    
-    # 0) Enforce title character limit (truncate if necessary)
-    if len(title_text) > MAX_TITLE_LEN:
-        title_text = title_text[: (MAX_TITLE_LEN - 1) ] + "…"
-    # 1) Load original
-    orig = Image.open(BytesIO(image_bytes)).convert("RGB")
-    # 1a) Trim black stripes from top/bottom
-    gray = orig.convert("L")
-    w, h = gray.size
-    top = 0
-    for y in range(h):
-        if max(gray.crop((0, y, w, y+1)).getdata()) > 16:
-            top = y
-            break
-    bottom = h
-    for y in range(h-1, -1, -1):
-        if max(gray.crop((0, y, w, y+1)).getdata()) > 16:
-            bottom = y + 1
-            break
-    orig = orig.crop((0, top, w, bottom))
-    # 1b) Resize to 1280×720
-    orig = orig.resize((1280, 720), Image.Resampling.LANCZOS)
-    # 2) Blur background (heavier so only colours remain)
-    blurred_bg = orig.filter(ImageFilter.GaussianBlur(radius=100))
-    # 3) Convert to RGBA canvas
-    canvas = blurred_bg.convert("RGBA")
-    # 4) Define card dimensions & position (centered)
-    card_w, card_h = 1000, 400
-    card_x = (1280 - card_w) // 2
-    card_y = (720 - card_h) // 2
-    radius = 40
-    # 5) Create a “frosted glass” region by taking a cropped blur of the background
-    card_region = blurred_bg.crop((card_x, card_y, card_x + card_w, card_y + card_h))
-    card_region = card_region.filter(ImageFilter.GaussianBlur(radius=10)).convert("RGBA")
-    # 6) Rounded‐rectangle mask
-    mask = Image.new("L", (card_w, card_h), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    mask_draw.rounded_rectangle([0, 0, card_w, card_h], radius=radius, fill=255)
-    # 7) Apply a semi‐transparent dark overlay (“glass”)
-    glass = Image.new("RGBA", (card_w, card_h), (20, 20, 20, 150))
-    card_frosted = Image.alpha_composite(card_region, glass)
-    # 8) Paste the frosted card onto the canvas with its rounded mask
-    canvas.paste(card_frosted, (card_x, card_y), mask)
-    draw = ImageDraw.Draw(canvas)
-    # Glow helper: draws a golden blurred glow under text
-    def add_glow(text, position, font):
-        glow_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-        glow_draw = ImageDraw.Draw(glow_layer)
-        glow_color = (255, 215, 0, 180)  # soft golden
-        glow_draw.text(position, text, font=font, fill=glow_color)
-        glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=8))
-        canvas.alpha_composite(glow_layer)
-    # 9) Subtle border around the card
-    draw.rounded_rectangle(
-        [card_x, card_y, card_x + card_w, card_y + card_h],
-        radius=radius,
-        outline=(30, 30, 30, 200),
-        width=2
-    )
-    # ─────── New: LIVE badge only ───────
-    badge_text = "LIVE"
-    badge_w, badge_h = 80, 30
-    badge_x = card_x + card_w - badge_w - 20
-    badge_y = card_y + 20
-    # Red rounded rectangle for badge
-    draw.rounded_rectangle(
-        [badge_x, badge_y, badge_x + badge_w, badge_y + badge_h],
-        radius=5,
-        fill=(255, 0, 0, 255)
-    )
-    # Golden glow behind badge text
-    font_live = ImageFont.truetype("arial.ttf", size=20) if True else ImageFont.load_default()
-    add_glow(badge_text, (badge_x + 50, badge_y + 25), font_live)
-    # Bright white LIVE text centered
-    text_bbox = draw.textbbox((0, 0), badge_text, font=font_live)
-    text_w = text_bbox[2] - text_bbox[0]
-    text_h = text_bbox[3] - text_bbox[1]
-    text_x = badge_x + (badge_w - text_w) // 2
-    text_y = badge_y + (badge_h - text_h) // 2
-    draw.text((text_x, text_y), badge_text, font=font_live, fill=(255, 255, 255, 255))
-    # 10) Prepare thumbnail: center‐crop then resize to 300×300
-    W, H = orig.size
-    crop_size = min(W, H)
-    left = (W - crop_size) // 2
-    upper = (H - crop_size) // 2
-    right = left + crop_size
-    lower = upper + crop_size
-    cropped_square = orig.crop((left, upper, right, lower))
-    album_thumb = cropped_square.resize((300, 300), Image.Resampling.LANCZOS)
-    thumb_x = card_x + 30
-    thumb_y = card_y + 30
-    canvas.paste(album_thumb.convert("RGBA"), (thumb_x, thumb_y))
-    # 11) White border around thumbnail
-    draw.rectangle(
-        [thumb_x, thumb_y, thumb_x + 300, thumb_y + 300],
-        outline=(255, 255, 255, 200),
-        width=2
-    )
-    # 12) Load fonts (fallback to default if Arial is missing)
-    font_title = ImageFont.load_default()
-    font_artist = ImageFont.load_default()
-    font_time = ImageFont.load_default()
-    font_footer = ImageFont.load_default()
-    font_watermark = ImageFont.load_default()
-    try:
-        font_title = ImageFont.truetype("arial.ttf", size=48)
-        font_artist = ImageFont.truetype("arial.ttf", size=36)
-        font_time = ImageFont.truetype("arial.ttf", size=28)
-        font_footer = ImageFont.truetype("arial.ttf", size=24)
-        font_watermark = ImageFont.truetype("arial.ttf", size=18)
-    except:
-        pass
-    # 13) Draw title with glow
-    text_x = card_x + 350
-    text_y = card_y + 60
-    add_glow(title_text, (text_x, text_y), font_title)
-    draw.text((text_x, text_y), title_text, font=font_title, fill=(255, 255, 255, 255))
-    # 14) Draw progress bar
-    bar_x0 = card_x + 370
-    bar_y0 = card_y + 240
-    bar_length = 400
-    bar_height = 6
-    bar_x1 = bar_x0 + bar_length
-    bar_y1 = bar_y0 + bar_height
-    draw.rounded_rectangle(
-        [bar_x0, bar_y0, bar_x1, bar_y1],
-        radius=3,
-        fill=(180, 180, 180, 120)
-    )
-    fill_pct = 0.35
-    filled_length = int(bar_length * fill_pct)
-    draw.rounded_rectangle(
-        [bar_x0, bar_y0, bar_x0 + filled_length, bar_y1],
-        radius=3,
-        fill=(255, 255, 255, 200)
-    )
-    thumb_radius = 10
-    cx = bar_x0 + filled_length
-    cy = bar_y0 + bar_height // 2
-    draw.ellipse(
-        [cx - thumb_radius, cy - thumb_radius, cx + thumb_radius, cy + thumb_radius],
-        fill=(255, 255, 255, 255)
-    )
-    # Glow behind time text (now uses passed-in time_text)
-    time_pos = (bar_x1 + 10, bar_y0 - 8)
-    add_glow(time_text, time_pos, font_time)
-    draw.text(time_pos, time_text, font=font_time, fill=(255, 255, 255, 255))
-    # 16) “Requested by @username” with glow
-    footer_text = f"Requested by {sender_username}"
-    footer_bbox = draw.textbbox((0, 0), footer_text, font=font_footer)
-    footer_w = footer_bbox[2] - footer_bbox[0]
-    footer_x = card_x + card_w - 20 - footer_w
-    footer_y = card_y + card_h - 40
-    add_glow(footer_text, (footer_x, footer_y), font_footer)
-    draw.text((footer_x, footer_y), footer_text, font=font_footer, fill=(255, 255, 255, 230))
-    # 17) “Powered by VibeshiftBots” with glow
-    watermark_text = "Powered by KustBots"
-    wm_x = card_x + 30
-    wm_y = card_y + card_h - 30
-    add_glow(watermark_text, (wm_x, wm_y), font_watermark)
-    draw.text((wm_x, wm_y), watermark_text, font=font_watermark, fill=(255, 255, 255, 200))
-    # 18) Return as BytesIO (PNG)
-    output = BytesIO()
-    canvas.convert("RGB").save(output, format="PNG")
-    output.seek(0)
-    return output
 
 @bot.on_message(
     filters.group & filters.regex(
@@ -1010,7 +811,7 @@ MAX_TITLE_LEN = 20
 def _one_line_title(full_title: str) -> str:
     """
     Truncate `full_title` to at most MAX_TITLE_LEN chars.
-    If truncated, append “…” so it still reads cleanly in one line.
+    If truncated, append "…" so it still reads cleanly in one line.
     """
     if len(full_title) <= MAX_TITLE_LEN:
         return full_title
@@ -1168,46 +969,13 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
         playlist_button = InlineKeyboardButton(text="✨ ᴀᴅᴅ тσ ρℓαυℓιѕт ✨", callback_data="add_to_playlist")
         base_keyboard = InlineKeyboardMarkup([control_row, [progress_button], [playlist_button]])
         
-        # Try to create frosted card if thumbnail exists
-        frosted_buffer = None
+        # Get thumbnail URL
         thumb_url = song_info.get("thumbnail")
-        
-        if thumb_url:
-            try:
-                # Handle both file paths and URLs
-                if thumb_url.startswith(("http://", "https://")):
-                    raw_thumb = await download_bytes_from_url(thumb_url)
-                else:
-                    # Check if file exists before opening
-                    if os.path.exists(thumb_url):
-                        with open(thumb_url, "rb") as f:
-                            raw_thumb = f.read()
-                    else:
-                        raise FileNotFoundError(f"Thumbnail file not found: {thumb_url}")
-                
-                # Create frosted card with the thumbnail
-                frosted_buffer = create_frosted_card(
-                    raw_thumb,
-                    sender_username=song_info["requester"],
-                    title_text=song_info['title'],
-                    artist_text=song_info['requester'],
-                    time_text=format_duration_for_card(total_duration)
-                )
-            except Exception as e:
-                print(f"Thumbnail processing failed: {e}")
-                frosted_buffer = None
         
         # Send message with thumbnail if available, otherwise send text
         try:
-            if frosted_buffer:
-                progress_message = await message.reply_photo(
-                    photo=frosted_buffer,
-                    caption=base_caption,
-                    reply_markup=base_keyboard,
-                    parse_mode=ParseMode.HTML
-                )
-            elif thumb_url and thumb_url.startswith(("http://", "https://")):
-                # Fallback to direct thumbnail URL if frosted card failed
+            if thumb_url and thumb_url.startswith(("http://", "https://")):
+                # Use thumbnail URL directly
                 progress_message = await message.reply_photo(
                     photo=thumb_url,
                     caption=base_caption,
@@ -1215,7 +983,7 @@ async def fallback_local_playback(chat_id: int, message: Message, song_info: dic
                     parse_mode=ParseMode.HTML
                 )
             else:
-                # Final fallback to text-only message
+                # Fallback to text-only message
                 progress_message = await message.reply_text(
                     base_caption,
                     reply_markup=base_keyboard,
@@ -1279,11 +1047,11 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
         [
             [
                 InlineKeyboardButton("Support", url="https://t.me/kustbotschat"),
-                InlineKeyboardButton("Admin", url="https://t.me/KustXoffical")
+                InlineKeyboardButton("Admin", url="https://t.me/xyz09723")
             ]
         ]
     )
-    # 1) “Processing…” message
+    # 1) "Processing…" message
     processing_message = message
     status_text = (
         "✨<b>ᴘʀᴇᴍɪᴜᴍ ᴅᴇᴛᴇᴄᴛᴇᴅ:</b> <b>ꜱᴘᴇᴇᴅ 𝟻x! 🚀</b>\n"
@@ -1321,7 +1089,7 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
     else:
         assistant_chat_id = ASSISTANT_CHAT_ID
         assistant_username = None
-    # 3) Check assistant’s chat‐member status via Bot API
+    # 3) Check assistant's chat‐member status via Bot API
     get_member_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getChatMember"
     params = {"chat_id": chat_id, "user_id": assistant_chat_id}
     async with aiohttp.ClientSession() as session:
@@ -1486,39 +1254,39 @@ async def start_playback_task(chat_id: int, message: Message, requester_id: int 
         await processing_message.delete()
     except Exception:
         pass
-    frosted_buffer = None
-    if song_info.get("thumbnail"):
-        try:
-            raw_thumb = None
-            if os.path.isfile(song_info["thumbnail"]):
-                with open(song_info["thumbnail"], "rb") as img_f:
-                    raw_thumb = img_f.read()
-            else:
-                raw_thumb = await download_bytes_from_url(song_info["thumbnail"])
-            frosted_buffer = create_frosted_card(
-                raw_thumb,
-                sender_username=f"{song_info['requester']}",
-                title_text=song_info['title'],
-                artist_text=song_info['requester'],
+    
+    # Get thumbnail URL
+    thumb_url = song_info.get("thumbnail")
+    
+    # Send message with thumbnail if available, otherwise send text
+    try:
+        if thumb_url and thumb_url.startswith(("http://", "https://")):
+            # Use thumbnail URL directly
+            new_progress_message = await bot.send_photo(
+                chat_id,
+                photo=thumb_url,
+                caption=base_caption,
+                reply_markup=base_keyboard,
+                parse_mode=ParseMode.HTML
             )
-        except Exception:
-            frosted_buffer = None
-    if frosted_buffer:
-        new_progress_message = await bot.send_photo(
+        else:
+            # Fallback to text-only message
+            new_progress_message = await bot.send_message(
+                chat_id,
+                base_caption,
+                reply_markup=base_keyboard,
+                parse_mode=ParseMode.HTML
+            )
+    except Exception as e:
+        print(f"Message sending failed: {e}")
+        # Ultimate fallback to text-only message
+        new_progress_message = await bot.send_message(
             chat_id,
-            photo=frosted_buffer,
-            caption=base_caption,
+            base_caption,
             reply_markup=base_keyboard,
             parse_mode=ParseMode.HTML
         )
-    else:
-        new_progress_message = await bot.send_photo(
-            chat_id,
-            photo=song_info["thumbnail"],
-            caption=base_caption,
-            reply_markup=base_keyboard,
-            parse_mode=ParseMode.HTML
-        )
+    
     global_playback_count += 1
     asyncio.create_task(
         update_progress_caption(
@@ -2210,23 +1978,45 @@ async def welcome_new_member(client: Client, message: Message):
             os.remove(img_path)
         except OSError:
             pass
+
+DOWNLOAD_API_URL_SPOTIFY = "http://104.168.62.69:5000/spotify-down?url="
+
 download_cache = {}  # Global cache dictionary
-async def download_audio(url):
-    # If url is already a local file, return it directly (for replied audio/video files)
+
+def is_spotify_episode(url: str) -> bool:
+    return "open.spotify.com/episode" in url
+
+async def download_audio(url: str) -> str:
+    """
+    Downloads audio from YouTube or Spotify and caches it.
+    Returns local file path.
+    """
+    # If URL is already a local file, return it directly
     if os.path.exists(url) and os.path.isfile(url):
         return url
+
+    # Return cached file if available
     if url in download_cache:
-        return download_cache[url]  # Return cached file path if available
+        return download_cache[url]
+
     try:
-        # Lower the priority of the process
+        # Lower process priority
         proc = psutil.Process(os.getpid())
-        proc.nice(psutil.IDLE_PRIORITY_CLASS if os.name == "nt" else 19)  # Windows/Linux
+        proc.nice(psutil.IDLE_PRIORITY_CLASS if os.name == "nt" else 19)
+
+        # Prepare temp file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
         file_name = temp_file.name
         temp_file.close()
-        download_url = f"{DOWNLOAD_API_URL}{url}"
+
+        # Select correct API
+        if is_spotify_episode(url):
+            download_url = f"{DOWNLOAD_API_URL_SPOTIFY}{url}"
+        else:
+            download_url = f"{DOWNLOAD_API_URL}{url}"
+
         async with aiohttp.ClientSession() as session:
-            async with session.get(download_url, timeout=35) as response:
+            async with session.get(download_url, timeout=150) as response:
                 if response.status == 200:
                     async with aiofiles.open(file_name, 'wb') as f:
                         while True:
@@ -2235,10 +2025,13 @@ async def download_audio(url):
                                 break
                             await f.write(chunk)
                             await asyncio.sleep(0.01)
+
+                    # Cache and return
                     download_cache[url] = file_name
                     return file_name
                 else:
                     raise Exception(f"Failed to download audio. HTTP status: {response.status}")
+
     except asyncio.TimeoutError:
         raise Exception("❌ Download API took too long to respond. Please try again.")
     except Exception as e:
@@ -2338,7 +2131,14 @@ async def _send_couple(
 # /couple command
 # -------------------
 processing_chats = set()
-@bot.on_message(filters.group & filters.command("coup75le", prefixes="/"))
+variants = [
+    "couple", "cuople", "cople", "c0uple", "coupl"  # add more common typos
+]
+
+# Build a regex pattern to match any variant, case-insensitive
+pattern = r"^/(?:{})\b".format("|".join(variants))
+
+@bot.on_message(filters.group & filters.regex(pattern, flags=re.IGNORECASE))
 async def make_couple(client: Client, message):
     chat_id     = message.chat.id
     group_title = message.chat.title or ""
@@ -2564,6 +2364,202 @@ async def unban_handler(_, message: Message):
         return
     await bot.unban_chat_member(message.chat.id, target_id)
     await message.reply(f"✅ User [{target_id}](tg://user?id={target_id}) has been unbanned.")
+
+@bot.on_message(filters.command("debug") & filters.user(OWNER_ID))
+@safe_handler
+async def debug_handler(_, message):
+    """
+    /debug [chat_id] [--file|-f] [--code]
+    - default: inline code if short, else send .txt file to OWNER
+    - --file / -f: force .txt file
+    - --code: force inline code block
+    """
+    parts = message.command or []
+    flags = set(p.lower() for p in parts[2:]) if len(parts) > 2 else set()
+    # support when only flags passed after command, and when only chat id provided
+    # find chat id and flags robustly
+    target_chat_id = None
+    want_file = False
+    want_code = False
+
+    # parse parts (parts[0] == "debug")
+    for p in parts[1:]:
+        if p in ("--file", "-f"):
+            want_file = True
+        elif p == "--code":
+            want_code = True
+        else:
+            # try parse as int id or username
+            if target_chat_id is None:
+                try:
+                    target_chat_id = int(p)
+                except Exception:
+                    # keep string (username) — we'll try to resolve
+                    target_chat_id = p
+
+    if target_chat_id is None:
+        target_chat_id = message.chat.id
+
+    # if username was given, try resolve
+    if isinstance(target_chat_id, str) and not str(target_chat_id).startswith("-"):
+        try:
+            u = await bot.get_users(target_chat_id)
+            target_chat_id = u.id
+        except Exception:
+            # fallback: keep as string
+            pass
+
+    # Build debug lines (similar to earlier implementation)
+    out_lines = []
+    out_lines.append(f"DEBUG — Chat {target_chat_id}")
+    out_lines.append("")
+    try:
+        chat = await bot.get_chat(target_chat_id)
+        title = getattr(chat, "title", None) or getattr(chat, "first_name", None) or "—"
+        out_lines.append(f"Title: { _escape(str(title)) }")
+        out_lines.append(f"Type: { _escape(str(chat.type)) }")
+        out_lines.append(f"Username: @{_escape(chat.username)}" if getattr(chat, "username", None) else "Username: —")
+    except Exception as e:
+        out_lines.append(f"get_chat: Failed — {_escape(str(e))}")
+
+    # member count
+    try:
+        members_count = await bot.get_chat_members_count(target_chat_id)
+        out_lines.append(f"Members: {members_count}")
+    except Exception as e:
+        out_lines.append(f"Members: N/A ({_escape(str(e))})")
+
+    # assistant presence checks (best-effort)
+    try:
+        assistant_status = await is_assistant_in_chat(target_chat_id)
+        out_lines.append(f"Assistant client in chat: {assistant_status}")
+    except Exception as e:
+        out_lines.append(f"Assistant check: Error ({_escape(str(e))})")
+    try:
+        api_assistant_status = await is_api_assistant_in_chat(target_chat_id)
+        out_lines.append(f"API Assistant (bot) in chat: {api_assistant_status}")
+    except Exception as e:
+        out_lines.append(f"API Assistant check: Error ({_escape(str(e))})")
+
+    # mapping & queue state
+    try:
+        api_map = chat_api_server.get(target_chat_id)
+        out_lines.append(f"Assigned API/LDS server: {api_map}")
+    except Exception:
+        out_lines.append("Assigned API/LDS server: N/A")
+    q = chat_containers.get(target_chat_id, [])
+    out_lines.append(f"Queue length: {len(q)}")
+    out_lines.append(f"Playback mode: {playback_mode.get(target_chat_id, 'unknown')}")
+
+    # last played, suggestions
+    last_song = last_played_song.get(target_chat_id)
+    if last_song:
+        out_lines.append(f"Last played: { _escape(str(last_song.get('title','—'))) } ({last_song.get('duration','—')})")
+    else:
+        out_lines.append("Last played: None")
+    sugg = last_suggestions.get(target_chat_id, [])
+    out_lines.append(f"Last suggestions cached: {len(sugg)}")
+
+    # members_cache (db) — best-effort
+    try:
+        cache_doc = members_cache.find_one({"chat_id": target_chat_id})
+        if cache_doc:
+            out_lines.append(f"members_cache: {len(cache_doc.get('members',[]))} ids (last_synced: {cache_doc.get('last_synced')})")
+        else:
+            out_lines.append("members_cache: None")
+    except Exception as e:
+        out_lines.append(f"members_cache: Error ({_escape(str(e))})")
+
+    # DB / broadcast / couples checks
+    try:
+        out_lines.append(f"broadcast DB entry: { bool(broadcast_collection.find_one({'chat_id': target_chat_id})) }")
+        out_lines.append(f"couple cached: { bool(couples_collection.find_one({'chat_id': target_chat_id})) }")
+    except Exception as e:
+        out_lines.append(f"DB checks: Error ({_escape(str(e))})")
+
+    # API playback records count
+    try:
+        rec_count = sum(1 for r in api_playback_records if r.get("chat_id") == target_chat_id)
+        out_lines.append(f"API playback records for chat: {rec_count}")
+    except Exception:
+        out_lines.append("API playback records: Error")
+
+    # system stats
+    try:
+        now_ts = time.time()
+        uptime_s = int(now_ts - bot_start_time) if 'bot_start_time' in globals() else 0
+        def _fmt_uptime(s):
+            if s <= 0: return "0s"
+            m, sec = divmod(s, 60); h, m = divmod(m, 60); d, h = divmod(h, 24)
+            parts = []
+            if d: parts.append(f"{d}d")
+            if h: parts.append(f"{h}h")
+            if m: parts.append(f"{m}m")
+            if sec: parts.append(f"{sec}s")
+            return " ".join(parts)
+        out_lines.append("")
+        out_lines.append("— System / Bot —")
+        out_lines.append(f"Bot uptime: {_fmt_uptime(uptime_s)}")
+        try:
+            cpu = psutil.cpu_percent(interval=0.5)
+            vm = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            out_lines.append(f"CPU %: {cpu}%")
+            out_lines.append(f"RAM: {vm.percent}% ({math.floor(vm.used/1024/1024)}MB used)")
+            out_lines.append(f"Disk: {disk.percent}% ({math.floor(disk.used/1024/1024/1024)} GB used)")
+        except Exception as e:
+            out_lines.append(f"psutil: Error ({_escape(str(e))})")
+    except Exception as e:
+        out_lines.append(f"System info: Error ({_escape(str(e))})")
+
+    # API servers summary (privacy-safe)
+    try:
+        total_servers = len(api_servers)
+        out_lines.append("")
+        out_lines.append(f"API servers: {total_servers} configured")
+    except Exception:
+        out_lines.append("")
+        out_lines.append("API servers: unavailable")
+
+    full_text = "\n".join(out_lines)
+
+    # decide output method
+    MAX_INLINE = 3500
+    use_file = want_file or (len(full_text) > MAX_INLINE and not want_code)
+
+    if not use_file:
+        # send inline as HTML preformatted block (monospace)
+        safe_text = _escape(full_text)
+        # Telegram HTML <pre> preserves formatting; send in parts if too long
+        if len(safe_text) <= 4000:
+            await message.reply(f"<pre>{safe_text}</pre>", parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        else:
+            # split into chunks of ~3900
+            chunk_size = 3900
+            for i in range(0, len(safe_text), chunk_size):
+                await message.reply(f"<pre>{safe_text[i:i+chunk_size]}</pre>", parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        return
+
+    # create .txt file and send to OWNER (private)
+    buf = io.BytesIO()
+    buf.write(full_text.encode("utf-8"))
+    buf.seek(0)
+    filename = f"debug_{target_chat_id}_{int(time.time())}.txt"
+
+    try:
+        await bot.send_document(OWNER_ID, document=buf, file_name=filename)
+        # reply in the invoking chat to confirm (avoid leaking full content)
+        if message.chat.id == OWNER_ID:
+            # if invoked in private with owner, just confirm
+            await message.reply_text(f"Sent debug file: {filename}")
+        else:
+            await message.reply_text("Debug is large — sent a .txt file to the owner (private).")
+    except Exception as e:
+        # fallback: try to reply with a short snippet and include error
+        await message.reply_text(f"Failed to send file to owner: {_escape(str(e))}\nSending inline snippet instead.")
+        safe_text = _escape(full_text[:3900])
+        await message.reply(f"<pre>{safe_text}</pre>", parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        
 @bot.on_message(filters.group & filters.command("mute"))
 @safe_handler
 async def mute_handler(_, message: Message):
@@ -3077,29 +3073,145 @@ async def stream_ended_handler(_, message):
 async def frozen_check_command(_, message):
     await message.reply_text("frozen check successful ✨")
 # ─── Persistence Helpers (Sync) ────────────────────────────────────────────────
-RESTART_CHANNEL_ID = -1001234567890  # Replace with your channel/chat ID
+def save_state_to_db():
+    """
+    Persist all in-memory state dictionaries into MongoDB before a hard restart.
+    We store a single document with _id "singleton" that contains:
+      - chat_containers
+      - chat_last_command
+      - chat_pending_commands
+      - playback_mode
+      - last_played_song
+      - last_suggestions
+      - chat_api_server
+      - global_playback_count
+      - api_server_counter
+      - global_api_index
+    """
+    # Convert integer keys to strings (MongoDB requires string keys for dicts)
+    data = {
+        "chat_containers":       { str(cid): queue for cid, queue in chat_containers.items() },
+        "chat_last_command":     { str(cid): cmd   for cid, cmd   in chat_last_command.items() },
+        "chat_pending_commands": { str(cid): pend  for cid, pend  in chat_pending_commands.items() },
+        "playback_mode":         { str(cid): mode  for cid, mode  in playback_mode.items() },
+        "last_played_song":      { str(cid): song  for cid, song  in last_played_song.items() },
+        "last_suggestions":      { str(cid): sug   for cid, sug   in last_suggestions.items() },
+        "chat_api_server":       { str(cid): srv   for cid, srv   in chat_api_server.items() },
+        "global_playback_count": global_playback_count,
+        "api_server_counter":    api_server_counter,
+        "global_api_index":      global_api_index
+    }
+    state_backup.replace_one(
+        {"_id": "singleton"},
+        {"_id": "singleton", "state": data},
+        upsert=True
+    )
+    # Clear only those dictionaries we want to reset on restart
+    chat_containers.clear()
+    chat_last_command.clear()
+    chat_pending_commands.clear()
+    playback_mode.clear()
+    last_played_song.clear()
+    last_suggestions.clear()
+    chat_api_server.clear()
+    # Note: We do NOT clear global counters; they'll be reloaded
+def load_state_from_db():
+    """
+    Load any persisted state from MongoDB on startup, then remove the backup document.
+    Reconstructs all in-memory dictionaries and counters.
+    """
+    doc = state_backup.find_one_and_delete({"_id": "singleton"})
+    if not doc or "state" not in doc:
+        return
+    data = doc["state"]
+    # Restore chat_containers
+    for cid_str, queue in data.get("chat_containers", {}).items():
+        try:
+            chat_containers[int(cid_str)] = queue
+        except ValueError:
+            continue
+    # Restore simple string mappings
+    for cid_str, cmd in data.get("chat_last_command", {}).items():
+        try:
+            chat_last_command[int(cid_str)] = cmd
+        except ValueError:
+            continue
+    for cid_str, pend in data.get("chat_pending_commands", {}).items():
+        try:
+            chat_pending_commands[int(cid_str)] = pend
+        except ValueError:
+            continue
+    for cid_str, mode in data.get("playback_mode", {}).items():
+        try:
+            playback_mode[int(cid_str)] = mode
+        except ValueError:
+            continue
+    for cid_str, song in data.get("last_played_song", {}).items():
+        try:
+            last_played_song[int(cid_str)] = song
+        except ValueError:
+            continue
+    for cid_str, sug in data.get("last_suggestions", {}).items():
+        try:
+            last_suggestions[int(cid_str)] = sug
+        except ValueError:
+            continue
+    for cid_str, srv in data.get("chat_api_server", {}).items():
+        try:
+            chat_api_server[int(cid_str)] = srv
+        except ValueError:
+            continue
+    # Restore counters
+    global global_playback_count, api_server_counter, global_api_index
+    global_playback_count = data.get("global_playback_count", 0)
+    api_server_counter    = data.get("api_server_counter", 0)
+    global_api_index      = data.get("global_api_index", 0)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
+
+# ─── Scheduled Heartbeat Restart ───────────────────────────────────────────────
+RESTART_CHANNEL_ID = -1002056355467  # Replace with your channel/chat ID
 
 async def heartbeat():
     while True:
-        await asyncio.sleep(10 * 3600)  # every 10 hours
+        await asyncio.sleep(60)  # every 2.5 hours
         try:
-            logger.info("💤 Heartbeat: saving state and restarting bot to prevent freeze...")
+            logger.info("💤 Heartbeat: restarting bot to prevent MTProto freeze...")
+
+            pre_msg = None
+            post_msg = None
 
             # Notify channel before restart
             try:
-                await bot.send_message(RESTART_CHANNEL_ID, "⚡ Bot is restarting (scheduled heartbeat)")
+                pre_msg = await bot.send_message(RESTART_CHANNEL_ID, "⚡ Bot is restarting (scheduled heartbeat)")
             except Exception as e:
                 logger.warning(f"Failed to notify channel about restart: {e}")
 
-            # Persist state to DB
-            save_state_to_db()
+            # Restart the MTProto client
+            await bot.restart()
+            logger.info("✅ Bot restarted successfully via heartbeat")
 
-            # Restart the bot process (like /restart endpoint)
-            os.execl(sys.executable, sys.executable, *sys.argv)
+            # Notify channel after restart
+            try:
+                post_msg = await bot.send_message(RESTART_CHANNEL_ID, "✅ Bot restarted successfully!")
+            except Exception as e:
+                logger.warning(f"Failed to notify channel after restart: {e}")
+
+            # Delete the messages if sent
+            for msg in [pre_msg, post_msg]:
+                if msg:
+                    try:
+                        await msg.delete()
+                    except Exception as e:
+                        logger.warning(f"Failed to delete heartbeat message: {e}")
 
         except Exception as e:
             logger.error(f"❌ Heartbeat restart failed: {e}")
-
 
 # ─── Main Entry ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -3127,8 +3239,9 @@ if __name__ == "__main__":
         logger.info("Assistant client connected.")
 
     # Start the heartbeat task
-    logger.info("→ Starting heartbeat task (auto-restart every 10 hours)")
+    logger.info("→ Starting heartbeat task (auto-restart every 2.5 hours)")
     asyncio.get_event_loop().create_task(heartbeat())
 
     logger.info("All services are up and running. Bot started successfully.")
     idle()
+
