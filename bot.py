@@ -3118,6 +3118,7 @@ def save_state_to_db():
       - global_playback_count
       - api_server_counter
       - global_api_index
+      - premium_users
     """
     # Convert integer keys to strings (MongoDB requires string keys for dicts)
     data = {
@@ -3130,13 +3131,15 @@ def save_state_to_db():
         "chat_api_server":       { str(cid): srv   for cid, srv   in chat_api_server.items() },
         "global_playback_count": global_playback_count,
         "api_server_counter":    api_server_counter,
-        "global_api_index":      global_api_index
+        "global_api_index":      global_api_index,
+        "premium_users":         list(premium_users)  # store as list
     }
     state_backup.replace_one(
         {"_id": "singleton"},
         {"_id": "singleton", "state": data},
         upsert=True
     )
+
     # Clear only those dictionaries we want to reset on restart
     chat_containers.clear()
     chat_last_command.clear()
@@ -3145,58 +3148,73 @@ def save_state_to_db():
     last_played_song.clear()
     last_suggestions.clear()
     chat_api_server.clear()
+    premium_users.clear()  # also reset after saving (reloaded on startup)
     # Note: We do NOT clear global counters; they'll be reloaded
+
+
 def load_state_from_db():
     """
     Load any persisted state from MongoDB on startup, then remove the backup document.
-    Reconstructs all in-memory dictionaries and counters.
+    Reconstructs all in-memory dictionaries, counters, and premium list.
     """
     doc = state_backup.find_one_and_delete({"_id": "singleton"})
     if not doc or "state" not in doc:
         return
+
     data = doc["state"]
+
     # Restore chat_containers
     for cid_str, queue in data.get("chat_containers", {}).items():
         try:
             chat_containers[int(cid_str)] = queue
         except ValueError:
             continue
+
     # Restore simple string mappings
     for cid_str, cmd in data.get("chat_last_command", {}).items():
         try:
             chat_last_command[int(cid_str)] = cmd
         except ValueError:
             continue
+
     for cid_str, pend in data.get("chat_pending_commands", {}).items():
         try:
             chat_pending_commands[int(cid_str)] = pend
         except ValueError:
             continue
+
     for cid_str, mode in data.get("playback_mode", {}).items():
         try:
             playback_mode[int(cid_str)] = mode
         except ValueError:
             continue
+
     for cid_str, song in data.get("last_played_song", {}).items():
         try:
             last_played_song[int(cid_str)] = song
         except ValueError:
             continue
+
     for cid_str, sug in data.get("last_suggestions", {}).items():
         try:
             last_suggestions[int(cid_str)] = sug
         except ValueError:
             continue
+
     for cid_str, srv in data.get("chat_api_server", {}).items():
         try:
             chat_api_server[int(cid_str)] = srv
         except ValueError:
             continue
+
     # Restore counters
     global global_playback_count, api_server_counter, global_api_index
     global_playback_count = data.get("global_playback_count", 0)
     api_server_counter    = data.get("api_server_counter", 0)
     global_api_index      = data.get("global_api_index", 0)
+
+    # Restore premium users
+    premium_users.update(data.get("premium_users", []))
 
 logging.basicConfig(
     level=logging.INFO,
