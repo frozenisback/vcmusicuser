@@ -3190,7 +3190,7 @@ async def watchdog():
                 logger.info("[WATCHDOG] Bot restarted successfully.")
             except Exception as start_e:
                 logger.error(f"[WATCHDOG] Restart failed: {start_e}")
-        await asyncio.sleep(300)  # check every 5 minutes
+        await asyncio.sleep(60)  # check every 5 minutes
 
 # ─── Main Entry ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
