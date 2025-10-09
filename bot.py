@@ -1840,6 +1840,9 @@ async def my_playlist_handler(_, message):
         buttons.append(nav_buttons)
     await message.reply("🎶 **Your Playlist:**", reply_markup=InlineKeyboardMarkup(buttons))
 from pathlib import Path
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
+
 AVATAR_DIAMETER  = 419        
 CIRCLE_CENTER    = (1118, 437)
 BOX_ORIGIN       = (220, 640)   
@@ -1848,12 +1851,12 @@ VALUE_OFFSET_X   = 200
 FONT_PATH        = "arial.ttf"
 FONT_SIZE        = 40
 TEXT_COLOR       = "white"
-# point this at the local file in your repo
+
 WELCOME_TEMPLATE_PATH = Path(__file__).parent / "welcome.png"
-async def create_welcome_image(user) -> str:
-    # load the local template
+
+async def create_welcome_image(user) -> BytesIO:
     tpl = Image.open(WELCOME_TEMPLATE_PATH).convert("RGBA")
-    # draw avatar
+
     if user.photo:
         avatar_file = await bot.download_media(user.photo.big_file_id)
         av = Image.open(avatar_file).convert("RGBA")
@@ -1865,22 +1868,51 @@ async def create_welcome_image(user) -> str:
         cx, cy = CIRCLE_CENTER
         top_left = (cx - D//2, cy - D//2)
         tpl.paste(av, top_left, mask)
-    # write user info
+
     draw = ImageDraw.Draw(tpl)
     font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
     x0, y0 = BOX_ORIGIN
-    draw.text((x0 + VALUE_OFFSET_X, y0),
-              user.first_name,
-              font=font, fill=TEXT_COLOR)
-    draw.text((x0 + VALUE_OFFSET_X, y0 + LINE_SPACING),
-              str(user.id),
-              font=font, fill=TEXT_COLOR)
-    draw.text((x0 + VALUE_OFFSET_X, y0 + 2*LINE_SPACING),
-              "@" + (user.username or "N/A"),
-              font=font, fill=TEXT_COLOR)
-    out = f"welcome_{user.id}.png"
-    tpl.save(out)
-    return out
+    draw.text((x0 + VALUE_OFFSET_X, y0), user.first_name, font=font, fill=TEXT_COLOR)
+    draw.text((x0 + VALUE_OFFSET_X, y0 + LINE_SPACING), str(user.id), font=font, fill=TEXT_COLOR)
+    draw.text((x0 + VALUE_OFFSET_X, y0 + 2*LINE_SPACING), "@" + (user.username or "N/A"), font=font, fill=TEXT_COLOR)
+
+    # Save image in memory (auto-cleans after use)
+    img_bytes = BytesIO()
+    tpl.save(img_bytes, format="PNG")
+    img_bytes.seek(0)
+    return img_bytes
+
+
+@bot.on_message(filters.group & filters.new_chat_members)
+async def welcome_new_member(client: Client, message: Message):
+    for member in message.new_chat_members:
+        # create and send the image directly from RAM
+        with await create_welcome_image(member) as img_bytes:
+            caption = (
+                f"𝗪𝗲𝗹𝗰𝗼𝗺𝗲 𝗧𝗼 {message.chat.title}\n"
+                "➖➖➖➖➖➖➖➖➖➖➖\n"
+                f"๏ 𝗡𝗔𝗠𝗘 ➠ {member.mention}\n"
+                f"๏ 𝗜𝗗 ➠ {member.id}\n"
+                f"๏ 𝐔𝐒𝐄𝐑𝐍𝐀𝐌𝐄 ➠ @{member.username or '—'}\n"
+                f"๏ 𝐌𝐀𝐃𝐄 𝐁𝐘 ➠ <a href=\"https://t.me/kustbots\">Frozen Bots</a>\n"
+                "➖➖➖➖➖➖➖➖➖➖➖"
+            )
+            markup = InlineKeyboardMarkup(
+                [[
+                    InlineKeyboardButton(
+                        "⦿ ᴀᴅᴅ ᴍᴇ ⦿",
+                        url="https://t.me/vcmusiclubot?startgroup=true"
+                    )
+                ]]
+            )
+            await client.send_photo(
+                chat_id=message.chat.id,
+                photo=img_bytes,
+                caption=caption,
+                parse_mode=ParseMode.HTML,
+                reply_markup=markup
+            )
+
 @bot.on_message(filters.new_chat_members, group=2)
 async def join_watcher(_, message):
     try:
@@ -1942,42 +1974,6 @@ async def on_left_chat_member(_, message: Message):
     except Exception as e:
         print(f"[Left Chat Handler Error] {e}")
 
-@bot.on_message(filters.group & filters.new_chat_members)
-async def welcome_new_member(client: Client, message: Message):
-    """
-    For each new member, generate & send their welcome card with styled caption.
-    """
-    for member in message.new_chat_members:
-        img_path = await create_welcome_image(member)
-        # Build caption using HTML links
-        caption = (
-            f"𝗪𝗲𝗹𝗰𝗼𝗺𝗲 𝗧𝗼 {message.chat.title}\n"
-            "➖➖➖➖➖➖➖➖➖➖➖\n"
-            f"๏ 𝗡𝗔𝗠𝗘 ➠ {member.mention}\n"
-            f"๏ 𝗜𝗗 ➠ {member.id}\n"
-            f"๏ 𝐔𝐒𝐄𝐑𝐍𝐀𝐌𝐄 ➠ @{member.username or '—'}\n"
-            f"๏ 𝐌𝐀𝐃𝐄 𝐁𝐘 ➠ <a href=\"https://t.me/kustbots\">Frozen Bots</a>\n"
-            "➖➖➖➖➖➖➖➖➖➖➖"
-        )
-        markup = InlineKeyboardMarkup(
-            [[
-                InlineKeyboardButton(
-                    "⦿ ᴀᴅᴅ ᴍᴇ ⦿",
-                    url="https://t.me/vcmusiclubot?startgroup=true"
-                )
-            ]]
-        )
-        await client.send_photo(
-            chat_id=message.chat.id,
-            photo=img_path,
-            caption=caption,
-            parse_mode=ParseMode.HTML,
-            reply_markup=markup
-        )
-        try:
-            os.remove(img_path)
-        except OSError:
-            pass
 
 DOWNLOAD_API_URL_SPOTIFY = "http://104.168.62.69:5000/spotify-down?url="
 
