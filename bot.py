@@ -3240,7 +3240,7 @@ RESTART_CHANNEL_ID = -1001234567890  # Replace with your channel/chat ID
 
 async def heartbeat():
     while True:
-        await asyncio.sleep(10 * 3600)  # every 10 hours
+        await asyncio.sleep(4 * 3600)  # every 10 hours
         try:
             logger.info("💤 Heartbeat: saving state and restarting bot to prevent freeze...")
 
